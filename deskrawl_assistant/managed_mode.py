@@ -14,6 +14,7 @@ from .models import ValidationError
 from .game_panel_log import DisposalLogCursor
 from .item_protection import divine_equipment, mandatory_storage, disposal_protection, is_rune
 from .storage_preferences import DEFAULT_STORAGE_PAGES
+from .equipment_requirements import equip_eligibility
 
 
 DEFAULT_SETTINGS = {
@@ -135,6 +136,7 @@ def item_kind(row):
 def equip_candidate_allowed(row, score, settings, character):
     """Use the same slot policy when planning and just before executing a swap."""
     if divine_equipment(row) or not isinstance(score, dict): return False
+    if not equip_eligibility(row, character)['can_equip']: return False
     target, delta = score.get('target'), score.get('delta')
     if (type(target) is not int or target not in range(12)
             or type(delta) not in (int, float) or not math.isfinite(delta)

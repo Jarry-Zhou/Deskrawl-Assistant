@@ -517,7 +517,7 @@ class AssistantService(ManagedServiceMixin):
         from .character import attribute_text, attack_speed, SLOT_LABELS, PREVIEW_NOTE
         if not character.get('available'): return deepcopy(character)
         stats = character['stats']
-        payload = {k:deepcopy(character.get(k)) for k in ('available','name','level','class_mask','primary',
+        payload = {k:deepcopy(character.get(k)) for k in ('available','name','level','max_level','class_mask','primary',
             'health','health_max','attack','warnings','captured_at','character_id','comparison_distance')}
         payload['preview_note'] = PREVIEW_NOTE
         payload['attack_speed'] = round(attack_speed(stats),3)

@@ -15,12 +15,13 @@ from test_headline_affixes import FixtureClient
 
 def item(slot=3, mods=(), **extra):
     return {'is_equipment':True,'class_mask':15,'equip_slot':slot,'modifiers_complete':True,
+        'item_level':1,'base_rarity':3,'is_black_mist':False,
         'modifiers':[{'stat':stat,'type':0,'value':value} for stat,value in mods],
         'upgrade_level':0,'rarity':3,'socket_count':0,'socketed_gems':[],**extra}
 
 
 def character(primary=1, equipment=(), **extra):
-    c = {'available':True,'class_mask':4,'primary':primary,'equipment':list(equipment),
+    c = {'available':True,'level':100,'max_level':100,'class_mask':4,'primary':primary,'equipment':list(equipment),
         'model':{'base':{0:10,1:100,2:20,3:10.5,4:.2,5:1.5},
             'caches':{536:{20:100,21:1},544:{}},'status':({}, {}, {}),'conditional':({}, {}),'conversions':[]},**extra}
     c['comparison_model'] = c['model']

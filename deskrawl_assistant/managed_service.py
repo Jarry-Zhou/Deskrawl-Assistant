@@ -154,6 +154,7 @@ class ManagedServiceMixin:
             item['item_type'] = source.get('item_type')
             item['item_class'] = source.get('item_class')
             item['base_rarity'] = source.get('base_rarity')
+            item['equip_slot'] = source.get('equip_slot')
             if not item['is_equipment']:
                 item['rarity'] = source.get('rarity',source.get('base_rarity'))
             item['rune_level'] = source.get('rune_level')

@@ -9,6 +9,7 @@ from copy import deepcopy
 import math
 from .native_memory import MemoryReadError
 from .stat_display import _single, is_percent_stat, upgraded_value
+from .equipment_requirements import equip_eligibility
 
 EQUIPPED_SLOTS = ('Weapon', 'Helm', 'Chest', 'Pants', 'Boots', 'Belt',
                   'Ring1', 'Ring2', 'Necklace', 'Shoulder', 'Gloves', 'Back')
@@ -150,6 +151,9 @@ def preview(row, character, item_ui):
     mask = row.get('class_mask')
     if type(mask) is not int or not mask & character['class_mask']:
         return {'available': False, 'incompatible': True, 'reason': '当前职业无法装备。'}
+    eligibility = equip_eligibility(row, character)
+    if not eligibility['can_equip']:
+        return {**eligibility, 'available': False, 'level_blocked': eligibility['available']}
     targets = {1: (0,), 2: (1,), 3: (2,), 4: (3,), 5: (4,), 6: (5,),
                7: (6, 7), 8: (8,), 9: (10,), 10: (9,), 11: (11,)}.get(row.get('equip_slot'))
     if not targets:
@@ -178,6 +182,6 @@ def preview(row, character, item_ui):
                 'delta': after - before, 'percent': (after - before) / before * 100 if before else None,
                 'attributes': changes})
         best = max(comparisons, key=lambda c: c['delta'])
-        return {'available': True, 'estimated': True, **best, 'comparisons': comparisons, 'note': PREVIEW_NOTE}
+        return {**eligibility, 'available': True, 'estimated': True, **best, 'comparisons': comparisons, 'note': PREVIEW_NOTE}
     except (ValueError, MemoryReadError, KeyError, TypeError, OverflowError) as exc:
         return {'available': False, 'reason': str(exc)}
