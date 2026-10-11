@@ -14,6 +14,7 @@ let recommendationData=null, recommendationRequest=0, recommendationLoading=fals
 let updateState=null, updatePolling=false, updateSaving=false, updateNoticeShown=false;
 let experienceManualSavedValues=['','','',''];
 let detailTarget=null, characterSignature='', equippedPreviewId=null, equippedPreviewSignature='';
+let lootPreviewData=null, lootPreviewLoading=false, lootPreviewRequest=0, lootPreviewSignature='';
 let columnFilters={containers:null,locks:null,rules:null}, columnMenuKey=null, columnDraft=new Set(), columnAnchor=null;
 const columnMenus={
   position:{label:'位置',sort:'position',filter:'containers',options:[['inventory','背包'],['storage','仓库']]},
@@ -59,11 +60,12 @@ function switchTab(tab){
   closeColumnMenu();
   activeTab=tab;
   document.querySelectorAll('.tab').forEach(button=>{let active=button.dataset.tab===tab;button.classList.toggle('active',active);button.setAttribute('aria-selected',active);});
-  $('rules-page').hidden=tab!=='rules';$('inventory-page').hidden=tab!=='inventory';$('logs-page').hidden=tab!=='logs';$('experience-page').hidden=tab!=='experience';$('recommendations-page').hidden=tab!=='recommendations';
+  $('rules-page').hidden=tab!=='rules';$('inventory-page').hidden=tab!=='inventory';$('logs-page').hidden=tab!=='logs';$('experience-page').hidden=tab!=='experience';$('recommendations-page').hidden=tab!=='recommendations';$('loot-preview-page').hidden=tab!=='loot-preview';
   if(tab==='inventory')renderInventory();
   if(tab==='logs')loadLogs();
   if(tab==='experience')loadExperience();
   if(tab==='recommendations')loadRecommendations();
+  if(tab==='loot-preview'){clearLootPreview('正在读取本趟计划…');loadLootPreview();}
 }
 function buildCatalog(){
   catalog.equipment.forEach(g=>gearMap.set(g.key,g));catalog.stats.forEach(s=>statMap.set(s.key,s));
@@ -384,6 +386,8 @@ function updateControls(){
 }
 function renderState(){
   const compatibility=state.compatibility||{phase:'idle',message:'连接时自动检测游戏兼容性'};
+  if(!state.connected)clearLootPreview('连接游戏并进入在线关卡，查看这趟会掉落什么。');
+  else if(['blocked','changed','error'].includes(compatibility.phase))clearLootPreview(compatibility.message||'当前游戏版本暂不支持读取掉落计划。','unsupported');
   $('compatibility-message').textContent=compatibility.message;
   $('compatibility-bar').dataset.phase=compatibility.phase;
   const connection=$('connection-state');connection.className='status-pill'+(state.connected?' online':'')+(state.busy?' busy':'');
@@ -412,7 +416,7 @@ async function pollState(){
   if(polling||exiting)return;
   polling=true;
   try{state=await api('state');renderState();}
-  catch(error){$('footer-state').textContent='助手服务已断开，请重新双击启动文件。';if(!state)$('operation-message').textContent=error.message;}
+  catch(error){clearLootPreview('助手服务已断开，请重新启动后连接游戏。','unavailable');$('footer-state').textContent='助手服务已断开，请重新双击启动文件。';if(!state)$('operation-message').textContent=error.message;}
   finally{polling=false;}
 }
 async function action(kind,data={}){
@@ -849,4 +853,71 @@ $('recommendation-calibration-reset').addEventListener('click',async()=>{
   finally{recommendationBusy=false;renderRecommendations();}
 });
 setInterval(()=>{if(!exiting&&activeTab==='recommendations'&&!recommendationBusy)loadRecommendations(true);},3000);
+function lootPreviewNumber(value){
+  return value!==null&&value!==undefined&&Number.isFinite(Number(value))?Math.max(0,Math.round(Number(value))).toLocaleString('zh-CN'):'—';
+}
+function clearLootPreview(reason,phase='waiting'){
+  lootPreviewRequest++;lootPreviewLoading=false;lootPreviewData=null;lootPreviewSignature='';
+  $('loot-preview-map').textContent='等待读取关卡';$('loot-preview-run').textContent=reason;
+  $('loot-preview-phase').textContent=phase==='unsupported'?'版本暂不支持':phase==='unavailable'?'暂不能读取':'等待进图';
+  $('loot-preview-phase').dataset.phase=phase;
+  for(const id of ['items','gold','potions','wave'])$('loot-preview-'+id).textContent='—';
+  $('loot-preview-equipment').textContent='包含装备、宝石、符文及其他物品';
+  $('loot-preview-updated').textContent='';$('loot-preview-refresh').disabled=false;
+  $('loot-preview-warnings').textContent='';$('loot-preview-warnings').hidden=true;
+  $('loot-preview-waves').replaceChildren();$('loot-preview-empty').textContent=reason;$('loot-preview-empty').hidden=false;
+}
+function lootPreviewItem(item){
+  const kinds={equipment:'装备',gem:'宝石',rune:'符文',chest:'宝箱',material:'材料',other:'其他物品'};
+  const modifiers=Array.isArray(item.modifiers)?item.modifiers:[];
+  const rarity=Number(item.rarity),rarityClass=Number.isInteger(rarity)&&rarity>=0&&rarity<=9?' loot-rarity-'+rarity:'';
+  const icon=typeof item.icon==='string'&&item.icon.startsWith('/icons/')?item.icon:'';
+  const equipment=item.kind==='equipment';
+  return `<article class="loot-preview-item${rarityClass}"><div class="loot-preview-item-head"><div class="loot-preview-icon">${icon?`<img src="${esc(icon)}" alt="" loading="lazy">`:'<span aria-hidden="true">◇</span>'}</div><div><h3>${esc(item.name||'名称尚未确认')}</h3><p>${esc(item.rarity_label||kinds[item.kind]||'其他物品')}${item.slot_label?' · '+esc(item.slot_label):''}</p></div><strong class="loot-preview-quantity" title="计划数量">×${lootPreviewNumber(item.quantity)}</strong></div>
+    <div class="loot-preview-item-meta">${item.level!==null&&item.level!==undefined?`<span>物品等级 ${esc(item.level)}</span>`:''}${equipment?`<span>${item.sockets===null||item.sockets===undefined?'孔数未确认':esc(item.sockets)+' 孔'}</span>`:''}${item.ancient?'<span class="equipment-tag ancient">远古</span>':''}${item.black_mist?'<span class="equipment-tag mist">黑雾</span>':''}</div>
+    ${modifiers.length?`<ul class="loot-preview-affixes">${modifiers.map(modifier=>`<li>${esc(modifier.text||'词条待确认')}</li>`).join('')}</ul>`:equipment?'<p class="loot-preview-item-note">此装备暂无可显示词条。</p>':''}
+    ${item.kind==='chest'&&Number(item.chest_gold)>0?`<p class="loot-preview-item-note">计划箱内金币 ${lootPreviewNumber(item.chest_gold)}（不计入波次合计）</p>`:''}${item.kind==='chest'?'<p class="loot-preview-item-note">箱子内物品需结算后确认。</p>':''}</article>`;
+}
+function renderLootPreview(data){
+  if(!data||data.available!==true||data.phase!=='active'||!data.run||!data.run.key){
+    clearLootPreview(data?.reason||'当前没有可读取的在线关卡计划。',data?.phase||'unavailable');return;
+  }
+  const run=data.run,totals=data.totals||{},waves=Array.isArray(data.waves)?data.waves:[];
+  const captured=new Date(data.updated_at);
+  $('loot-preview-updated').textContent=Number.isNaN(captured.getTime())?'每 2 秒自动更新':'读取于 '+captured.toLocaleTimeString('zh-CN',{hour12:false});
+  $('loot-preview-refresh').disabled=false;
+  const signature=JSON.stringify([run,totals,waves,data.warnings]);
+  lootPreviewData=data;if(signature===lootPreviewSignature)return;lootPreviewSignature=signature;
+  $('loot-preview-map').textContent=run.map_name||'当前在线关卡';
+  $('loot-preview-run').textContent=(run.difficulty_label||'难度未确认')+' · 本趟服务器计划';
+  $('loot-preview-phase').textContent=waves.length&&waves.every(wave=>wave.state==='completed')?'本趟波次已完成 · 待结算':'在线关卡进行中';$('loot-preview-phase').dataset.phase='active';
+  $('loot-preview-items').textContent=lootPreviewNumber(totals.items);
+  $('loot-preview-equipment').textContent='其中装备 '+lootPreviewNumber(totals.equipment)+' 件';
+  $('loot-preview-gold').textContent=lootPreviewNumber(totals.gold);
+  $('loot-preview-potions').textContent=lootPreviewNumber(totals.potion_charges);
+  $('loot-preview-wave').textContent=lootPreviewNumber(run.current_wave)+' / '+lootPreviewNumber(run.total_waves);
+  const warnings=Array.isArray(data.warnings)?data.warnings:[];
+  $('loot-preview-warnings').textContent=warnings.join(' ');$('loot-preview-warnings').hidden=!warnings.length;
+  const hasItems=waves.some(wave=>Array.isArray(wave.items)&&wave.items.length);
+  $('loot-preview-empty').textContent=waves.length?'本趟计划没有物品掉落；金币与药水补充见各波次。':'本趟计划尚未提供波次内容，稍后自动重新读取。';
+  $('loot-preview-empty').hidden=hasItems;
+  $('loot-preview-waves').innerHTML=waves.map(wave=>{
+    const progress=['completed','current','upcoming'].includes(wave.state)?wave.state:'upcoming';
+    const label={completed:'已完成波次 · 待结算',current:'当前波次',upcoming:'后续波次'}[progress];
+    const items=Array.isArray(wave.items)?wave.items:[];
+    return `<section class="panel loot-preview-wave ${progress}"><div class="loot-preview-wave-heading"><h2>第 ${esc(wave.number)} 波 <span>${label}</span></h2><div><span>金币 ${lootPreviewNumber(wave.gold)}</span><span>药水补充 ${lootPreviewNumber(wave.potion_charges)} 次</span><span>${items.length} 组物品</span></div></div>${items.length?`<div class="loot-preview-item-grid">${items.map(lootPreviewItem).join('')}</div>`:'<p class="loot-preview-wave-empty">此波无计划物品。</p>'}</section>`;
+  }).join('');
+}
+async function loadLootPreview(background=false){
+  if(exiting||lootPreviewLoading)return;
+  if(state&&!state.connected){clearLootPreview('连接游戏并进入在线关卡，查看这趟会掉落什么。');return;}
+  if(['blocked','changed','error'].includes(state?.compatibility?.phase)){clearLootPreview(state.compatibility.message||'当前游戏版本暂不支持读取掉落计划。','unsupported');return;}
+  const request=++lootPreviewRequest;lootPreviewLoading=true;
+  if(!background)$('loot-preview-refresh').disabled=true;
+  try{const data=await api('loot-preview');if(request!==lootPreviewRequest||exiting)return;renderLootPreview(data);}
+  catch(error){if(request===lootPreviewRequest&&!exiting)clearLootPreview('本趟计划暂不能读取：'+error.message,'unavailable');}
+  finally{if(request===lootPreviewRequest){lootPreviewLoading=false;$('loot-preview-refresh').disabled=false;}}
+}
+$('loot-preview-refresh').addEventListener('click',()=>loadLootPreview());
+setInterval(()=>{if(!exiting&&activeTab==='loot-preview')loadLootPreview(true);},2000);
 boot();

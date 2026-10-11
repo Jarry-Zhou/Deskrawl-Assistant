@@ -81,6 +81,10 @@ def make_handler(service, token):
                     if urlsplit(self.path).query:
                         raise ValueError('刷图推荐不接受额外查询参数。')
                     return self.reply(service.recommendation_page())
+                if path=='/api/loot-preview':
+                    if urlsplit(self.path).query:
+                        raise ValueError('掉落预览不接受额外查询参数。')
+                    return self.reply(service.loot_preview_page())
                 if path=='/api/export/rules': return self.reply(service.export_rules())
                 if path=='/api/export/items':
                     with service.guard: value = service.snapshot

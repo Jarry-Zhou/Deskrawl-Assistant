@@ -32,6 +32,7 @@ data/*
 !data/carriage-types.json
 !data/item-ui.json
 !data/compatibility-baseline.json
+!data/loot-plan-types.json
 
 # The Microsoft bootstrapper is fetched separately before packaging.
 packaging/*.exe
@@ -74,3 +75,4 @@ docs/*
 !tools/extract_recommendation_catalog.py
 !docs/刷图推荐说明.md
 !docs/recommendation-model.md
+!docs/掉落预览说明.md

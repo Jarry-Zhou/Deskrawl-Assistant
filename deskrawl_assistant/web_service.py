@@ -116,6 +116,37 @@ class AssistantService:
     def log_page(self, **filters):
         return self.journal.page(**filters)
 
+    def loot_preview_page(self):
+        """Read the current plan without retaining or recording planned player loot."""
+        from datetime import datetime, timezone
+
+        def empty(phase, reason, warnings=None):
+            return {'available':False, 'phase':phase, 'reason':reason, 'run':None,
+                'totals':{'items':0, 'equipment':0, 'gold':0, 'potion_charges':0},
+                'waves':[], 'warnings':warnings or []}
+
+        with self.guard:
+            if self.closed.is_set() or self.updating:
+                value = empty('waiting', '助手正在退出或更新，请稍候。')
+            elif not self.client.connected:
+                value = empty('waiting', '连接游戏后，每次进入在线关卡自动显示掉落计划。')
+            else:
+                value = None
+        if value is None:
+            try:
+                value = deepcopy(self.client.loot_preview_snapshot())
+                if not value.get('available'):
+                    phase = value.get('phase')
+                    value = empty(phase if phase in {'waiting','unsupported','unavailable'} else 'unavailable',
+                        value.get('reason') or '等待当前在线关卡的完整掉落计划。', value.get('warnings'))
+            except Exception:
+                value = empty('unavailable', '掉落计划读取暂时中断，稍后自动重试。')
+        with self.guard:
+            if not self.client.connected or self.closed.is_set() or self.updating:
+                value = empty('waiting', '连接游戏后，每次进入在线关卡自动显示掉落计划。')
+        value['updated_at'] = datetime.now(timezone.utc).isoformat()
+        return value
+
     def experience_live(self):
         if not self.client.connected:
             return {'available': False, 'error': '连接游戏后可读取角色经验；也可手动录入采样。'}

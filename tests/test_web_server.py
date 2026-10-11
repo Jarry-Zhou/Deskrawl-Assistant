@@ -16,6 +16,8 @@ class FakeService:
     def start(self,kind,data):self.actions.append(kind)
     def recommendation_page(self):
         return {'available':False,'rows':[],'error':'尚未连接角色'}
+    def loot_preview_page(self):
+        return {'available':False,'phase':'waiting','run':None,'waves':[]}
     def recommendation_settings(self,data):
         from deskrawl_assistant.recommendation_book import validate_settings
         return {'settings':validate_settings(data.get('settings',data),['Normal','Nightmare','Inferno'])}
@@ -184,6 +186,17 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertEqual(json.loads(body)['rows'],[])
         self.assertEqual(self.request('/api/recommendations?minutes=bad')[0],400)
+
+    def test_loot_preview_is_uncached_read_only_and_rejects_parameters(self):
+        code, headers, body = self.request('/api/loot-preview')
+        self.assertEqual(code,200)
+        self.assertEqual(headers['Cache-Control'],'no-store')
+        self.assertIsNone(json.loads(body)['run'])
+        for query in ('run=other','pid=24572','wave=1'):
+            self.assertEqual(self.request('/api/loot-preview?'+query)[0],400)
+        headers = {'Origin':self.url,'X-Assistant-Token':'test-session-token'}
+        self.assertEqual(self.request('/api/loot-preview',{},headers)[0],404)
+        self.assertFalse(self.service.actions)
 
     def test_recommendation_mutations_require_session_and_validate_values(self):
         endpoint='/api/recommendations/settings'

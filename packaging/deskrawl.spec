@@ -7,6 +7,7 @@ assets = [
     'game-catalog.json',
     'experience-types.json',
     'recommendation-types.json',
+    'loot-plan-types.json',
     'recommendation-catalog.json',
     'equipment-ui.json',
     'affix-groups-static.json',
