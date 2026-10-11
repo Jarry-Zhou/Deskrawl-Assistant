@@ -32,6 +32,7 @@ data/*
 !data/carriage-types.json
 !data/item-ui.json
 !data/compatibility-baseline.json
+!data/game-actions-profile.json
 
 # The Microsoft bootstrapper is fetched separately before packaging.
 packaging/*.exe
@@ -63,6 +64,8 @@ docs/*
 !docs/1.1.8验收说明.md
 !docs/1.2.0验收说明.md
 !docs/1.2.1验收说明.md
+!docs/1.2.2验收说明.md
+!docs/托管模式开发说明.md
 !docs/screenshots/
 
 !docs/经验收益说明.md

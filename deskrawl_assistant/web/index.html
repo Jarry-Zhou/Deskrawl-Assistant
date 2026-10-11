@@ -7,6 +7,8 @@
   <link rel="icon" href="/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
   <script src="/inventory-tools.js" defer></script>
+  <script src="/automation-tools.js" defer></script>
+  <script src="/managed-mode.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/rule-tools.js" defer></script>
 </head>
@@ -25,7 +27,7 @@
     <a id="update-release" href="https://github.com/awesomehy/Deskrawl-Assistant/releases" target="_blank" rel="noopener noreferrer">发行记录 ↗</a>
     <button id="check-update" class="button ghost">检查更新</button><button id="install-update" class="button primary" hidden>下载并更新（重启）</button>
   </section>
-  <nav class="tabs" aria-label="功能页签"><button class="tab active" data-tab="rules" role="tab" aria-selected="true">装备筛选规则 <span id="rule-count">0</span></button><button class="tab" data-tab="inventory" role="tab" aria-selected="false">背包与仓库</button><button class="tab" data-tab="recommendations" role="tab" aria-selected="false">刷图推荐</button><button class="tab" data-tab="experience" role="tab" aria-selected="false">经验收益</button><button class="tab" data-tab="logs" role="tab" aria-selected="false">日志</button><span id="monitor-badge" hidden><i></i>持续监控中</span></nav>
+  <nav class="tabs" aria-label="功能页签"><button class="tab active" data-tab="rules" role="tab" aria-selected="true">装备筛选规则 <span id="rule-count">0</span></button><button class="tab" data-tab="inventory" role="tab" aria-selected="false">背包与仓库</button><button class="tab" data-tab="managed" role="tab" aria-selected="false">托管模式</button><button class="tab" data-tab="recommendations" role="tab" aria-selected="false">刷图推荐</button><button class="tab" data-tab="experience" role="tab" aria-selected="false">经验收益</button><button class="tab" data-tab="logs" role="tab" aria-selected="false">日志</button><span id="monitor-badge" hidden><i></i>持续监控中</span></nav>
   <main>
     <section id="rules-page" role="tabpanel">
       <div class="page-heading"><div><h1>装备筛选规则</h1><p>先找到传说装备，再设定要保留的词条组合。</p></div><div class="heading-actions"><button id="import-rules" class="button ghost">导入规则</button><button id="export-rules" class="button ghost">导出规则</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></div>
@@ -51,11 +53,12 @@
           <summary><strong>自动整理</strong><span id="automation-summary">已暂停 · 点击配置</span></summary>
           <div class="automation-content">
             <div class="automation-grid">
-              <section class="automation-card"><label class="automation-title"><input type="checkbox" id="auto-carriage">马车 → 背包</label><p>按物品名称收取整组物品；背包满时等待。</p><div class="filter-row"><input id="carriage-search" placeholder="搜索要收取的物品…" aria-label="搜索马车自动收取物品"><select id="carriage-kind" aria-label="马车物品类型"><option value="">全部类型</option><option value="equipment">装备</option><option value="gem">宝石</option><option value="rune">符文</option><option value="chest">宝箱</option><option value="material">材料 / 其他</option></select></div><div class="carriage-selection-actions"><button id="carriage-select-all" class="button ghost" type="button" title="选中当前类型和搜索条件下的全部物品">全选</button><button id="carriage-select-none" class="button ghost" type="button" title="取消选中当前类型和搜索条件下的全部物品">全不选</button><small>仅影响当前筛选结果</small></div><div id="carriage-choices" class="carriage-choices"></div><small id="carriage-selected">已选 0 种</small><div id="carriage-state" class="note">连接后读取马车</div></section>
-              <section class="automation-card"><label class="automation-title"><input type="checkbox" id="auto-gems">宝石 → 仓库</label><p>自动存入背包中的全部宝石，优先合并同种同等级的堆叠，剩余数量放进空格。</p><small>仓库堆叠容量和空格不足时等待，宝石保留在背包。</small></section>
-              <section class="automation-card"><label class="automation-title"><input type="checkbox" id="auto-pressure">背包快满时装备 → 仓库</label><div class="automation-field"><span>背包剩余空格 ≤</span><input id="pressure-threshold" type="number" min="0" max="2047" value="4" aria-label="触发剩余空格"> 格时触发</div><div class="automation-field"><span>整理后预留</span><input id="pressure-target" type="number" min="1" max="2048" value="12" aria-label="整理后预留空格"> 格</div><label class="automation-field">装备范围 <select id="pressure-filter"><option value="all">全部背包装备（含已锁定）</option><option value="locked">仅已锁定装备</option><option value="unlocked">仅未锁定装备</option></select></label><small>保留词条、强化和锁定状态。仓库满时等待，不出售或分解物品。</small></section>
+              <section class="automation-card"><label class="automation-title"><input type="checkbox" id="auto-carriage">马车 → 背包</label><p>按物品类型收取，不必逐个选择物品；背包满时等待。</p><div class="carriage-selection-actions"><button id="carriage-select-all" class="button ghost" type="button">全选类型</button><button id="carriage-select-none" class="button ghost" type="button">全不选</button></div><div id="carriage-choices" class="carriage-type-choices"></div><small id="carriage-selected">已选 0 类物品</small><div id="carriage-state" class="note">连接后读取马车</div></section>
+              <section class="automation-card"><label class="automation-title"><input type="checkbox" id="auto-gems">宝石 → 指定仓库页</label><p>存入背包中的全部宝石，仅在所选页内优先合并同种同等级堆叠。</p><span class="automation-page-label">宝石存放页</span><div id="automation-gem-pages" class="automation-page-choices"></div><small>新用户默认第 5 页；未解锁或容量不足时等待，宝石留在背包。</small></section>
+              <section class="automation-card"><label class="automation-title"><input type="checkbox" id="auto-runes">符文 → 指定仓库页</label><p>自动存入背包中的全部符文，使用单独配置的仓库分区。</p><span class="automation-page-label">符文存放页</span><div id="automation-rune-pages" class="automation-page-choices"></div><small>新用户默认第 4 页；未解锁或满时等待，不移动到其他分区。</small></section>
+              <section class="automation-card"><label class="automation-title"><input type="checkbox" id="auto-pressure">背包快满时装备 → 指定仓库页</label><div class="automation-field"><span>背包剩余空格 ≤</span><input id="pressure-threshold" type="number" min="0" max="2047" value="4" aria-label="触发剩余空格"> 格时触发</div><div class="automation-field"><span>整理后预留</span><input id="pressure-target" type="number" min="1" max="2048" value="12" aria-label="整理后预留空格"> 格</div><label class="automation-field">装备范围 <select id="pressure-filter"><option value="all">全部背包装备（含已锁定）</option><option value="locked">仅已锁定装备</option><option value="unlocked">仅未锁定装备</option></select></label><span class="automation-page-label">装备存放页</span><div id="automation-equipment-pages" class="automation-page-choices"></div><small>新用户默认第 1／2／3 页；只使用已解锁的所选页，未解锁或满时等待。保留词条、强化和锁定状态。</small></section>
             </div>
-            <div class="automation-footer"><button id="save-automation" class="button">保存整理设置</button><button id="run-automation" class="button primary">启动自动整理</button><span id="automation-draft-state" class="note">设置已保存</span><small>每 2 秒检查一次；重新启动助手后默认暂停。</small></div>
+            <div class="automation-footer"><button id="save-automation" class="button">保存整理设置</button><button id="run-automation" class="button primary">启动自动整理</button><span id="automation-draft-state" class="note">设置已保存</span><small>每 2 秒检查一次；重新启动默认暂停。旧配置按类型迁移，存放页默认第 1 页，可在此修改。</small></div>
             <p id="automation-status" class="note">自动整理已暂停。</p>
           </div>
         </details>
@@ -78,6 +81,73 @@
         <div class="inventory-body"><div class="table-scroll"><table class="inventory-table"><thead><tr><th class="check-column"><input type="checkbox" id="select-visible" aria-label="选择当前列表物品"></th><th>物品</th><th><button class="column-button" data-column="position" aria-label="位置筛选与排序" aria-haspopup="dialog" aria-expanded="false" aria-controls="column-menu">位置<span class="column-indicator">▾</span></button></th><th>数量</th><th><button class="column-button" data-column="level" aria-label="物品等级排序" aria-haspopup="dialog" aria-expanded="false" aria-controls="column-menu">物品等级<span class="column-indicator">▾</span></button></th><th><button class="column-button" data-column="upgrade" aria-label="强化排序" aria-haspopup="dialog" aria-expanded="false" aria-controls="column-menu">强化<span class="column-indicator">▾</span></button></th><th><button class="column-button" data-column="sockets" aria-label="总孔数排序" aria-haspopup="dialog" aria-expanded="false" aria-controls="column-menu">孔位<span class="column-indicator">▾</span></button></th><th><button class="column-button" data-column="lock" aria-label="锁状态筛选" aria-haspopup="dialog" aria-expanded="false" aria-controls="column-menu">锁状态<span class="column-indicator">▾</span></button></th><th><button class="column-button" data-column="power" aria-label="换装攻击力排序" aria-haspopup="dialog" aria-expanded="false" aria-controls="column-menu">换装攻击力 · 估算<span class="column-indicator">▾</span></button></th><th><button class="column-button" data-column="rules" aria-label="规则结果筛选" aria-haspopup="dialog" aria-expanded="false" aria-controls="column-menu">规则结果<span class="column-indicator">▾</span></button></th></tr></thead><tbody id="item-rows"></tbody></table><div id="inventory-empty" class="empty-state">连接游戏，查看背包和仓库物品</div></div><aside id="item-detail" class="item-detail"><div class="empty-state">点击物品查看详情</div></aside></div>
       </section>
       <div class="bottom-notes"><span id="usage-note">监控只自动处理新增装备；已有装备请用“一键按规则锁定”。关闭网页后监控仍可继续，点右上角退出才会停止。</span><button id="history-toggle" class="text-button">查看日志 →</button></div><div id="history-list" class="panel history" hidden></div>
+    </section>
+    <section id="managed-page" role="tabpanel" hidden>
+      <div class="page-heading"><div><h1>托管模式</h1><p>自动换装、复刷与推图，回城后按保留规则整理奖励。</p></div><button id="managed-refresh" class="button ghost" type="button">刷新状态</button></div>
+      <section class="panel managed-status" aria-label="托管运行状态">
+        <div class="managed-status-main"><span id="managed-status-dot" class="managed-status-dot"></span><div><strong id="managed-phase">尚未启动</strong><p id="managed-message" aria-live="polite">连接游戏后读取托管能力和关卡。</p></div></div>
+        <div class="managed-runtime"><span>本次运行</span><strong id="managed-elapsed">00:00:00</strong></div>
+        <div class="managed-run-actions"><button id="managed-start" class="button primary" type="button" disabled>启动托管</button><button id="managed-pause" class="button" type="button" hidden>暂停</button><button id="managed-stop" class="button danger" type="button" disabled>回城整理后停止</button></div>
+      </section>
+      <div id="managed-error" class="inline-error managed-error" role="alert" hidden></div>
+      <div id="managed-capabilities" class="managed-capabilities" aria-label="托管功能可用状态"></div>
+      <p id="managed-test-notice" class="muted" hidden>本地托管测试模式：新增动作尚未完成实机验收。保存配置并点击启动后执行；动作结果无法确认时暂停。</p>
+      <div class="managed-layout">
+        <div class="managed-config">
+          <section class="panel managed-card">
+            <div class="managed-card-heading"><div><span class="eyebrow">托管期间 · 推荐开启</span><h2>装备监控与自动整理</h2></div></div>
+            <div class="managed-background-options"><label class="managed-toggle"><input id="managed-rule-monitoring" type="checkbox" checked>背包 / 仓库命中规则自动锁定</label><label class="managed-toggle"><input id="managed-inventory-automation" type="checkbox" checked>启用背包 / 仓库自动整理</label></div>
+            <p class="managed-card-note">自动整理沿用「背包与仓库」中已保存的类型、触发门槛和存放页设置。两项功能与托管动作依次执行。关闭监控不影响回城清理时的装备保护：先筛选锁定，再处置垃圾。</p>
+          </section>
+          <section class="panel managed-card">
+            <div class="managed-card-heading"><div><span class="eyebrow">01 · 自动换装</span><h2>只换更高战力的装备</h2></div><label class="managed-toggle"><input id="managed-auto-equip" type="checkbox">启用</label></div>
+            <p class="managed-card-note">比较背包与仓库中的可穿戴装备，按固定单体 Boss 基准战力选择。神圣装备禁止自动穿戴。未指定暗金时，其他品质均可换装；指定但尚未穿上时，允许普通、优秀、稀有装备过渡，穿上后只在同名装备中升级。</p>
+            <details id="managed-lock-details"><summary>各部位换装设置 <small>选择指定暗金、不限制名称或不参与自动换装</small></summary><p id="managed-class-scope" class="managed-class-scope">连接游戏后，自动按当前职业筛选装备。</p><div id="managed-slot-locks" class="managed-slot-locks"></div></details>
+            <p class="managed-footnote">比较沿用当前战力估算；暗金特效、技能联动不完整模拟，已有宝石不会自动转移。</p>
+          </section>
+          <section class="panel managed-card">
+            <div class="managed-card-heading"><div><span class="eyebrow">02 · 自动刷图 / 推图</span><h2>选择刷图方式</h2></div><label class="managed-toggle"><input id="managed-farming" type="checkbox">启用</label></div>
+            <div class="managed-farming-fields">
+              <label>刷图模式<select id="managed-farm-mode"><option value="repeat">复刷 · 重复指定关卡</option><option value="push">推图 · 失败后回退复刷</option></select></label>
+              <label>起始难度<select id="managed-difficulty"><option value="current">沿用启动时当前难度</option><option value="Normal">普通</option><option value="Nightmare">噩梦</option><option value="Inferno">炼狱</option></select></label>
+              <label class="managed-map-field"><span id="managed-map-label">复刷关卡</span><select id="managed-map"><option value="">连接后读取关卡</option></select></label>
+              <label class="managed-threshold">回城整理<span>背包剩余空格 &lt; <input id="managed-free-threshold" type="number" min="1" max="2048" step="1" value="4" aria-label="触发回城的背包剩余格阈值"> 格</span></label>
+            </div>
+            <p id="managed-farm-note" class="managed-footnote">通关后重复进入选定关卡；背包空格不足时先回城整理，再继续刷图。</p>
+          </section>
+          <section class="panel managed-card managed-cleanup-card">
+            <div class="managed-card-heading"><div><span class="eyebrow">03 · 回城整理</span><h2>保留什么，如何处理其他奖励</h2></div><span class="badge locked">先保留 · 后处置</span></div>
+            <p class="managed-footnote">新用户默认：装备 1／2／3 页、符文 4 页、宝石 5 页。只使用已解锁的所选页；没有可用目标页时保留物品并暂停，可修改分区后继续。</p>
+            <div class="managed-policy-presets"><span>未命中装备快捷设置</span><button class="button ghost" type="button" data-managed-preset="sell_low">普通 / 优秀出售，其余分解</button><button class="button ghost" type="button" data-managed-preset="sell">全部出售</button><button class="button ghost" type="button" data-managed-preset="salvage">全部分解</button><button class="button ghost" type="button" data-managed-preset="store">全部入库</button></div>
+            <div class="managed-cleanup-table-wrap"><table class="managed-cleanup-table"><thead><tr><th>物品范围</th><th>处理方式</th><th>仓库满时</th><th>存放仓库页签</th></tr></thead><tbody>
+              <tr class="managed-protected-row"><td><strong>神圣 / 黑雾传说</strong><small>固定保护，不可修改</small></td><td colspan="2"><span class="badge match">锁定 → 仓库</span></td><td rowspan="7" class="managed-equipment-storage"><strong>装备共用存放页</strong><div id="managed-equipment-pages" class="managed-page-choices"></div><small>保护装备和选择入库的装备存放在这些页；只清理所选页中未锁定且不符合规则的装备。</small></td></tr>
+              <tr class="managed-protected-row"><td><strong>符合筛选规则的装备</strong><small>使用已启用的筛选组合</small></td><td colspan="2"><span class="badge match">锁定 → 仓库</span></td></tr>
+              <tr class="quality-ancient"><td><strong>远古传说 · 未命中</strong></td><td><select id="managed-equipment-ancient-action" data-managed-policy aria-label="远古传说未命中处理方式"><option value="store">放入仓库</option><option value="sell">出售</option><option value="salvage">分解</option></select></td><td><select id="managed-equipment-ancient-fallback" data-managed-policy aria-label="远古传说仓库满时处理方式"><option value="sell">出售</option><option value="salvage">分解</option></select></td></tr>
+              <tr class="quality-legendary"><td><strong>普通传说 · 未命中</strong></td><td><select id="managed-equipment-legendary-action" data-managed-policy aria-label="普通传说未命中处理方式"><option value="store">放入仓库</option><option value="sell">出售</option><option value="salvage">分解</option></select></td><td><select id="managed-equipment-legendary-fallback" data-managed-policy aria-label="普通传说仓库满时处理方式"><option value="sell">出售</option><option value="salvage">分解</option></select></td></tr>
+              <tr class="quality-rare"><td><strong>稀有 · 未命中</strong></td><td><select id="managed-equipment-rare-action" data-managed-policy aria-label="稀有未命中处理方式"><option value="store">放入仓库</option><option value="sell">出售</option><option value="salvage">分解</option></select></td><td><select id="managed-equipment-rare-fallback" data-managed-policy aria-label="稀有仓库满时处理方式"><option value="sell">出售</option><option value="salvage">分解</option></select></td></tr>
+              <tr class="quality-uncommon"><td><strong>优秀 · 未命中</strong></td><td><select id="managed-equipment-uncommon-action" data-managed-policy aria-label="优秀未命中处理方式"><option value="store">放入仓库</option><option value="sell">出售</option><option value="salvage">分解</option></select></td><td><select id="managed-equipment-uncommon-fallback" data-managed-policy aria-label="优秀仓库满时处理方式"><option value="sell">出售</option><option value="salvage">分解</option></select></td></tr>
+              <tr class="quality-normal"><td><strong>普通 · 未命中</strong></td><td><select id="managed-equipment-normal-action" data-managed-policy aria-label="普通未命中处理方式"><option value="store">放入仓库</option><option value="sell">出售</option><option value="salvage">分解</option></select></td><td><select id="managed-equipment-normal-fallback" data-managed-policy aria-label="普通仓库满时处理方式"><option value="sell">出售</option><option value="salvage">分解</option></select></td></tr>
+              <tr class="managed-protected-row"><td><strong>套装 / 宏伟符文</strong><small>固定保护，不可修改</small></td><td><span class="badge match">必须入库</span></td><td><small>满时暂停</small></td><td rowspan="2"><strong>符文共用存放页</strong><div id="managed-rune-pages" class="managed-page-choices"></div></td></tr>
+              <tr><td><strong>普通符文</strong><small>不含套装与宏伟符文</small></td><td><select id="managed-rune-action" aria-label="普通符文处理方式"><option value="store">放入仓库</option><option value="sell">出售</option></select></td><td><small>满时暂停</small></td></tr>
+              <tr><td><strong>宝石</strong><small>优先同种同等级堆叠</small></td><td><select id="managed-gem-action" aria-label="宝石处理方式"><option value="store">放入仓库</option><option value="sell">出售</option></select></td><td><small>满时暂停</small></td><td><div id="managed-gem-pages" class="managed-page-choices"></div></td></tr>
+            </tbody></table></div>
+            <p class="managed-footnote">品质设置只对不符合规则的装备生效，包含没有启用规则的装备。仓库满时，按待清理装备自己的品质选择出售 / 分解，包含所选页里的原有垃圾装备；其他页不清理。已锁定和待核验装备保留；保护装备无处存放时暂停等待。不符合规则的强化 / 已镶嵌装备也按所选策略处理，不自动返还强化材料和宝石。</p>
+            <div class="managed-loop-note"><span class="step">↻</span><div><strong>先批量收取，宝箱最后开启</strong><p>背包有空位时连续收取马车和地面物品，收完或背包满后统一筛选、锁定和整理，再收下一批。装备、符文和宝石处理完后再开宝箱；开箱奖励重新经过收取与保护流程。主城地面与马车未清空或仍在卸货时，禁止入图与切换难度。神圣、黑雾装备及套装、宏伟符文必须收纳；指定页满时暂停，不改为出售。</p></div></div>
+          </section>
+          <div class="managed-save-bar"><span id="managed-draft-state" class="note">设置已保存</span><button id="managed-reset-draft" class="button ghost" type="button">重置改动</button><button id="managed-save" class="button" type="button">保存托管设置</button></div>
+        </div>
+        <aside class="managed-side">
+          <section class="panel managed-loot">
+            <div class="managed-card-heading"><div><span class="eyebrow">本次托管</span><h2>累计掉落</h2></div><span id="managed-loot-total" class="badge locked">0 件</span></div>
+            <p id="managed-stats-note" class="managed-card-note">启动时已有物品不计入掉落；出售与分解在确认完成后累计。</p>
+            <div class="managed-stat-section"><h3>装备 <small>按品质从高到低</small></h3><table class="managed-stats-table"><thead><tr><th>品质</th><th>掉落</th><th>已出售 / 分解</th></tr></thead><tbody id="managed-equipment-stats"></tbody></table></div>
+            <div class="managed-stat-section"><h3>符文 <small id="managed-rune-total">0 个</small></h3><div id="managed-rune-stats" class="managed-item-stats"></div></div>
+            <div class="managed-stat-section"><h3>宝石 <small id="managed-gem-total">0 个</small></h3><div id="managed-gem-stats" class="managed-item-stats"></div></div>
+            <div class="managed-stats-footer"><button id="managed-reset-stats" class="text-button" type="button">清空本次统计</button><small>停止后可清空，不删除日志</small></div>
+          </section>
+          <section class="panel managed-history"><div class="managed-card-heading"><div><span class="eyebrow">执行记录</span><h2>当前流程</h2></div><small id="managed-history-count">0 条</small></div><ol id="managed-history-list" class="managed-history-list"><li class="managed-history-empty">尚未启动托管</li></ol></section>
+        </aside>
+      </div>
     </section>
     <section id="recommendations-page" role="tabpanel" hidden>
       <div class="page-heading"><div><h1>刷图推荐</h1><p>按平均伤害粗估用时，正常刷图自动校准；根据当前角色和地图直接比较经验收益。</p></div><button id="recommendation-refresh" class="button">刷新推荐</button></div>
@@ -161,5 +231,6 @@
   <dialog id="import-dialog" class="rule-tool-dialog" aria-labelledby="import-title"><h2 id="import-title">导入筛选组合</h2><p id="import-summary"></p><label class="tool-field">导入后状态<select id="import-enabled"><option value="false">停用 · 稍后手动启用</option><option value="true">启用 · 立即参与筛选</option></select></label><p>保留现有组合，新导入的组合使用新的编号。选择启用后，将参与按规则锁定及持续监控。</p><div class="dialog-actions"><button id="import-cancel" class="button">取消</button><button id="import-confirm" class="button primary">导入组合</button></div></dialog>
   <dialog id="manage-dialog" class="rule-tool-dialog" aria-labelledby="manage-title"><h2 id="manage-title">管理词条组合</h2><p>勾选需要清理的组合，然后批量删除。</p><div class="tool-selection"><button id="manage-all" class="button ghost">全选</button><button id="manage-none" class="button ghost">全不选</button><span id="manage-count"></span></div><div id="manage-list" class="manage-list"></div><div class="dialog-actions"><button id="manage-close" class="button">关闭</button><button id="manage-delete" class="button danger" disabled>删除所选组合</button></div></dialog>
   <dialog id="copy-dialog" class="rule-tool-dialog" aria-labelledby="copy-title"><h2 id="copy-title">复制到同类装备</h2><p id="copy-source"></p><label class="tool-field">复制范围<select id="copy-scope"><option value="all">此装备的全部已保存组合</option><option value="current">仅当前已保存组合</option></select></label><label class="tool-field">目标装备<select id="copy-target"></select></label><div id="copy-target-preview" class="copy-target-preview"></div><label class="tool-field">复制方式<select id="copy-mode"><option value="append">追加 · 保留目标已有组合</option><option value="replace">替换 · 清理目标已有组合</option></select></label><p id="copy-summary"></p><p>复制名称、词条条件及启用状态；相同组合自动跳过。仅复制已保存的内容，当前未保存的改动仍可继续编辑。</p><div class="dialog-actions"><button id="copy-cancel" class="button">取消</button><button id="copy-confirm" class="button primary">复制组合</button></div></dialog>
+  <div id="managed-gear-menu" class="managed-gear-menu" hidden><p id="managed-gear-scope"></p><label class="search managed-picker-search"><span>⌕</span><input id="managed-gear-search" placeholder="搜索装备名称…" aria-label="搜索可用暗金装备" autocomplete="off"></label><div id="managed-gear-choices" class="managed-gear-choices" role="listbox" aria-label="自动换装选项"></div></div>
   <dialog id="confirm-dialog"><div class="dialog-icon">↗</div><h2 id="confirm-title"></h2><p id="confirm-body"></p><div class="dialog-actions"><button id="confirm-cancel" class="button">取消</button><button id="confirm-ok" class="button danger">确认</button></div></dialog>
 </body></html>

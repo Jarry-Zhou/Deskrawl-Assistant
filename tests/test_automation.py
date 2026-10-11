@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from deskrawl_assistant.automation import DEFAULT_SETTINGS,validate_settings,pressure_candidates
+from deskrawl_assistant.automation import DEFAULT_SETTINGS,validate_settings,pressure_candidates,storage_targets
 from deskrawl_assistant.web_service import AssistantService
 from deskrawl_assistant.native_memory import MemoryReadError
 from deskrawl_assistant.models import ValidationError
@@ -20,20 +20,23 @@ def gem(index,name='GemEmerald4',count=1):
 class AutomationClient(FakeClient):
     def __init__(self,items,capacity=40):
         super().__init__(items);self.capacity=capacity;self.events=[];self.drops=[];self.storage_full=False
+        self.storage_indices=list(range(250));self.destinations=[]
     def snapshot(self):
         for row in self.items:
             row['transfer_key']=f"{row['container']}:{row['slot_index']}:{row['internal_name']}:{row.get('item_uid')}:{row.get('count',1)}"
         snap=super().snapshot()
         snap['containers']['inventory']['slot_count']=self.capacity
-        snap['transfer']={'available':True,'storage_indices':list(range(250))}
+        snap['transfer']={'available':True,'page_size':50,'storage_indices':list(self.storage_indices)}
         return snap
-    def move_items(self,expected,target,validate):
+    def move_items(self,expected,target,validate,*,target_indices=None):
         if self.storage_full: raise MemoryReadError('目标堆叠容量及可用空格不足；未移动任何物品')
         if not validate(): raise MemoryReadError('移动已取消，未更改物品')
         row=next(r for r in self.items if r['transfer_key']==expected[0]['transfer_key'])
-        self.events.append(('move',row['internal_name']))
         used={r['slot_index'] for r in self.items if r['container']==target}
-        row['container']=target;row['slot_index']=next(n for n in range(250) if n not in used)
+        destination=next((n for n in (target_indices if target_indices is not None else range(250)) if n not in used),None)
+        if destination is None: raise MemoryReadError('目标堆叠容量及可用空格不足；未移动任何物品')
+        self.events.append(('move',row['internal_name']));self.destinations.append(destination)
+        row['container']=target;row['slot_index']=destination
         return {'moved':1,'stacked_count':0}
     def carriage_snapshot(self):return {'available':True,'count':len(self.drops),'items':copy.deepcopy(self.drops)}
     def collect_carriage(self,token,validate):
@@ -51,6 +54,7 @@ class AutomationClient(FakeClient):
 class AutomationTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        threads=patch('deskrawl_assistant.web_service.threading.Thread');threads.start();self.addCleanup(threads.stop)
         self.client=AutomationClient([])
         self.service=AssistantService(self.client,Path(self.tmp.name)/'rules.json')
         self.service._publish(self.client.snapshot());self.addCleanup(self.service.close)
@@ -63,7 +67,7 @@ class AutomationTests(unittest.TestCase):
         return settings
     def test_invalid_configuration_cannot_overwrite_saved_preferences(self):
         saved=self.enable(gems={'enabled':True})
-        for mutate in [lambda s:s['carriage'].update(enabled=True,items=[]),lambda s:s['carriage'].update(items=['arbitrary_address']),
+        for mutate in [lambda s:s['carriage'].update(enabled=True,types=[]),lambda s:s['carriage'].update(types=['arbitrary_address']),
                        lambda s:s['pressure'].update(threshold=12,target_free=12),lambda s:s['pressure'].update(threshold=True),
                        lambda s:s['gems'].update(enabled=1)]:
             invalid=copy.deepcopy(saved);mutate(invalid)
@@ -96,11 +100,11 @@ class AutomationTests(unittest.TestCase):
         self.client.items.extend([gem(2),gem(3),gem(4)])
         self.service._automation_once()
         self.assertEqual(len(self.client.events),1);self.assertEqual(self.client.items[1]['container'],'storage')
-    def test_gems_free_space_before_carriage_and_unselected_drops_remain(self):
+    def test_gems_free_space_before_carriage_and_unselected_types_remain(self):
         self.client.capacity=1;self.client.items=[gem(0)]
         self.client.drops=[{**gem(0),'selection_id':'chosen','collectable':True},
-                           {**gem(0,'GemRuby4'),'selection_id':'other','collectable':True}]
-        self.enable(gems={'enabled':True},carriage={'enabled':True,'items':['GemEmerald4']})
+                           {**gem(0,'TreasureChest2'),'item_class':'ItemData','selection_id':'other','collectable':True}]
+        self.enable(gems={'enabled':True},carriage={'enabled':True,'types':['gem']})
         self.service._automation_once()
         self.assertEqual(self.client.events,[('move','GemEmerald4'),('collect','GemEmerald4')])
         self.assertEqual([r['selection_id'] for r in self.client.drops],['other'])
@@ -112,7 +116,7 @@ class AutomationTests(unittest.TestCase):
     def test_full_inventory_keeps_carriage_item(self):
         self.client.capacity=1;self.client.items=[item(0)]
         self.client.drops=[{**gem(0),'selection_id':'chosen','collectable':True}]
-        self.enable(carriage={'enabled':True,'items':['GemEmerald4']});self.service._automation_once()
+        self.enable(carriage={'enabled':True,'types':['gem']});self.service._automation_once()
         self.assertFalse(self.client.events);self.assertEqual(len(self.client.drops),1)
         self.assertTrue(self.service.automation_running)
     def test_stop_and_disabling_lock_monitor_leave_independent_switches_consistent(self):
@@ -124,10 +128,10 @@ class AutomationTests(unittest.TestCase):
     def test_changing_preferences_cancels_a_prepared_transfer(self):
         self.client.items=[gem(0)];self.enable(gems={'enabled':True})
         original=self.client.move_items
-        def change(expected,target,validate):
+        def change(expected,target,validate,*,target_indices=None):
             settings=copy.deepcopy(self.service.automation_settings);settings['gems']['enabled']=False
             self.service.save_automation(settings)
-            return original(expected,target,validate)
+            return original(expected,target,validate,target_indices=target_indices)
         with patch.object(self.client,'move_items',side_effect=change):self.service._automation_once()
         self.assertFalse(self.client.events)
     def test_failure_stops_both_background_operations(self):
@@ -135,6 +139,76 @@ class AutomationTests(unittest.TestCase):
         with patch.object(self.client,'move_items',side_effect=MemoryReadError('回读不一致')):self.service._work('monitor',{})
         self.assertFalse(self.service.automation_running);self.assertFalse(self.service.monitoring)
         self.assertIn('回读不一致',self.service.error)
+
+    def test_gems_runes_and_equipment_use_separate_noncontiguous_pages(self):
+        self.client.storage_indices=list(range(50))+list(range(100,150))+list(range(200,250))
+        rune=dict(gem(1,'Rune3'),item_class='RuneData',item_type=7)
+        gear=item(2)
+        self.client.capacity=4;self.client.items=[gem(0),rune,gear]
+        self.enable(gems={'enabled':True,'pages':[5]},runes={'enabled':True,'pages':[3]},
+                    pressure={'enabled':True,'pages':[1],'threshold':3,'target_free':4})
+        self.service._automation_once()
+        self.assertEqual(self.client.events,[('move','GemEmerald4'),('move','Rune3'),('move',gear['internal_name'])])
+        self.assertEqual(self.client.destinations,[200,100,0])
+
+    def test_full_selected_page_does_not_spill_into_other_empty_pages(self):
+        self.client.items=[gem(0)]+[dict(gem(n),container='storage') for n in range(50)]
+        self.enable(gems={'enabled':True,'pages':[1]})
+        self.service._automation_once()
+        self.assertFalse(self.client.events)
+        self.assertEqual(self.client.items[0]['container'],'inventory')
+        self.assertTrue(self.service.automation_running)
+        self.assertIn('空格不足',self.service.automation_status)
+
+    def test_closed_selected_page_waits_instead_of_using_open_page(self):
+        self.client.storage_indices=list(range(50))+list(range(200,250))
+        self.client.items=[gem(0)]
+        self.enable(gems={'enabled':True,'pages':[2]})
+        self.service._automation_once()
+        self.assertFalse(self.client.events)
+        self.assertIn('尚未开放',self.service.automation_status)
+
+    def test_type_selection_collects_all_gem_variants_and_ignores_runes(self):
+        keys=[key for key,meta in self.service.item_ui['collectibles'].items() if meta.get('kind')=='gem'][:2]
+        self.assertEqual(len(keys),2)
+        self.client.drops=[dict(gem(n,key),selection_id=f'gem-{n}',collectable=True) for n,key in enumerate(keys)]
+        rune_key=next(key for key,meta in self.service.item_ui['collectibles'].items() if meta.get('kind')=='rune')
+        self.client.drops.append(dict(gem(2,rune_key),selection_id='rune',collectable=True))
+        self.enable(carriage={'enabled':True,'types':['gem']})
+        self.service._automation_once()
+        self.assertEqual(self.client.events,[('collect',key) for key in keys])
+        self.assertEqual([row['selection_id'] for row in self.client.drops],['rune'])
+
+    def test_legacy_preferences_migrate_only_in_memory_and_do_not_autostart(self):
+        key=next(key for key,meta in self.service.item_ui['collectibles'].items() if meta.get('kind')=='gem')
+        legacy={'carriage':{'enabled':True,'items':[key]},'gems':{'enabled':True},
+                'pressure':{'enabled':True,'threshold':4,'target_free':12,'equipment_filter':'locked'}}
+        original=json.dumps(legacy,ensure_ascii=False,indent=2)+'\n'
+        self.service.automation_config.write_text(original,encoding='utf-8')
+        other=AssistantService(AutomationClient([]),self.service.config)
+        try:
+            self.assertEqual(other.automation_settings['carriage'],{'enabled':True,'types':['gem']})
+            self.assertEqual(other.automation_settings['gems'],{'enabled':True,'pages':[1]})
+            self.assertFalse(other.automation_settings['runes']['enabled'])
+            self.assertFalse(other.automation_running)
+            self.assertEqual(other.automation_config.read_text(encoding='utf-8'),original)
+        finally:other.close()
+
+    def test_invalid_pages_and_types_are_rejected_without_saving(self):
+        saved=self.enable(gems={'enabled':True})
+        for field,value in [('pages',[True]),('pages',[0]),('pages',[1,1]),('pages',[]),('pages','1')]:
+            raw=copy.deepcopy(saved);raw['gems'][field]=value
+            with self.subTest(value=value),self.assertRaises(ValidationError):self.service.save_automation(raw)
+        raw=copy.deepcopy(saved);raw['carriage']['types']=['gem','gem']
+        with self.assertRaises(ValidationError):self.service.save_automation(raw)
+        self.assertEqual(json.loads(self.service.automation_config.read_text()),saved)
+
+    def test_target_slot_validation_rejects_malformed_permissions(self):
+        for transfer in ({'page_size':True,'storage_indices':[0]}, {'page_size':50,'storage_indices':[0,0]},
+                         {'page_size':50,'storage_indices':[-1]}, {'storage_indices':[0]}):
+            with self.subTest(transfer=transfer),self.assertRaises(ValidationError):
+                storage_targets({'transfer':transfer},[1])
+        self.assertEqual(storage_targets({'transfer':{'page_size':50,'storage_indices':[0,49,200,249]}},[5]),[200,249])
 
 
 if __name__=='__main__':unittest.main()

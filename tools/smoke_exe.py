@@ -18,7 +18,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.1'
+NAME = 'Deskrawl装备助手-v1.2.2'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--connect-game', action='store_true')
     parser.add_argument('--desktop', action='store_true')
+    parser.add_argument('--test-managed', action='store_true', help='Check the explicit test entry without connecting to a game.')
     parser.add_argument('--exe', type=Path, help='Test a separately packaged executable.')
     parser.add_argument('--report', type=Path, help='Save verification without replacing another build report.')
     args = parser.parse_args()
@@ -97,6 +98,7 @@ def main():
         log = persistent / 'data/runtime/assistant-actions.jsonl'
         previous_loads = log.read_text(encoding='utf-8').count('desktop_window_loaded') if log.is_file() else 0
         command = [str(exe), '--port', str(port)]
+        if args.test_managed: command.append('--test-managed')
         if not args.desktop: command.append('--no-browser')
         process = subprocess.Popen(command, cwd=working,
             env=env, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -107,7 +109,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.1'
+                assert request('/api/state')['app_version'] == '1.2.2'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -133,6 +135,17 @@ def main():
         assert not request('/api/state')['rules']
         assert not request('/api/state')['monitoring']
         assert not request('/api/state')['automation']['running']
+        managed = request('/api/managed')
+        assert not managed['running'] and managed['phase'] == 'idle'
+        cleanup = managed['settings']['cleanup']
+        assert [cleanup[k+'_pages'] for k in ('equipment','rune','gem')] == [[1,2,3],[4],[5]]
+        auto = request('/api/state')['automation']['settings']
+        assert [auto[k]['pages'] for k in ('pressure','runes','gems')] == [[1,2,3],[4],[5]]
+        assert not managed['warehouse_ready']
+        assert 'data/game-actions-profile.json' in normalized
+        assert request('/automation-tools.js') and request('/managed-mode.js')
+        assert '托管模式' in request('/').decode('utf-8')
+        report['checks'].append('托管页面与动作配置内置；新用户装备1/2/3、符文4、宝石5；断线不误报解锁，托管默认停止')
         report['checks'].append('空规则、监控默认关闭；独立 exe 在中文和空格路径正常启动')
         assert '__SESSION_TOKEN__' not in request('/').decode('utf-8')
         assert b'async function api' in request('/app.js')
@@ -158,11 +171,17 @@ def main():
         for item in item_ui['items'].values():
             assert request(item['icon']).startswith(b'\x89PNG')
         report['checks'].append('36 张宝石、199 张符文图标及效果说明全部内置并可读取')
-        settings = {'carriage':{'enabled':False,'items':['GemDiamond4']},'gems':{'enabled':True},
-                    'pressure':{'enabled':False,'threshold':4,'target_free':12,'equipment_filter':'all'}}
+        settings = {'carriage':{'enabled':False,'types':['gem']},'gems':{'enabled':True,'pages':[5]},
+                    'runes':{'enabled':False,'pages':[4]},
+                    'pressure':{'enabled':False,'threshold':4,'target_free':12,'equipment_filter':'all','pages':[1,2,3]}}
         request('/api/automation/settings', {'settings':settings})
         assert request('/api/state')['automation']['settings'] == settings
         assert not request('/api/state')['automation']['running']
+        managed_settings = managed['settings']
+        managed_settings['cleanup'].update(equipment_pages=[5],rune_pages=[2,4],gem_pages=[1])
+        saved_managed = request('/api/managed/settings', {'settings':managed_settings})['settings']
+        assert saved_managed['cleanup']['rune_pages'] == [2,4]
+        assert not request('/api/managed')['running']
         rule = {'id':'packaging-disabled-rule','name':'打包验证（停用）', 'equipment_keys':['LegendaryBelt3'], 'enabled':False,
             'groups':{'primary':{'selected_stats':['Stats.CooldownReduction'],'operator':'>=','count':1}}, 'group_mode':'all'}
         request('/api/rule/save', rule)
@@ -202,6 +221,7 @@ def main():
         # A second launch must attach to the same service and exit, leaving
         # the first instance's session and rule data intact.
         second_command = [str(exe), '--port', str(port)]
+        if args.test_managed: second_command.append('--test-managed')
         if not args.desktop: second_command.append('--no-browser')
         second = subprocess.run(second_command, cwd=working,
             env=env, creationflags=subprocess.CREATE_NO_WINDOW, timeout=20)
@@ -283,6 +303,9 @@ def main():
         assert request('/api/logs?category=settings')['total'] >= logs_before
         assert state['connected'] is False and state['monitoring'] is False
         assert state['automation']['settings'] == settings and not state['automation']['running']
+        restored_managed = request('/api/managed')
+        assert restored_managed['settings'] == saved_managed and not restored_managed['running']
+        report['checks'].append('自定义托管分区、未解锁页选择与自动整理偏好重启后保留，默认方案不覆盖本地配置')
         assert request('/api/recommendations')['settings'] == recommendation_settings
         assert request('/api/experience')['recent'][0]['id'] == xp_sample['id']
         request('/api/experience/delete', {'id':xp_sample['id']})
@@ -303,6 +326,7 @@ def main():
             subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
     report['native_window'] = args.desktop
+    report['managed_test_entry'] = args.test_managed
     report_path = args.report or ROOT / 'release' / ('native-exe-verification.json' if args.desktop else 'exe-verification.json')
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     print(json.dumps(report, ensure_ascii=False, indent=2))

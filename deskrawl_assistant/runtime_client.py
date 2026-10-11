@@ -16,8 +16,12 @@ class RuntimeConnectionError(RuntimeError):
 
 
 class RuntimeClient:
-    def __init__(self):
+    def __init__(self, *, managed_test_mode=False):
+        if type(managed_test_mode) is not bool:
+            raise ValueError('托管测试模式必须由本地启动参数指定。')
+        self.managed_test_mode = managed_test_mode
         self._reader = None
+        self._actions = None
         self._guard = threading.RLock()
         self.pid: int | None = None
         self.last_error: str | None = None
@@ -143,16 +147,38 @@ class RuntimeClient:
                 raise RuntimeConnectionError("尚未连接游戏。")
             return unlock_equipment(self._reader, expected, validate)
 
-    def move_items(self, expected, target, validate=lambda: True):
+    def move_items(self, expected, target, validate=lambda: True, *, target_indices=None):
         from .container_transfer import move_items
         with self._guard:
             if self._reader is None:
                 raise RuntimeConnectionError("尚未连接游戏。")
             return move_items(self._reader, expected, target, validate,
-                on_commit=lambda result: self.item_events('items_transferred',result) if self.item_events else None)
+                on_commit=lambda result: self.item_events('items_transferred',result) if self.item_events else None,
+                target_indices=target_indices)
+
+    def _game_actions(self):
+        # Construction and capability discovery never install the dispatcher.
+        if self._reader is None: raise RuntimeConnectionError('尚未连接游戏。')
+        if self._actions is None:
+            from .game_actions import GameActions
+            self._actions = GameActions(self._reader, allow_unverified=self.managed_test_mode)
+        return self._actions
+
+    def managed_capabilities(self):
+        with self._guard: return self._game_actions().capabilities()
+
+    def control_snapshot(self):
+        with self._guard: return self._game_actions().control_snapshot()
+
+    def execute_game_action(self, kind, payload, cancel_event=None, *, validate=lambda:True):
+        with self._guard:
+            return self._game_actions().execute(kind,payload,cancel_event=cancel_event,validate=validate)
 
     def close(self):
         with self._guard:
+            if self._actions is not None:
+                self._actions.close()
+                self._actions = None
             reader, self._reader = self._reader, None
             self.pid = None
             if reader is not None:

@@ -23,6 +23,23 @@ BOOK_RVA = 0x3A17D08
 DIFFICULTY_RVA = 0x3A1E438
 
 
+def completed_by_difficulty(keys):
+    result = {key:[] for key in ('Normal','Nightmare','Inferno')}
+    for raw in keys:
+        if not isinstance(raw,str): raise MemoryReadError('已完成地图标识无效。')
+        parts = raw.split('::difficulty::')
+        if len(parts)==1:
+            key,difficulty = raw,'Normal'
+        elif len(parts)==2:
+            key,label = parts
+            difficulty = {'Nightmare':'Nightmare','Inferno1':'Inferno','Inferno':'Inferno'}.get(label)
+        else:
+            raise MemoryReadError('已完成地图难度标识无效。')
+        if difficulty in result and key:
+            result[difficulty].append(key)
+    return result
+
+
 def decode_obscured_double(raw):
     """Decode copied ACTk v39 ObscuredDouble and verify its native checksum."""
     if len(raw) != 40:
@@ -464,6 +481,85 @@ def _loadout_identity(copy):
     return {'equipment': equipped, 'runes': runes,
             'talents': sorted(talents, key=lambda value: value['asset_id'])}
 
+def _campaign_progress(copy, save, config_obj, catalog):
+    """Map unlocks and entry items do not depend on combat skills or DPS."""
+    reader = copy.reader
+    diff_klass = copy.klass(copy.ptr(reader.module['base'] + native_rva(reader,'difficulty_rva',DIFFICULTY_RVA)), 'ey')
+    diff_static = copy.ptr(diff_klass+184)
+    diff_enum,max_difficulty = copy.integer(diff_static),copy.integer(diff_static+4)
+    difficulty = {0:'Normal',1:'Nightmare',2:'Inferno'}.get(diff_enum)
+    if not difficulty:
+        raise MemoryReadError('当前难度不在已验证范围。')
+    if max_difficulty not in (0,1,2) or diff_enum>max_difficulty:
+        raise MemoryReadError('难度解锁状态未确认。')
+    completed_maps = completed_by_difficulty(copy.completed(save))
+    is_demo = copy.boolean(config_obj+48)
+    entry_items = {}
+    inventory = copy.verify(reader.singleton('Inventory'),'Inventory')
+    for item,amount in copy.dictionary(copy.ptr(inventory+64),'int','object').items():
+        if amount>0: entry_items[reader.asset_name(item)] = amount
+    unlocked_maps = {tier:[m['map_id'] for m in catalog['maps']
+        if not m.get('unavailable') and not (is_demo and m.get('locked_in_demo'))
+        and catalog['difficulties'][tier]['value']<=max_difficulty
+        and (not m.get('prerequisite') or m['prerequisite'] in completed_maps[tier])]
+        for tier in completed_maps}
+    return {'difficulty':difficulty,'unlocked_maps':unlocked_maps,'completed_maps':completed_maps,
+            'unlocked_difficulties':[key for key,row in catalog['difficulties'].items() if row['value']<=max_difficulty],
+            'entry_items':entry_items,'is_demo':is_demo}
+
+
+def _campaign_run(copy, manager, difficulty):
+    """Only the identity and completion evidence needed by the serial planner."""
+    plan,active_map = copy.ptr(manager+120),copy.ptr(manager+112)
+    if not plan or not active_map: return None
+    copy.verify(plan,'RunPlan'); copy.verify(active_map,'MapData')
+    wave = copy.verify(copy.ptr(manager+104),'WaveManager')
+    if copy.ptr(wave+88)!=plan: raise SnapshotChangedError('当前关卡计划正在切换。')
+    from .recommendation import difficulty_id
+    raw_id = copy.reader.string(copy.ptr(plan+16)) or ''
+    map_id = copy.reader.string(copy.ptr(plan+24)) or ''
+    plan_difficulty = difficulty_id(copy.reader.string(copy.ptr(plan+48)) or '')
+    if not raw_id or map_id!=copy.reader.asset_name(active_map) or plan_difficulty!=difficulty:
+        raise SnapshotChangedError('关卡身份尚未稳定。')
+    waves = copy.array(copy.ptr(plan+88),8,'RunWave',limit=512)
+    alive = 0
+    for raw in copy.list(copy.ptr(manager+192),element='Enemy',limit=4096):
+        enemy = struct.unpack('<Q',raw)[0]
+        if enemy and not copy.boolean(copy.verify(enemy,'Enemy')+296): alive += 1
+    return {'id':hashlib.sha256(raw_id.encode()).hexdigest(),'map_id':map_id,'difficulty':difficulty,
+            'wave_index':copy.integer(wave+48),'wave_count':len(waves),'wave_active':copy.boolean(wave+64),
+            'enemy_count':alive,'finished':copy.boolean(wave+248),'final_kill_settled':copy.boolean(wave+249),
+            'status_source':'verified_WaveManager_state'}
+
+
+def _campaign_snapshot(reader):
+    copy = _Copy(reader)
+    manager = copy.singleton(MANAGER_RVA,'GameManager')
+    if copy.integer(manager+168)!=1: raise MemoryReadError('请先进入角色，再读取关卡。')
+    data = copy.singleton(DATA_RVA,'PlayerData')
+    save = copy.verify(reader.singleton('SaveSystem'),'SaveSystem')
+    mode,slot = struct.unpack('<ii',copy.read(save+32,8))
+    label = reader.string(copy.ptr(data+40)) or ''
+    if mode not in (0,1) or not 0<=slot<100: raise MemoryReadError('当前角色标识无效。')
+    config_obj = copy.verify(copy.ptr(manager+32),'GameConfig')
+    progress = _campaign_progress(copy,save,config_obj,_catalog())
+    run = _campaign_run(copy,manager,progress['difficulty'])
+    copy.finish()
+    return {'available':True,'profile':{'character_id':f'{mode}:{slot}:{label}',**progress},
+            'run':run,'reason':'','source':'verified_game_memory'}
+
+
+def read_campaign(reader):
+    """Read-only campaign state, including immediately after login in town."""
+    try:
+        for attempt in range(3):
+            try: return _campaign_snapshot(reader)
+            except SnapshotChangedError:
+                if attempt==2: raise
+    except (MemoryReadError,OSError,ValueError,UnicodeError,KeyError,struct.error) as exc:
+        return {'available':False,'profile':None,'run':None,'reason':str(exc),'source':'verified_game_memory'}
+
+
 def _snapshot(reader):
     copy = _Copy(reader)
     manager = copy.singleton(MANAGER_RVA, 'GameManager')
@@ -518,22 +614,9 @@ def _snapshot(reader):
     if not 0 <= hp_current <= hp_max <= 1e15:
         raise MemoryReadError('当前生命数值无效。')
     dead = copy.boolean(player + 296)
-    diff_klass = copy.klass(copy.ptr(reader.module['base'] + native_rva(reader,'difficulty_rva',DIFFICULTY_RVA)), 'ey')
-    diff_enum = copy.integer(copy.ptr(diff_klass + 184))
-    difficulty = {0: 'Normal', 1: 'Nightmare', 2: 'Inferno'}.get(diff_enum)
-    if not difficulty:
-        raise MemoryReadError('当前难度不在已验证范围。')
     catalog = _catalog()
-    completed = copy.completed(save)
-    is_demo = copy.boolean(config_obj + 48)
-    entry_items = {}
-    inventory = copy.verify(reader.singleton('Inventory'), 'Inventory')
-    for item, amount in copy.dictionary(copy.ptr(inventory + 64), 'int', 'object').items():
-        if amount > 0:
-            entry_items[reader.asset_name(item)] = amount
-    unlocked = [m['map_id'] for m in catalog['maps']
-                if not m.get('unavailable') and not (is_demo and m.get('locked_in_demo'))
-                and (not m.get('prerequisite') or m['prerequisite'] in completed)]
+    progress = _campaign_progress(copy,save,config_obj,catalog)
+    difficulty = progress['difficulty']
     permanent = {off: caches[off] for off in (536, 544, 568, 576, 648)}
     loadout_identity = _loadout_identity(copy)
     loadout = fingerprint(character_id, permanent, skills, {'conversions': conversions, 'hero_id': hero_id, 'life_skill_stats': caches[632], 'identity': loadout_identity})
@@ -570,8 +653,7 @@ def _snapshot(reader):
         'xp_gain_multiplier': max(0, 1 + stats[41]), 'xp_gain_provenance': 'Player.final_XPGain_bonus_plus_one',
         'combat': combat_stats, 'combat_provenance': provenance, 'skills': skills,
         'timing': timing,
-        'unlocked_maps': {difficulty: unlocked}, 'completed_maps': {difficulty: completed},
-        'entry_items': entry_items, 'is_demo': is_demo}, 'run': run, 'warnings': list(dict.fromkeys(warnings)),
+        **progress}, 'run': run, 'warnings': list(dict.fromkeys(warnings)),
         'reason': '', 'source': 'verified_game_memory'}
 
 

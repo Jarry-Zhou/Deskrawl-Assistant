@@ -16,6 +16,7 @@ assets = [
     'carriage-types.json',
     'item-ui.json',
     'compatibility-baseline.json',
+    'game-actions-profile.json',
 ]
 datas = [(str(root / 'data' / name), 'data') for name in assets]
 datas.append((str(root / 'deskrawl_assistant' / 'web'), 'deskrawl_assistant/web'))
@@ -42,7 +43,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Deskrawl装备助手-v1.2.1',
+    name='Deskrawl装备助手-v1.2.2',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

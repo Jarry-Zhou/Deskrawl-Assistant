@@ -169,7 +169,8 @@ def access_state(reader):
     if owned not in (b'\0',b'\1'): raise MemoryReadError('仓库扩展页状态异常')
     allowed = list(range((pages+1)*50))
     if owned == b'\1': allowed.extend(range(200,250))
-    return {'available':True,'storage_indices':allowed,'storage_pages':pages+1+(owned==b'\1')}, guards
+    return {'available':True,'storage_indices':allowed,'storage_pages':pages+1+(owned==b'\1'),
+            'page_size':50}, guards
 
 
 class FrozenSlotTransaction:
@@ -292,13 +293,22 @@ class FrozenSlotTransaction:
             self.handle = None
 
 
-def move_items(reader,expected,target,validate=lambda:True,on_commit=None):
+def move_items(reader,expected,target,validate=lambda:True,on_commit=None,*,target_indices=None):
     if target not in ('inventory','storage') or not expected:
         raise MemoryReadError('请选择物品和移动方向')
     snapshot = reader.snapshot()
     if not snapshot['complete']: raise MemoryReadError('物品正在变化，请刷新后重试')
     access,guards = access_state(reader)
     allowed = set(access['storage_indices'])
+    restricted = None
+    if target_indices is not None:
+        if (not isinstance(target_indices,(list,tuple)) or not target_indices
+                or any(type(n) is not int or n < 0 for n in target_indices)
+                or len(set(target_indices)) != len(target_indices)):
+            raise MemoryReadError('目标格位限制无效')
+        restricted = set(target_indices)
+        if target=='storage' and not restricted <= allowed:
+            raise MemoryReadError('目标仓库页尚未开放')
     source_name = 'storage' if target=='inventory' else 'inventory'
     current = {r.get('transfer_key'):r for r in snapshot['containers'][source_name]['slots']}
     keys = [r.get('transfer_key') for r in expected]
@@ -312,9 +322,12 @@ def move_items(reader,expected,target,validate=lambda:True,on_commit=None):
         entries,block = reader.array(array,'InventorySlot',limit=2048,stride=8)
         arrays[name] = [struct.unpack('<Q',v)[0] for v in entries]
         guards.extend([(root+offset,struct.pack('<Q',array)),(array+32,block)])
+    if restricted is not None and any(n >= len(arrays[target]) for n in restricted):
+        raise MemoryReadError('目标格位超出容器容量')
     targets = []
     for index,address in enumerate(arrays[target]):
         if target=='storage' and index not in allowed: continue
+        if restricted is not None and index not in restricted: continue
         if not address or p.u64(address)!=reader.classes['InventorySlot']: continue
         header = p.read(address,48)
         targets.append({'slot_index':index,'address':address,'header':header,

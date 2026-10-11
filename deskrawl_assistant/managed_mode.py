@@ -1,0 +1,1107 @@
+"""Pure, serial managed-mode planner. It never calls or writes to the game.
+
+Every action needs a fresh observation and a verified receipt. The power score
+is character.preview's fixed panel estimate, not damage per second: legendary
+proc differences are not predicted. An executor must still recheck identities.
+"""
+from __future__ import annotations
+
+from collections import Counter
+from copy import deepcopy
+import math
+
+from .models import ValidationError
+from .game_panel_log import DisposalLogCursor
+from .item_protection import divine_equipment, mandatory_storage, disposal_protection, is_rune
+from .storage_preferences import DEFAULT_STORAGE_PAGES
+
+
+DEFAULT_SETTINGS = {
+    'background': {'rule_monitoring': True, 'inventory_automation': True},
+    'auto_equip': {'enabled': False, 'minimum_delta': 1, 'slot_locks': {}, 'disabled_slots': []},
+    'farming': {'enabled': False, 'mode': 'repeat', 'dungeon_id': None, 'difficulty':'current',
+                'progression': [], 'free_threshold': 4},
+    'cleanup': {'equipment_action': 'store', 'equipment_fallback': 'sell', 'equipment_policies': {},
+                'equipment_pages': list(DEFAULT_STORAGE_PAGES['equipment']), 'rune_action': 'store', 'rune_pages': list(DEFAULT_STORAGE_PAGES['rune']),
+                'gem_action': 'store', 'gem_pages': list(DEFAULT_STORAGE_PAGES['gem'])},
+}
+EQUIPMENT_BUCKETS = ('divine', 'black_mist', 'ancient', 'legendary', 'rare', 'uncommon', 'normal')
+BUCKET_LABELS = dict(zip(EQUIPMENT_BUCKETS, ('神圣', '黑雾传说', '远古传说', '普通传说', '稀有', '优秀', '普通')))
+DISPOSABLE_BUCKETS = EQUIPMENT_BUCKETS[2:]
+DIFFICULTIES = ('Normal','Nightmare','Inferno')
+DIFFICULTY_LABELS = dict(zip(DIFFICULTIES,('普通','噩梦','炼狱')))
+
+
+def run_record(value):
+    """The native reader returns None when no dungeon run is active."""
+    if value is None:
+        return {}
+    if not isinstance(value,dict):
+        raise ValidationError('关卡运行记录格式未确认。')
+    return value
+
+
+def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_empty_rune_pages=False):
+    """Validate saved choices, including reserved pages; check permissions at runtime."""
+    if not isinstance(raw, dict):
+        raise ValidationError('托管配置格式无效。')
+    raw = deepcopy(raw)
+    raw.setdefault('background', deepcopy(DEFAULT_SETTINGS['background']))
+    if set(raw) != set(DEFAULT_SETTINGS): raise ValidationError('托管配置格式无效。')
+    if isinstance(raw.get('farming'),dict):
+        raw['farming'].setdefault('difficulty','current')
+    if isinstance(raw.get('auto_equip'),dict):
+        raw['auto_equip'].setdefault('disabled_slots',[])
+    if isinstance(raw.get('cleanup'),dict):
+        raw['cleanup'].setdefault('equipment_policies',{})
+    result = deepcopy(raw)
+    for group, defaults in DEFAULT_SETTINGS.items():
+        if not isinstance(raw[group], dict) or set(raw[group]) != set(defaults):
+            raise ValidationError('托管配置字段不完整：' + group)
+    e, f, c = result['auto_equip'], result['farming'], result['cleanup']
+    if type(e['enabled']) is not bool or type(f['enabled']) is not bool:
+        raise ValidationError('托管开关必须为布尔值。')
+    if any(type(v) is not bool for v in result['background'].values()):
+        raise ValidationError('托管监控和整理开关必须为布尔值。')
+    delta = e['minimum_delta']
+    if type(delta) not in (int, float) or not math.isfinite(delta) or delta < 1:
+        raise ValidationError('换装最小提升必须是至少 1 的有限数值。')
+    disabled = e['disabled_slots']
+    if (not isinstance(disabled,list) or any(type(n) is not int or n not in range(12) for n in disabled)
+            or len(set(disabled)) != len(disabled)):
+        raise ValidationError('不参与自动换装的部位无效。')
+    e['disabled_slots'] = sorted(disabled)
+    locks = e['slot_locks']
+    if not isinstance(locks, dict) or any(str(k) not in {str(n) for n in range(12)} for k in locks):
+        raise ValidationError('暗金锁定部位无效。')
+    e['slot_locks'] = {str(k): v for k, v in locks.items()}
+    if len(e['slot_locks']) != len(locks):
+        raise ValidationError('暗金锁定部位重复。')
+    if any(not isinstance(v, str) or not v or (equipment_keys is not None and v not in equipment_keys)
+           for v in locks.values()):
+        raise ValidationError('指定暗金装备无效。')
+    if f['mode'] not in ('repeat', 'push') or type(f['free_threshold']) is not int or not 0 <= f['free_threshold'] <= 2048:
+        raise ValidationError('刷图模式或回城空格门槛无效。')
+    if f['difficulty'] not in ('current',*DIFFICULTIES):
+        raise ValidationError('托管难度无效。')
+    if f['dungeon_id'] is not None and (type(f['dungeon_id']) not in (int, str) or not str(f['dungeon_id'])):
+        raise ValidationError('关卡标识无效。')
+    p = f['progression']
+    if (not isinstance(p,list) or len(p)>4096 or any(not (type(i) in (int,str) or
+            isinstance(i,dict) and set(i)=={'dungeon_id','difficulty'} and type(i['dungeon_id']) in (int,str)
+            and i['difficulty'] in DIFFICULTIES) for i in p) or len({str(i) for i in p})!=len(p)):
+        raise ValidationError('推进关卡顺序无效。')
+    if f['enabled'] and f['dungeon_id'] is None:
+        raise ValidationError('请先选择托管关卡。')
+    if c['equipment_action'] not in ('sell', 'salvage', 'store') or c['equipment_fallback'] not in ('sell', 'salvage'):
+        raise ValidationError('未命中装备处理方式无效。')
+    policies = c['equipment_policies']
+    if not isinstance(policies,dict) or not set(policies) <= set(DISPOSABLE_BUCKETS):
+        raise ValidationError('装备品质处理配置无效；神圣和黑雾装备固定保留。')
+    for bucket, policy in policies.items():
+        if (not isinstance(policy,dict) or set(policy) != {'action','fallback'}
+                or policy['action'] not in ('store','sell','salvage') or policy['fallback'] not in ('sell','salvage')):
+            raise ValidationError('装备品质处理方式无效：'+BUCKET_LABELS[bucket])
+    # Legacy global preferences become explicit per-quality preferences without
+    # changing a saved user's disposal choices. The globals only aid migration.
+    c['equipment_policies'] = {bucket:deepcopy(policies.get(bucket,
+        {'action':c['equipment_action'],'fallback':c['equipment_fallback']})) for bucket in DISPOSABLE_BUCKETS}
+    if c['rune_action'] not in ('sell', 'store') or c['gem_action'] not in ('sell', 'store'):
+        raise ValidationError('符文或宝石处理方式无效。')
+    for name in ('equipment_pages', 'rune_pages', 'gem_pages'):
+        pages = c[name]
+        if (not isinstance(pages, list) or len(pages) > 256 or any(type(n) is not int or n < 1 for n in pages)
+                or len(set(pages)) != len(pages)):
+            raise ValidationError('托管仓库页选择无效：' + name)
+        if not pages and not (name=='rune_pages' and allow_empty_rune_pages) and (
+                name in ('equipment_pages','rune_pages') or c[name.replace('_pages', '_action')] == 'store'):
+            raise ValidationError('请勾选用于存放物品的仓库页。')
+    return result
+
+
+def item_kind(row):
+    if row.get('is_equipment') is True or row.get('kind') == 'equipment':
+        return 'equipment'
+    if is_rune(row): return 'rune'
+    if row.get('kind') in ('gem', 'rune', 'chest', 'material'):
+        return row['kind']
+    name = row.get('internal_name', row.get('name_key', ''))
+    if row.get('item_class') == 'RuneData': return 'rune'
+    if row.get('item_class') == 'GemData' or name.startswith('Gem'): return 'gem'
+    if name.startswith('TreasureChest'): return 'chest'
+    return 'material'
+
+
+def equip_candidate_allowed(row, score, settings, character):
+    """Use the same slot policy when planning and just before executing a swap."""
+    if divine_equipment(row) or not isinstance(score, dict): return False
+    target, delta = score.get('target'), score.get('delta')
+    if (type(target) is not int or target not in range(12)
+            or type(delta) not in (int, float) or not math.isfinite(delta)
+            or delta < settings['minimum_delta']):
+        return False
+    if target in settings.get('disabled_slots',[]): return False
+    wanted = settings['slot_locks'].get(str(target))
+    if not wanted or row.get('name_key') == wanted:
+        return True
+    # A named legendary still excludes other legendary names. Early-game
+    # ordinary/uncommon/rare upgrades may bridge the slot until it is worn.
+    rarity = row.get('rarity')
+    if type(rarity) is not int or rarity not in (0, 1, 2): return False
+    if not isinstance(character, dict) or character.get('available') is not True: return False
+    worn = character.get('equipment')
+    if not isinstance(worn, list): return False
+    slots = set()
+    current = None
+    for item in worn:
+        if not isinstance(item, dict): return False
+        slot = item.get('equipped_slot')
+        if type(slot) is not int or slot not in range(12) or slot in slots: return False
+        slots.add(slot)
+        if slot == target: current = item
+    if 'replaced_uid' not in score: return False
+    if current is None:
+        return score['replaced_uid'] is None
+    key, uid = current.get('name_key'), current.get('item_uid')
+    return (isinstance(key, str) and bool(key) and isinstance(uid, str) and bool(uid)
+            and score['replaced_uid'] == uid and key != wanted)
+
+
+def equipment_bucket(row):
+    """One mutually exclusive label, even when the game sets overlapping tags."""
+    if row.get('rarity') == 4 or row.get('is_divine') is True: return 'divine'
+    if row.get('is_black_mist') is True: return 'black_mist'
+    if row.get('is_ancient') is True: return 'ancient'
+    return {0: 'normal', 1: 'uncommon', 2: 'rare', 3: 'legendary'}.get(row.get('rarity'), 'unknown')
+
+
+def equipment_policy(cleanup, row, *, fallback=False):
+    bucket = equipment_bucket(row)
+    if bucket not in DISPOSABLE_BUCKETS:
+        raise ValidationError('当前装备品质不能按垃圾策略处理。')
+    field = 'fallback' if fallback else 'action'
+    return cleanup.get('equipment_policies',{}).get(bucket,{}).get(field,
+        cleanup['equipment_fallback' if fallback else 'equipment_action'])
+
+
+def equipment_actions(cleanup):
+    return {equipment_policy(cleanup,{'rarity':rarity,'is_ancient':ancient},fallback=fallback)
+        for rarity,ancient in ((0,False),(1,False),(2,False),(3,False),(3,True)) for fallback in (False,True)}
+
+
+def identity(row):
+    uid = row.get('item_uid')
+    if isinstance(uid, str) and uid:
+        return 'uid:' + uid
+    return row.get('observation_id') or row.get('selection_id') or row.get('transfer_key')
+
+
+def _quantity(row):
+    n = row.get('count', 1)
+    if type(n) is not int or n < 1: raise ValidationError('物品数量尚未确认。')
+    return n
+
+
+def _metric_key(row):
+    kind = item_kind(row)
+    if kind == 'equipment': return kind, equipment_bucket(row)
+    if kind in ('rune', 'gem'):
+        return kind, row.get('internal_name', row.get('name_key', '')), row.get('rarity'), row.get('rune_level', row.get('level'))
+    return None
+
+
+def _location_key(row):
+    index = row.get('slot_index')
+    if index is None: index = row.get('observation_id', row.get('selection_id'))
+    return row.get('container'), str(index), _metric_key(row)
+
+
+def observation_items(observation):
+    if 'items' in observation:
+        result = [deepcopy(r) for r in observation['items']]
+    else:
+        result = []
+        for container, data in observation.get('containers', {}).items():
+            result.extend(dict(deepcopy(r), container=container) for r in data.get('slots', []))
+    known = {(r.get('container'), r.get('slot_index'), identity(r)) for r in result}
+    for container in ('carriage', 'ground'):
+        for row in observation.get(container, {}).get('items', []):
+            row = dict(deepcopy(row), container=container)
+            token = (container, row.get('slot_index'), identity(row))
+            if token not in known:
+                result.append(row); known.add(token)
+    for row in observation.get('character', {}).get('equipment', []):
+        row = dict(deepcopy(row), container='equipped')
+        token = ('equipped', row.get('equipped_slot'), identity(row))
+        if token not in known:
+            result.append(row); known.add(token)
+    return result
+
+
+class ManagedMetrics:
+    """Session-only loot counts: initial holdings and transfers are not drops.
+
+    Generated identities are remembered for the whole session. Fungible stacks
+    require a complete all-source observation and use conserved total quantities.
+    A confirmed disposal adjusts the previous balance before the next snapshot.
+    Stable explicit drop events can be supplied instead of inferred changes.
+    """
+    def __init__(self):
+        self.baselined = False
+        self.seen_uids = set()
+        self.seen_events = set()
+        self.balances = Counter()
+        self.initial = Counter()
+        self.locations = Counter()
+        self.initial_locations = Counter()
+        self.rows = {}
+        self.totals = {}
+        self.disposal_ids = set()
+        self.uid_acquired = set()
+        self.uid_outcomes = set()
+        self.inference_mode = None
+        self.native_ledgers = {}
+        self.native_bag_uids = set()
+        self.native_policy = {}
+        self.native_counts = Counter()
+        self.native_estimates = Counter()
+        self.native_pending = Counter()
+        self.native_estimate_queue = {}
+        self.native_pickup_credits = Counter()
+        self.native_initialised = False
+        self.native_initial_pending = Counter()
+        self.native_initial_receipts = Counter()
+        self.native_generations = Counter()
+        self.panel_cursor = DisposalLogCursor()
+        self.panel_enabled = False
+        self.panel_pending = []
+        self.panel_initial = {}
+        self.panel_initial_gone = {}
+        self.panel_tick = 0
+        self.panel_events = 0
+        self.panel_unparsed = 0
+        self.panel_gold = 0
+
+    def _panel_observe(self, observation, rows, *, baseline=False):
+        if 'system_log' not in observation: return
+        self.panel_enabled = True
+        new = self.panel_cursor.observe(observation['system_log'], baseline=baseline)
+        if baseline:
+            self.panel_initial = {r['item_uid']:deepcopy(r) for r in rows
+                if item_kind(r) == 'equipment' and r.get('rarity') in (0,1,2) and r.get('item_uid')
+                and r.get('container') in ('ground','carriage') and not r.get('issues')}
+        if self._complete(observation):
+            self.panel_tick += 1
+            current = {r['item_uid']:r for r in rows if r.get('item_uid')}
+            for uid, row in list(self.panel_initial.items()):
+                now = current.get(uid)
+                if now and now.get('container') in ('ground','carriage'): continue
+                del self.panel_initial[uid]
+                if now is None:
+                    key = (row.get('name_key') or row.get('internal_name'), row.get('rarity'))
+                    # Allow for the inventory/log snapshots straddling disposal.
+                    self.panel_initial_gone.setdefault(key, []).append(self.panel_tick + 2)
+            if not self.panel_initial:
+                self.panel_pending.extend(new)
+                new = []
+            for event in self.panel_pending:
+                receipt = event.get('receipt')
+                if not isinstance(receipt, dict):
+                    self.panel_unparsed += 1; continue
+                row = receipt.get('item', {})
+                field = {'sell':'sold','salvage':'salvaged'}.get(receipt.get('action'))
+                rarity = row.get('rarity')
+                if rarity in (3,4): continue  # WaveManager carries ancient/mist flags.
+                if not field or type(rarity) is not int or rarity not in (0,1,2) or receipt.get('quantity') != 1:
+                    self.panel_unparsed += 1; continue
+                key = (row.get('name_key') or row.get('internal_name'), rarity)
+                initial = self.panel_initial_gone.get(key, [])
+                if initial:
+                    initial.pop(0); continue
+                self._record(row, field, 1)
+                self.panel_events += 1
+                if field == 'sold': self.panel_gold += receipt.get('gold') or 0
+            self.panel_pending = []
+            self.panel_initial_gone = {key:[expiry for expiry in values if expiry > self.panel_tick]
+                for key,values in self.panel_initial_gone.items() if any(expiry > self.panel_tick for expiry in values)}
+        # Only defer if source identities are incomplete or initial ground
+        # items still need distinguishing. Ordinary new log records book now.
+        self.panel_pending.extend(deepcopy(new))
+
+    def _record(self, row, field, quantity):
+        key = _metric_key(row)
+        if key is None or quantity <= 0: return
+        self.rows.setdefault(key, deepcopy(row))
+        totals = self.totals.setdefault(key, {'count': 0, 'sold': 0, 'salvaged': 0, 'stored': 0})
+        totals[field] += quantity
+
+    @staticmethod
+    def _complete(observation):
+        if observation.get('complete') is not True: return False
+        return all(observation.get(k, {}).get('complete', observation.get(k, {}).get('available')) is True
+                   for k in ('carriage', 'ground'))
+
+    def _native_observe(self, observation, rows, *, baseline=False):
+        ledger = observation.get('loot_ledger', {})
+        if not isinstance(ledger, dict) or ledger.get('complete') is not True or ledger.get('available') is not True: return
+        baseline = baseline or not self.native_initialised
+        self.native_initialised = True
+        bag = {r['item_uid']:r for r in rows if item_kind(r) == 'equipment'
+               and r.get('container') in ('inventory', 'storage', 'equipped') and r.get('item_uid') and not r.get('issues')}
+        newly_bagged = Counter(r.get('rarity') for uid,r in bag.items() if uid not in self.native_bag_uids)
+        self.native_bag_uids.update(bag)
+        if not baseline: self.native_pickup_credits.update(newly_bagged)
+        self.native_pending = Counter(equipment_bucket(r) for r in rows if r.get('container') in ('ground', 'carriage')
+            and r.get('item_uid') in self.uid_acquired and not r.get('issues'))
+        if baseline:
+            initial = [r for r in rows if item_kind(r) == 'equipment' and r.get('container') in ('ground', 'carriage')]
+            self.native_initial_pending = Counter(equipment_bucket(r) for r in initial)
+            self.native_initial_receipts = Counter((r.get('name_key') or r.get('internal_name'), equipment_bucket(r)) for r in initial)
+        run_id = ledger.get('id')
+        if not run_id:
+            self.native_policy = dict(ledger.get('policy', self.native_policy)); return
+        counts, receipts = ledger.get('counts', {}), ledger.get('receipts', [])
+        if not isinstance(counts, dict) or not isinstance(receipts, list): return
+        if any(type(n) is not int or n < 0 for n in counts.values()): return
+        previous = self.native_ledgers.get(run_id)
+        if baseline:
+            self.native_ledgers[run_id] = deepcopy(ledger)
+            self.native_policy = dict(ledger.get('policy', {})); return
+        previous_counts = previous.get('counts', {}) if previous else {}
+        old_indices = {r['index'] for r in (previous or {}).get('receipts', [])}
+        if (any(n < previous_counts.get(k, 0) for k,n in counts.items())
+                or previous and len(receipts) < len(previous.get('receipts', []))):
+            self.native_estimate_queue.clear(); self.native_pickup_credits.clear()
+            self.native_generations[run_id] += 1
+            if (previous and ledger.get('run_id') and previous.get('run_id')
+                    and ledger['run_id'] != previous['run_id']):
+                previous_counts, old_indices = {}, set()
+                self.native_pickup_credits.update(newly_bagged)
+            else:
+                self.native_ledgers[run_id] = deepcopy(ledger); self.native_policy = dict(ledger.get('policy', {})); return
+        delta = {int(k):n - previous_counts.get(k, 0) for k,n in counts.items()}
+        special = Counter()
+        for receipt in receipts:
+            if receipt['index'] in old_indices: continue
+            row = receipt['item']; bucket = equipment_bucket(row)
+            if row.get('rarity') == 3 and bucket in ('ancient', 'black_mist'): special[bucket] += 1
+            initial_key = (row.get('name_key') or row.get('internal_name'), bucket)
+            if self.native_initial_receipts[initial_key] > 0:
+                self.native_initial_receipts[initial_key] -= 1
+                continue
+            field = {'sell':'sold', 'salvage':'salvaged'}.get(receipt.get('action'))
+            if field:
+                event_id = ('native_carriage', run_id, self.native_generations[run_id], receipt['index'])
+                if event_id not in self.disposal_ids:
+                    self.disposal_ids.add(event_id); self._record(row, field, 1)
+        for rarity,bucket in ((0,'normal'), (1,'uncommon'), (2,'rare'), (3,'legendary'), (4,'divine')):
+            amount = delta.get(rarity, 0)
+            if rarity == 3: amount = max(0, amount - sum(special.values()))
+            old = min(amount, self.native_initial_pending[bucket])
+            self.native_initial_pending[bucket] -= old; amount -= old
+            self.native_counts[bucket] += amount
+            if rarity < 3:
+                if self.panel_enabled:
+                    # Never combine log receipts with policy-based estimates:
+                    # a failed read can recover those same events next time.
+                    self.native_estimate_queue.pop(rarity, None)
+                    self.native_pickup_credits.pop(rarity, None)
+                    continue
+                policy = ledger.get('policy', {}).get(str(rarity))
+                # Lower grades have only aggregate pickups. A stable policy
+                # provides an estimate, never a verified disposal receipt.
+                queued_policy, queued = self.native_estimate_queue.pop(rarity, (None, 0))
+                excluded = min(queued, self.native_pickup_credits[rarity])
+                self.native_pickup_credits[rarity] -= excluded
+                if policy in (1, 2) and policy == queued_policy and policy == self.native_policy.get(str(rarity)):
+                    estimate = max(0, queued - excluded)
+                    field = 'sold' if policy == 1 else 'salvaged'
+                    row = {'kind':'equipment', 'rarity':rarity, 'is_ancient':False, 'is_black_mist':False}
+                    self._record(row, field, estimate); self.native_estimates[(bucket, field)] += estimate
+                excluded = min(amount, self.native_pickup_credits[rarity])
+                self.native_pickup_credits[rarity] -= excluded
+                if policy == self.native_policy.get(str(rarity)):
+                    self.native_estimate_queue[rarity] = (policy, amount - excluded)
+        for bucket, amount in special.items():
+            old = min(amount, self.native_initial_pending[bucket])
+            self.native_initial_pending[bucket] -= old
+            self.native_counts[bucket] += amount-old
+        self.native_ledgers[run_id] = deepcopy(ledger)
+        self.native_policy = dict(ledger.get('policy', {}))
+
+    def observe(self, observation):
+        if observation.get('complete') is not True: return
+        rows = observation_items(observation)
+        totals = Counter()
+        examples = {}
+        unique = {}
+        locations = Counter()
+        for row in rows:
+            key = _metric_key(row)
+            if key is None or row.get('issues'): continue
+            uid = row.get('item_uid')
+            if isinstance(uid, str) and uid:
+                if uid not in unique: unique[uid] = row
+            else:
+                totals[key] += _quantity(row); examples[key] = row
+                locations[_location_key(row)] += _quantity(row)
+        if not self.baselined:
+            if 'drop_events' not in observation and not self._complete(observation): return
+            self.seen_uids.update(unique)
+            self.balances = totals
+            self.initial = totals.copy()
+            self.locations = locations
+            self.initial_locations = locations.copy()
+            self.baselined = True
+            self.inference_mode = 'events' if 'drop_events' in observation else 'snapshots'
+            for event in observation.get('drop_events', []):
+                self.seen_events.add(str(event.get('event_id')))
+            self._panel_observe(observation, rows, baseline=True)
+            self._native_observe(observation, rows, baseline=True)
+            return
+        if self._complete(observation):
+            # Transport known initial units along source decreases/target gains.
+            # Newly dropped stacks stay distinguishable from initial warehouse
+            # stacks, even when both have the same ItemData/grade/level.
+            initial_pool = Counter()
+            new_pool = Counter()
+            next_initial = Counter()
+            for location, before in self.locations.items():
+                lost = max(0, before - locations[location])
+                old_lost = min(lost, self.initial_locations[location])
+                initial_pool[location[2]] += old_lost
+                new_pool[location[2]] += lost - old_lost
+                next_initial[location] = max(0, self.initial_locations[location] - lost)
+            for location, current in locations.items():
+                gained = max(0, current - self.locations[location])
+                from_initial = min(gained, initial_pool[location[2]])
+                next_initial[location] += from_initial
+                initial_pool[location[2]] -= from_initial
+                gained -= from_initial
+                from_new = min(gained, new_pool[location[2]])
+                new_pool[location[2]] -= from_new
+            self.initial_locations = +next_initial
+            self.locations = locations
+            self.initial = Counter()
+            for location, quantity in self.initial_locations.items(): self.initial[location[2]] += quantity
+        if self.inference_mode == 'events':
+            for event in observation.get('drop_events', []):
+                event_id = event.get('event_id')
+                if event_id is None or str(event_id) in self.seen_events: continue
+                self.seen_events.add(str(event_id))
+                row = event.get('item', event)
+                self._record(row, 'count', event.get('quantity', _quantity(row)))
+                if row.get('item_uid'): self.uid_acquired.add(row['item_uid'])
+            self.seen_uids.update(unique)
+            self._panel_observe(observation, rows)
+            self._native_observe(observation, rows)
+            return
+        for uid, row in unique.items():
+            if uid not in self.seen_uids:
+                self._record(row, 'count', _quantity(row)); self.uid_acquired.add(uid)
+        self.seen_uids.update(unique)
+        self._panel_observe(observation, rows)
+        self._native_observe(observation, rows)
+        if not self._complete(observation): return
+        for key, n in totals.items():
+            increase = max(0, n - self.balances[key])
+            self._record(examples[key], 'count', increase)
+        self.balances = totals
+
+    def committed(self, operation_id, row, kind, quantity=None):
+        if operation_id in self.disposal_ids: return
+        self.disposal_ids.add(operation_id)
+        field = {'sell': 'sold', 'salvage': 'salvaged', 'transfer': 'stored'}.get(kind)
+        if field is None: return
+        n = _quantity(row) if quantity is None else quantity
+        key = _metric_key(row)
+        uid = row.get('item_uid')
+        # Outcomes in the cumulative-drop table apply only to drops this session.
+        if uid:
+            receipt_key = (field, uid)
+            tracked = n if uid in self.uid_acquired and receipt_key not in self.uid_outcomes else 0
+            self.uid_outcomes.add(receipt_key)
+        else:
+            location = _location_key(row)
+            initial = self.initial_locations[location]
+            excluded = min(n, initial)
+            tracked = n - excluded
+            if field != 'stored':
+                self.initial[key] = max(0, self.initial[key] - excluded)
+                self.initial_locations[location] = max(0, initial - excluded)
+                self.locations[location] = max(0, self.locations[location] - n)
+            totals = self.totals.get(key, {})
+            prior = totals.get('stored', 0) if field == 'stored' else totals.get('sold', 0) + totals.get('salvaged', 0)
+            tracked = min(tracked, max(0, totals.get('count', 0) - prior))
+        if field != 'stored' and not uid and self.inference_mode == 'snapshots':
+            self.balances[key] = max(0, self.balances[key] - n)
+        self._record(row, field, tracked)
+
+    def state(self):
+        equipment = {bucket: {'name': BUCKET_LABELS[bucket], 'count': 0, 'sold': 0, 'salvaged': 0, 'stored': 0}
+                     for bucket in EQUIPMENT_BUCKETS}
+        runes, gems = [], []
+        for key, totals in sorted(self.totals.items(), key=lambda p: str(p[0])):
+            row = self.rows[key]
+            if key[0] == 'equipment':
+                if key[1] in equipment: equipment[key[1]].update(totals)
+            else:
+                value = {'name_key': key[1], 'name': row.get('name', key[1]), 'rarity': key[2], 'level': key[3], **totals}
+                (runes if key[0] == 'rune' else gems).append(value)
+        for (bucket, field), quantity in self.native_estimates.items():
+            equipment[bucket]['estimated_' + field] = quantity
+        for bucket, totals in equipment.items():
+            totals['count'] = max(totals['count'], self.native_counts[bucket] + self.native_pending[bucket],
+                                  totals['sold'] + totals['salvaged'])
+        note = '已出售／分解包含助手处置与游戏马车自动处理。'
+        if self.panel_enabled:
+            note += '普通、优秀、稀有的马车自动处置按游戏系统日志逐件计数。'
+            if self.panel_pending: note += '部分新日志等待完整扫描核对初始物品来源。'
+            if not self.panel_cursor.available: note += '游戏日志暂不可读，自动处置统计等待恢复；未用估算补填。'
+            if self.panel_cursor.incomplete: note += '本次日志读取起点缺失或历史已被覆盖，统计可能不完整。'
+            if self.panel_unparsed: note += f'另有 {self.panel_unparsed} 条处置日志格式未确认，未计入。'
+        if self.native_estimates or not self.panel_enabled:
+            note += '带 ≈ 的低品质数量按稳定马车策略估算，策略变化区间不估算。'
+        return {'equipment': equipment, 'runes': runes, 'gems': gems, 'note':note,
+                'game_log':{'enabled':self.panel_enabled, 'available':self.panel_cursor.available,
+                    'incomplete':self.panel_cursor.incomplete or bool(self.panel_unparsed),
+                    'confirmed_disposals':self.panel_events,'sale_gold':self.panel_gold,
+                    'unparsed':self.panel_unparsed,'reason':self.panel_cursor.reason}}
+
+
+class ManagedMode:
+    def __init__(self, settings=None):
+        self.settings = validate_settings(settings or deepcopy(DEFAULT_SETTINGS))
+        self.running = False
+        self.phase = 'idle'
+        self.status = '托管未开始。'
+        self.pending = None
+        self.metrics = ManagedMetrics()
+        self.session = None
+        self.last_success = None
+        self.last_success_difficulty = None
+        self.target_dungeon = self.settings['farming']['dungeon_id']
+        self.target_difficulty = None if self.settings['farming']['difficulty']=='current' else self.settings['farming']['difficulty']
+        self.push_failed = False
+        self.handled_runs = set()
+        self.force_dispose = set()
+        self.equip_reserved = None
+        self.sequence = 0
+        self.await_effect = None
+        self.await_count = 0
+        self.reward_barrier = False
+        self.barrier_reads = 0
+        self.cleanup_processing = False
+        self.finishing = False
+        self.pressure_active = False
+        self.finish_empty_reads = 0
+
+    def start(self, observation):
+        if self.running or self.pending: raise ValidationError('托管已在运行。')
+        if observation.get('complete') is not True: raise ValidationError('请先完整读取背包与仓库。')
+        if not self.settings['auto_equip']['enabled'] and not self.settings['farming']['enabled']:
+            raise ValidationError('请至少开启自动换装或自动刷图。')
+        self.__init__(self.settings)
+        self.running = True
+        self.session = observation.get('session', observation.get('bridge_session'))
+        if self.target_difficulty is None:
+            self.target_difficulty = observation.get('scene',{}).get('difficulty')
+        self.metrics.observe(observation)
+        self.phase = 'cleanup' if self.settings['farming']['enabled'] and self._town(observation) else 'farming'
+        self.reward_barrier = self.phase == 'cleanup'
+        self.status = '托管已开始。'
+        return self.state()
+
+    def stop(self, reason='托管已停止。'):
+        self.running = False; self.phase = 'stopped'; self.status = reason
+        self.pending = None; self.equip_reserved = None
+        self.await_effect = None
+        self.finishing = False
+        return self.state()
+
+    def request_finish(self):
+        """Keep submitted receipts/fences; finish town cleanup without re-entry."""
+        if not self.running and self.phase != 'paused': return self.state()
+        self.finishing = True
+        self.finish_empty_reads = 0
+        self.running = True
+        self.reward_barrier = True; self.barrier_reads = 0
+        self.status = '正在结束托管：回城整理奖励后停止。'
+        return self.state()
+
+    def pause(self, reason='托管已暂停，可继续本次统计。'):
+        """The executor must cancel/wait for in-flight work before calling this."""
+        self.running = False; self.phase = 'paused'; self.status = reason
+        self.pending = None; self.await_effect = None
+        return self.state()
+
+    def resume(self, observation):
+        if self.running or self.pending is not None: raise ValidationError('托管正在运行。')
+        if self.phase != 'paused': raise ValidationError('本次托管已停止，请重新开始。')
+        if observation.get('complete') is not True: raise ValidationError('请先完整读取背包与仓库。')
+        session = observation.get('session', observation.get('bridge_session'))
+        if self.session is not None and session != self.session:
+            raise ValidationError('角色或游戏连接已改变，不能继续上次托管。')
+        self.running = True
+        self.pending = None; self.await_effect = None; self.await_count = 0
+        self.phase = 'cleanup' if (self.settings['farming']['enabled'] or self.finishing) and self._town(observation) else 'farming'
+        self.reward_barrier = self.phase == 'cleanup'
+        self.metrics.observe(observation)
+        self.cleanup_processing = False
+        self.status = '继续本次托管，累计掉落统计已保留。'
+        return self.state()
+
+    def _pause(self, reason):
+        self.running = False; self.phase = 'paused'; self.status = reason
+        self.pending = None
+        return None
+
+    def state(self):
+        return {'settings': deepcopy(self.settings), 'running': self.running, 'finishing': self.finishing, 'phase': self.phase,
+                'status': self.status, 'pending': deepcopy(self.pending), 'last_success': self.last_success,
+                'target_dungeon': self.target_dungeon, 'target_difficulty':self.target_difficulty,
+                'last_success_difficulty':self.last_success_difficulty,
+                'push_failed': self.push_failed, 'statistics': self.metrics.state()}
+
+    @staticmethod
+    def _town(observation):
+        return observation.get('scene', {}).get('in_town') is True
+
+    @staticmethod
+    def _bag_free(observation):
+        bag = observation.get('counts', {}).get('inventory')
+        if bag is not None:
+            capacity, occupied = bag.get('capacity'), bag.get('occupied')
+        else:
+            bag = observation.get('containers', {}).get('inventory', {})
+            capacity, occupied = bag.get('slot_count'), bag.get('occupied_count')
+        if type(capacity) is not int or type(occupied) is not int or not 0 <= occupied <= capacity:
+            raise ValidationError('背包空格数量尚未完整读取。')
+        return capacity - occupied
+
+    @staticmethod
+    def _safe(row):
+        return bool(identity(row) and not row.get('issues') and row.get('movable', True) is not False
+                    and type(row.get('locked')) is bool and type(row.get('count', 1)) is int and row.get('count', 1) > 0)
+
+    @staticmethod
+    def _review(row):
+        if row.get('issues') or row.get('rule_status') in ('review', 'unknown'): return True
+        if row.get('rule_status') == 'no_rule' and row.get('rules_known') is True: return False
+        return row.get('review') is not False
+
+    @staticmethod
+    def _quality_known(row):
+        return (type(row.get('rarity')) is int and row['rarity'] in range(5)
+                and type(row.get('is_black_mist')) is bool and type(row.get('is_ancient')) is bool)
+
+    @classmethod
+    def _protected(cls, row):
+        return (bool(mandatory_storage(row)) or row.get('matches') is True
+                or row.get('locked') is True or cls._review(row) or not cls._quality_known(row))
+
+    @classmethod
+    def _disposable(cls, row):
+        return item_kind(row) == 'equipment' and cls._safe(row) and not cls._protected(row) and row.get('matches') is False
+
+    def _action(self, kind, row=None, **data):
+        self.finish_empty_reads = 0
+        self.sequence += 1
+        action = {'action_id': f'{id(self):x}-{self.sequence}', 'kind': kind, **data}
+        if row is not None:
+            action['item'] = deepcopy(row)
+        self.pending = action
+        self.await_effect = None
+        self.status = action.get('reason', kind)
+        return deepcopy(action)
+
+    def complete(self, action_id, success=True, *, error=None, result=None):
+        """A success receipt must say verified=True; no optimistic game success."""
+        if self.pending is None or self.pending['action_id'] != action_id:
+            raise ValidationError('托管动作编号不一致。')
+        action = self.pending
+        self.pending = None
+        if not success or not isinstance(result, dict) or result.get('verified') is not True:
+            return self.stop('操作未确认，托管已停止：' + (error or (result or {}).get('reason', '游戏执行结果未核验。')))
+        quantity = result.get('quantity')
+        if action.get('item') is not None and quantity is not None and (
+                type(quantity) is not int or not 1 <= quantity <= _quantity(action['item'])):
+            return self.stop('操作数量未确认，托管已停止。')
+        self.await_effect = action
+        self.await_count = 0
+        row = action.get('item')
+        if action['kind'] in ('sell', 'salvage'):
+            self.metrics.committed(action_id, row, action['kind'], result.get('quantity'))
+            self.force_dispose.discard(identity(row))
+        elif action['kind'] == 'transfer':
+            if action.get('reason_code') == 'warehouse_eviction': self.force_dispose.add(identity(row))
+            if action.get('reason_code') == 'equip_prepare': self.equip_reserved = identity(row)
+            if action.get('target') == 'storage': self.metrics.committed(action_id, row, 'transfer', result.get('quantity'))
+        elif action['kind'] == 'equip':
+            self.equip_reserved = None
+        elif action['kind'] == 'return_town':
+            self.phase = 'cleanup'
+            self.cleanup_processing = False
+        elif action['kind'] == 'enter_dungeon':
+            self.phase = 'farming'
+        elif action['kind'] == 'switch_difficulty':
+            self.phase = 'cleanup'
+        if action['kind'] in ('return_town', 'collect_ground', 'collect_carriage', 'open_chest'):
+            self.reward_barrier = True; self.barrier_reads = 0
+        if action['kind'] == 'open_chest':
+            self.cleanup_processing = False
+        return self.state()
+
+    def _effect_visible(self, observation, all_items):
+        """Do not queue the same action while a supposedly fresh read is stale."""
+        action = self.await_effect
+        if not action: return True
+        kind, old = action['kind'], action.get('item')
+        if old:
+            matches = [r for r in all_items if r.get('container') == old.get('container')
+                       and identity(r) == identity(old)]
+            if kind == 'lock':
+                visible = bool(matches and matches[0].get('locked') is True)
+            elif kind == 'equip':
+                visible = any(identity(r) == identity(old) and r.get('equipped_slot') == action['target_slot']
+                              for r in observation.get('character', {}).get('equipment', []))
+            else:
+                visible = not matches or sum(_quantity(r) for r in matches) < _quantity(old)
+        elif kind == 'return_town':
+            visible = self._town(observation)
+        elif kind == 'enter_dungeon':
+            scene = observation.get('scene', {})
+            visible = (not self._town(observation) and str(scene.get('dungeon_id')) == str(action['dungeon_id'])
+                       and (not action.get('difficulty') or scene.get('difficulty')==action['difficulty'])
+                       and run_record(scene.get('run')).get('status') in ('running', 'settling'))
+        elif kind == 'switch_difficulty':
+            visible = self._town(observation) and observation.get('scene',{}).get('difficulty')==action['difficulty']
+        else: visible = False
+        if visible:
+            self.await_effect = None; self.await_count = 0
+            return True
+        self.await_count += 1
+        self.status = '等待游戏状态确认，暂不重复执行动作。'
+        if self.await_count >= 5:
+            self._pause('已验证动作没有反映在连续读取中，托管已暂停，请检查游戏状态。')
+        return False
+
+    def _targets(self, observation, pages):
+        storage = observation.get('storage', {})
+        page_size = storage.get('page_size', observation.get('transfer', {}).get('page_size'))
+        allowed = storage.get('allowed_indices', observation.get('transfer', {}).get('storage_indices'))
+        if (type(page_size) is not int or page_size < 1 or not isinstance(allowed, list)
+                or any(type(n) is not int or n < 0 for n in allowed) or len(set(allowed)) != len(allowed)):
+            raise ValidationError('仓库页大小或开放格位未确认。')
+        return sorted(n for n in allowed if n // page_size + 1 in pages)
+
+    @staticmethod
+    def _room(row, targets, all_items):
+        storage = {r['slot_index']: r for r in all_items if r.get('container') == 'storage' and type(r.get('slot_index')) is int}
+        if any(n not in storage for n in targets): return True
+        if item_kind(row) != 'gem': return False
+        maximum = row.get('max_stack')
+        if type(maximum) is not int or maximum < 2: return False
+        key = _metric_key(row)
+        space = sum(max(0, maximum - _quantity(storage[n])) for n in targets
+                    if _metric_key(storage[n]) == key and not storage[n].get('issues') and not storage[n].get('item_uid'))
+        return space >= _quantity(row)
+
+    def _equip(self, observation, all_items):
+        if not self.settings['auto_equip']['enabled']: return None
+        e = self.settings['auto_equip']; candidates = []
+        for row in all_items:
+            if row.get('container') not in ('inventory', 'storage') or item_kind(row) != 'equipment' or not self._safe(row): continue
+            power = row.get('power')
+            if not isinstance(power, dict) or power.get('available') is not True: continue
+            for score in power.get('comparisons', [power]):
+                if not equip_candidate_allowed(row, score, e, observation.get('character')): continue
+                target, delta = score['target'], score['delta']
+                if row.get('container') == 'storage' and self._bag_free(observation) == 0: continue
+                candidates.append((delta, -target, row, score))
+        if not candidates: return None
+        _, _, row, score = max(candidates, key=lambda c: (c[0], c[1], str(identity(c[2]))))
+        wanted = e['slot_locks'].get(str(score['target']))
+        transitional = bool(wanted and row.get('name_key') != wanted)
+        if row['container'] == 'storage':
+            return self._action('transfer', row, target='inventory', reason_code='equip_prepare',
+                                reason='将战力更高的过渡装备取到背包。' if transitional else '将可提升固定面板战力的装备取到背包。')
+        return self._action('equip', row, target_slot=score['target'], expected_delta=score['delta'],
+                            reason='尚未穿戴指定暗金，换上战力更高的过渡装备。' if transitional else '换上固定面板战力更高的装备。')
+
+    def _storage_transfer(self, observation, row, pages, all_items, mandatory=False):
+        targets = self._targets(observation, pages)
+        if not targets:
+            label = {'equipment':'装备','rune':'符文','gem':'宝石'}.get(item_kind(row),'物品')
+            return self._pause('所选'+label+'仓库页尚未解锁或没有开放格位，物品保留；请解锁仓库页或修改存放分区。')
+        if self._room(row, targets, all_items):
+            return self._action('transfer', row, target='storage', target_indices=targets,
+                                reason='将奖励存入指定仓库页。')
+        if item_kind(row) != 'equipment':
+            return self._pause('容量不足：所选符文或宝石仓库页没有可用空格或堆叠容量。')
+        cleanup = self.settings['cleanup']
+        if not mandatory:
+            return self._action(equipment_policy(cleanup,row,fallback=True), row,
+                reason_code='equipment_fallback', reason='装备专用仓库页已满，按品质配置处置未命中装备。')
+        if self._bag_free(observation) == 0:
+            disposable = next((r for r in all_items if r.get('container') == 'inventory' and self._disposable(r)), None)
+            if disposable:
+                return self._action(equipment_policy(cleanup,disposable,fallback=True), disposable,
+                    reason_code='equipment_fallback', reason='按品质处理背包垃圾，为保留装备腾出搬运空格。')
+            return self._pause('容量不足：背包没有空格，无法取出仓库垃圾；黑雾、神圣和保留装备保持不动。')
+        junk = next((r for r in all_items if r.get('container') == 'storage' and r.get('slot_index') in targets and self._disposable(r)), None)
+        if junk:
+            return self._action('transfer', junk, target='inventory', reason_code='warehouse_eviction',
+                                reason='取出所选装备页中的未锁垃圾，随后按配置出售或分解。')
+        return self._pause('容量不足：所选装备仓库页已满，且没有可安全清理的未命中装备。')
+
+    def _background_lock(self, all_items):
+        if not self.settings['background']['rule_monitoring']: return None
+        for row in all_items:
+            if (row.get('container') in ('inventory', 'storage') and item_kind(row) == 'equipment'
+                    and self._safe(row) and row.get('matches') is True and row.get('locked') is False):
+                return self._action('lock', row, reason='托管监控：锁定背包或仓库中命中规则的装备。')
+        return None
+
+    def _background_organize(self, observation, all_items):
+        if not self.settings['background']['inventory_automation']: return None
+        config = observation.get('automation_settings')
+        if not isinstance(config, dict): return None
+        bag = [r for r in all_items if r.get('container') == 'inventory' and self._safe(r)]
+        def store(row, group):
+            targets = self._targets(observation, config[group]['pages'])
+            if targets and self._room(row, targets, all_items):
+                return self._action('transfer', row, target='storage', target_indices=targets,
+                    reason_code='background_organize', automation_group=group, automation_settings=deepcopy(config),
+                    reason='托管自动整理：将物品存入自动整理设置中的仓库页。')
+        for group, kind in (('gems', 'gem'), ('runes', 'rune')):
+            if config[group]['enabled']:
+                for row in bag:
+                    if item_kind(row) == kind:
+                        action = store(row, group)
+                        if action: return action
+        pressure = config['pressure']; free = self._bag_free(observation)
+        capacity = observation['counts']['inventory']['capacity']
+        self.pressure_active = (pressure['enabled'] and (self.pressure_active or free <= pressure['threshold'])
+                                and free < min(pressure['target_free'], capacity))
+        if self.pressure_active:
+            for row in bag:
+                if (item_kind(row) == 'equipment' and (pressure['equipment_filter'] == 'all'
+                        or row['locked'] is (pressure['equipment_filter'] == 'locked'))):
+                    action = store(row, 'pressure')
+                    if action: return action
+        carriage = config['carriage']
+        if carriage['enabled'] and free > 0 and observation.get('carriage', {}).get('complete') is True:
+            for row in all_items:
+                if (row.get('container') == 'carriage' and item_kind(row) in carriage['types']
+                        and row.get('collectable') is True and identity(row) and not row.get('issues')):
+                    return self._action('collect_carriage', row, reason_code='background_organize',
+                        automation_settings=deepcopy(config), reason='托管自动整理：收取所选类型的马车物品。')
+        return None
+
+    def _collect_rewards(self, observation, all_items):
+        """Fill the bag before processing; only complete reads can prove empty."""
+        complete = True
+        drops = []
+        for source in ('carriage', 'ground'):
+            data = observation.get(source, {})
+            if data.get('complete') is not True:
+                complete = False
+                continue
+            if data.get('items'):
+                source_rows = [r for r in all_items if r.get('container') == source]
+                if not source_rows:
+                    return self._pause('马车或地面物品身份未确认，已暂停托管。'), False
+                drops.extend(source_rows)
+        if drops:
+            if self._bag_free(observation) == 0:
+                return self._pause('背包没有空格，无法继续收取马车或地面物品。'), False
+            valid = [r for r in drops if not r.get('issues') and identity(r)]
+            if not valid:
+                return self._pause('马车或地面物品身份未确认，已暂停托管。'), False
+            # Do not fill remaining space with chests ahead of other rewards.
+            row = min(valid, key=lambda r: item_kind(r) == 'chest')
+            source = row['container']
+            return self._action('collect_' + source, row,
+                reason='批量收取' + ('马车' if source == 'carriage' else '地面') + '物品，收完或背包满后统一整理。'), False
+        if not complete:
+            self.finish_empty_reads = 0
+            self.status = '等待完整读取马车与地面掉落。'
+        return None, complete
+
+    def _cleanup(self, observation, all_items):
+        if not self._town(observation):
+            return self._action('return_town', reason='返回主城后整理奖励。')
+        settings = self.settings['cleanup']
+        bag = [r for r in all_items if r.get('container') == 'inventory']
+        if not self.cleanup_processing and self._bag_free(observation) > 0:
+            action, sources_empty = self._collect_rewards(observation, all_items)
+            if action or not sources_empty:
+                return action
+        # Finish a full batch before refilling. One sale freeing one slot must
+        # not immediately lead to another pickup/sale cycle.
+        self.cleanup_processing = True
+        if any(mandatory_storage(r) and not self._safe(r) for r in bag):
+            return self._pause('必须收纳的物品读取或搬运状态未确认，保留物品并暂停托管。')
+        if self.reward_barrier:
+            uncertain = [r for r in bag if item_kind(r) == 'equipment' and r.get('locked') is not True
+                         and (not self._safe(r) or self._review(r) or not self._quality_known(r)
+                              or type(r.get('matches')) is not bool)]
+            if uncertain:
+                self.barrier_reads += 1
+                self.status = '等待新奖励身份、词条和筛选结论完整读取，暂不出售或分解。'
+                if self.barrier_reads >= 5:
+                    return self._pause('新奖励仍待核验，托管已暂停；未出售或分解本轮装备。')
+                return None
+        # Mandatory protection cannot be disabled in settings.
+        protected = [r for r in bag if item_kind(r) == 'equipment' and self._safe(r)
+                     and (mandatory_storage(r) or r.get('matches') is True
+                          or r.get('locked') is True)]
+        # Phase 1: finish and observe EVERY required lock before any disposal,
+        # including warehouse-capacity fallback disposal. Each verified lock is
+        # followed by the state fence before this loop can move to the next item.
+        for row in protected:
+            if row.get('locked') is False:
+                return self._action('lock', row, reason='锁定黑雾、神圣或命中筛选规则的装备。')
+        action = self._background_lock(all_items)
+        if action: return action
+        self.reward_barrier = False; self.barrier_reads = 0
+        # Phase 2: only fully screened/locked rewards may now be rearranged.
+        for row in bag:
+            if identity(row) in self.force_dispose:
+                if not self._disposable(row): return self._pause('待清理仓库装备状态发生变化，已停止以保留装备。')
+                return self._action(equipment_policy(settings,row,fallback=True), row,
+                    reason_code='equipment_fallback', reason='按品质处理从装备专用页取出的未命中装备。')
+        action = self._equip(observation, all_items)
+        if action: return action
+        for row in protected:
+            return self._storage_transfer(observation, row, settings['equipment_pages'], all_items, mandatory=True)
+        for row in bag:
+            if item_kind(row) == 'rune' and mandatory_storage(row):
+                return self._storage_transfer(observation, row, settings['rune_pages'], all_items, mandatory=True)
+        for row in bag:
+            kind = item_kind(row)
+            if not self._safe(row): continue
+            if kind == 'equipment':
+                if self._protected(row): continue
+                if row.get('matches') is not False: continue
+                handling, pages = equipment_policy(settings,row), settings['equipment_pages']
+            elif kind in ('rune', 'gem'):
+                if row.get('locked') is True: continue
+                handling, pages = settings[kind + '_action'], settings[kind + '_pages']
+                if handling != 'store' and (reason := disposal_protection(row)):
+                    return self._pause(reason)
+            else: continue
+            if handling == 'store':
+                return self._storage_transfer(observation, row, pages, all_items)
+            return self._action(handling, row, reason='按托管配置处理奖励。')
+        # Finish the current equipment/rune/gem batch before refilling. All
+        # outside rewards must be collected before opening bag chests.
+        action, sources_empty = self._collect_rewards(observation, all_items)
+        if action or not sources_empty:
+            self.cleanup_processing = False
+            return action
+        # Each chest opening starts another collection batch and lock barrier.
+        for row in bag:
+            if item_kind(row) == 'chest' and self._safe(row) and row.get('locked') is False:
+                if self._bag_free(observation) == 0: return self._pause('背包没有空格，暂不能安全打开宝箱。')
+                return self._action('open_chest', row, reason='奖励处理完毕，打开宝箱后重新扫描。')
+        if self.finishing:
+            self.finish_empty_reads += 1
+            if self.finish_empty_reads < 2:
+                self.status = '奖励已整理，等待再次确认马车卸货与地面掉落已清空。'; return None
+            self.stop('托管已停止：已回城并完成奖励整理。')
+            return None
+        if self._bag_free(observation) < self.settings['farming']['free_threshold']:
+            return self._pause('整理后背包空格仍少于回城门槛，保留装备或材料占用较多，请先处理容量。')
+        self.phase = 'travel'
+        if self.target_difficulty and observation.get('scene',{}).get('difficulty')!=self.target_difficulty:
+            return self._action('switch_difficulty',difficulty=self.target_difficulty,
+                reason='主城整理完成，切换到'+DIFFICULTY_LABELS[self.target_difficulty]+'难度。')
+        return self._action('enter_dungeon', dungeon_id=self.target_dungeon,difficulty=self.target_difficulty,
+                            reason='奖励整理完成，返回目标关卡。')
+
+    def _runs(self, observation):
+        run = run_record(observation.get('scene', {}).get('run'))
+        status = run.get('status')
+        run_id = run.get('id')
+        if status not in ('success', 'failed') or run_id is None or str(run_id) in self.handled_runs: return
+        self.handled_runs.add(str(run_id))
+        dungeon = run.get('dungeon_id', observation.get('scene', {}).get('dungeon_id'))
+        difficulty = run.get('difficulty') or observation.get('scene',{}).get('difficulty') or self.target_difficulty
+        if status == 'success':
+            self.last_success = dungeon
+            self.last_success_difficulty = difficulty
+            if self.settings['farming']['mode'] == 'push' and not self.push_failed:
+                progression = self.settings['farming']['progression']
+                pos = None
+                for n,point in enumerate(progression):
+                    key,tier = (point['dungeon_id'],point['difficulty']) if isinstance(point,dict) else (point,None)
+                    if str(key)==str(dungeon) and (tier is None or tier==difficulty):
+                        pos = n
+                        break
+                following = progression[pos+1] if pos is not None and pos+1<len(progression) else None
+                if isinstance(following,dict):
+                    self.target_dungeon,self.target_difficulty = following['dungeon_id'],following['difficulty']
+                elif following is not None:
+                    self.target_dungeon = following
+                else:
+                    self.target_dungeon,self.target_difficulty = dungeon,difficulty
+        elif self.settings['farming']['mode'] == 'push':
+            self.push_failed = True
+            if self.last_success is None:
+                self._pause('首个关卡未能通过，暂无已通过关卡可复刷，请调整起始关卡。')
+            else:
+                self.target_dungeon = self.last_success
+                self.target_difficulty = self.last_success_difficulty
+
+    def next_action(self, observation):
+        if not self.running or self.pending is not None: return None
+        if observation.get('complete') is not True:
+            self.status = '等待完整背包与仓库读取。'; return None
+        session = observation.get('session', observation.get('bridge_session'))
+        if self.session is not None and session != self.session:
+            return self._pause('游戏连接或角色已改变，托管已暂停。')
+        try:
+            all_items = observation_items(observation)
+            if not self._effect_visible(observation, all_items): return None
+            self.metrics.observe(observation)
+            if self.finishing:
+                scene = observation.get('scene', {})
+                if scene.get('available') is not True or scene.get('scene_changing') is True:
+                    self.status = '正在结束托管，等待场景稳定后回城整理。'; return None
+                self.phase = 'cleanup' if self._town(observation) else 'returning'
+                return self._cleanup(observation, all_items)
+            if self.settings['farming']['enabled']:
+                scene = observation.get('scene', {})
+                if scene.get('available') is False:
+                    self.status = '等待场景状态读取。'; return None
+                self._runs(observation)
+                if not self.running: return None
+                if self._town(observation): self.phase = 'cleanup'
+                if self.phase == 'cleanup': return self._cleanup(observation, all_items)
+                if self.target_difficulty and scene.get('difficulty')!=self.target_difficulty:
+                    self.phase = 'returning'
+                    return self._action('return_town',reason='切换目标难度前，先回到主城整理。')
+                if self._bag_free(observation) < self.settings['farming']['free_threshold']:
+                    self.phase = 'returning'
+                    return self._action('return_town', reason='背包剩余空格低于门槛，自动回城整理。')
+                if run_record(scene.get('run')).get('status') in ('success', 'failed'):
+                    # TownPortalSystem.fri rejects the already active combat map.
+                    # Finish every run through the original return/cleanup/entry
+                    # path, including repeats of the same map after a failure.
+                    self.phase = 'returning'
+                    return self._action('return_town', reason='本轮结束，回城整理后复刷或推进关卡。')
+                if scene.get('dungeon_id') is not None and str(scene['dungeon_id']) != str(self.target_dungeon):
+                    self.phase = 'returning'
+                    return self._action('return_town', reason='当前关卡与托管目标不同，回城整理后切换关卡。')
+            action = self._background_lock(all_items)
+            if action: return action
+            action = self._equip(observation, all_items)
+            if action: return action
+            action = self._background_organize(observation, all_items)
+            if action: return action
+            self.status = '正在刷图，等待奖励或更好的装备。' if self.settings['farming']['enabled'] else '正在监控固定面板战力提升。'
+            return None
+        except (ValidationError, KeyError, TypeError, ValueError) as exc:
+            return self._pause('托管读取未确认，已暂停：' + str(exc))

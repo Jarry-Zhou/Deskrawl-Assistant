@@ -128,6 +128,35 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(code,403)
         self.assertFalse(self.service.actions)
 
+    def test_managed_endpoints_require_session_and_never_forward_raw_native_actions(self):
+        self.service.managed_page=Mock(return_value={'running':False,'capabilities':{}})
+        self.service.save_managed=Mock()
+        self.service.set_managed_running=Mock(return_value={'running':False})
+        self.service.stop_managed=Mock(return_value={'running':False})
+        self.service.finish_managed=Mock(return_value={'running':True,'finishing':True})
+        self.service.reset_managed=Mock(return_value={'running':False})
+        actions=[('/api/managed/settings',{'settings':{'offline':'settings'}},self.service.save_managed),
+                 ('/api/managed/run',{'enabled':True},self.service.set_managed_running),
+                 ('/api/managed/stop',{},self.service.finish_managed),
+                 ('/api/managed/abort',{},self.service.stop_managed),
+                 ('/api/managed/reset',{},self.service.reset_managed)]
+        self.assertEqual(self.request('/api/managed')[0],200)
+        for endpoint,payload,method in actions:
+            with self.subTest(endpoint=endpoint):
+                self.assertEqual(self.request(endpoint,payload)[0],403)
+                self.assertEqual(self.request(endpoint,payload,{'Origin':'https://other.example',
+                    'X-Assistant-Token':'test-session-token'})[0],403)
+                method.assert_not_called()
+                self.assertEqual(self.request(endpoint,payload,{'Origin':self.url,
+                    'X-Assistant-Token':'test-session-token'})[0],200)
+                method.assert_called_once()
+        self.service.save_managed.assert_called_once_with({'offline':'settings'})
+        self.service.set_managed_running.assert_called_once_with(True)
+        for endpoint in ('/api/managed/action','/api/managed/native','/api/managed/verify'):
+            self.assertEqual(self.request(endpoint,{'address':123,'allow_unverified':True},
+                {'Origin':self.url,'X-Assistant-Token':'test-session-token'})[0],404)
+        self.assertFalse(self.service.actions)
+
     def test_sandboxed_browser_origin_can_send_authenticated_unlock(self):
         code,_,_=self.request('/api/action',{'kind':'unlock_all'},{'X-Assistant-Token':'test-session-token','Origin':'null'})
         self.assertEqual(code,200)

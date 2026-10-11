@@ -17,9 +17,9 @@ from test_web_service import item
 
 class ReceiptClient(AutomationClient):
     """Fake transactions emit the same committed receipt as the native client."""
-    def move_items(self,expected,target,validate):
+    def move_items(self,expected,target,validate,*,target_indices=None):
         source=copy.deepcopy(expected[0])
-        result=super().move_items(expected,target,validate)
+        result=super().move_items(expected,target,validate,target_indices=target_indices)
         changed=next(r for r in self.items if r['internal_name']==source['internal_name'] and r['container']==target)
         result.update(operation_id=operation_id(),movements=[dict(name=source['internal_name'],
             identity=source.get('item_uid') or '',count=source['count'],merged=False,
@@ -120,7 +120,7 @@ class ActivityServiceTests(unittest.TestCase):
 
     def test_tool_carriage_to_bag_then_storage_logged_once_with_exact_counts(self):
         settings=copy.deepcopy(DEFAULT_SETTINGS)
-        settings['carriage'].update(enabled=True,items=['GemEmerald4']);settings['gems']['enabled']=True
+        settings['carriage'].update(enabled=True,types=['gem']);settings['gems']['enabled']=True
         self.service.save_automation(settings);self.service.set_automation_running(True)
         self.client.drops=[dict(gem(4,count=8),selection_id='drop',observation_id='stable-drop',collectable=True)]
         self.service.operation_kind='monitor'

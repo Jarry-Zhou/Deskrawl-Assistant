@@ -61,6 +61,9 @@ def make_handler(service, token):
                 if path=='/api/session': return self.reply({'token':token})
                 if path=='/api/catalog': return self.reply(service.catalog_payload())
                 if path=='/api/state': return self.reply(service.state())
+                if path=='/api/managed':
+                    if urlsplit(self.path).query: raise ValueError('托管状态不接受额外查询参数。')
+                    return self.reply(service.managed_page())
                 if path=='/api/logs':
                     query = parse_qs(urlsplit(self.path).query)
                     allowed = {'category','query','before','limit'}
@@ -154,6 +157,13 @@ def make_handler(service, token):
                 elif path=='/api/monitor': service.set_monitoring(data.get('enabled'))
                 elif path=='/api/automation/settings': return self.reply({'settings':service.save_automation(data.get('settings'))})
                 elif path=='/api/automation/run': service.set_automation_running(data.get('enabled'))
+                elif path=='/api/managed/settings':
+                    service.save_managed(data.get('settings'))
+                    return self.reply(service.managed_page())
+                elif path=='/api/managed/run': return self.reply(service.set_managed_running(data.get('enabled')))
+                elif path=='/api/managed/stop': return self.reply(service.finish_managed())
+                elif path=='/api/managed/abort': return self.reply(service.stop_managed())
+                elif path=='/api/managed/reset': return self.reply(service.reset_managed())
                 elif path=='/api/stop': service.stop()
                 elif path=='/api/shutdown':
                     service.stop()
@@ -245,7 +255,7 @@ class AssistantServer:
             self.finished.set()
 
 
-def main(*, port=PORT, open_browser=True):
+def main(*, port=PORT, open_browser=True, test_managed=False):
     # Fixed loopback port allows a second launcher click to reuse the same
     # service instead of starting competing equipment writers.
     url = f'http://127.0.0.1:{port}/'
@@ -256,7 +266,11 @@ def main(*, port=PORT, open_browser=True):
                 if open_browser: webbrowser.open(url)
                 return
     except (OSError,ValueError): pass
-    host = AssistantServer(port)
+    service = None
+    if test_managed:
+        from .runtime_client import RuntimeClient
+        service = AssistantService(client=RuntimeClient(managed_test_mode=True))
+    host = AssistantServer(port, service=service)
     try:
         host.start()
         if open_browser: webbrowser.open(url)

@@ -116,7 +116,7 @@ def read_carriage(reader):
         array,count,version=struct.unpack('<Qii',read(root+16,16))
         records,block=reader.array(array,element,limit=8192,stride=8)
         if not 0<=count<=len(records): raise MemoryReadError('马车列表数量异常')
-        guards.append((array+32,block))
+        if count: guards.append((array+32,block[:count*8]))
         return [struct.unpack('<Q',v)[0] for v in records[:count]]
     drops=objects(ptr(carriage+152),'LootDrop')
     world=objects(ptr(manager+216),'LootDrop')

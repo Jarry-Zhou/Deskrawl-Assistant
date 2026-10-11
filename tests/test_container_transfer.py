@@ -143,6 +143,39 @@ class TransferTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'已取消'): move_items(self.reader,[row],'inventory',lambda:False)
         tx.assert_not_called()
 
+    @patch('deskrawl_assistant.container_transfer.access_state',return_value=({'storage_indices':[0]},[]))
+    @patch('deskrawl_assistant.container_transfer.FrozenSlotTransaction')
+    def test_target_restriction_rejects_closed_page_before_write(self,tx,access):
+        row,pair = self.fake_reader()
+        with self.assertRaisesRegex(RuntimeError,'尚未开放'):
+            move_items(self.reader,[row],'storage',target_indices=[50])
+        tx.assert_not_called()
+
+    @patch('deskrawl_assistant.container_transfer.access_state',return_value=({'storage_indices':[0]},[]))
+    @patch('deskrawl_assistant.container_transfer.FrozenSlotTransaction')
+    def test_target_restriction_rejects_invalid_and_out_of_range_indices(self,tx,access):
+        row,pair = self.fake_reader()
+        for restriction in ([],[True],[0,0],[-1]):
+            with self.subTest(restriction=restriction), self.assertRaisesRegex(RuntimeError,'限制无效'):
+                move_items(self.reader,[row],'inventory',target_indices=restriction)
+        with self.assertRaisesRegex(RuntimeError,'超出容器'):
+            move_items(self.reader,[row],'inventory',target_indices=[1])
+        tx.assert_not_called()
+
+    @patch('deskrawl_assistant.container_transfer.access_state',return_value=({'storage_indices':[0]},[]))
+    @patch('deskrawl_assistant.container_transfer.FrozenSlotTransaction')
+    def test_only_selected_destination_receives_items(self,tx,access):
+        row,(src,dst,full,empty) = self.fake_reader()
+        another = dst+0x100
+        self.p.put(another,empty)
+        self.reader.array = lambda ptr,*a,**kw: ([struct.pack('<Q',src)],struct.pack('<Q',src)) if ptr==0x830000 else (
+            [struct.pack('<Q',dst),struct.pack('<Q',another)],struct.pack('<QQ',dst,another))
+        tx.return_value.apply_slots.return_value = {'moved':1}
+        result = move_items(self.reader,[row],'inventory',target_indices=[1])
+        changes = tx.return_value.apply_slots.call_args.args[0]
+        self.assertEqual({a for a,_,_ in changes},{src,another})
+        self.assertEqual(result['destinations'][0]['slot_index'],1)
+
     def stack(self,address,count,item=0x500000,index=0,uid=0,locked=0):
         head = bytearray(48)
         struct.pack_into('<Q',head,0,self.klass)

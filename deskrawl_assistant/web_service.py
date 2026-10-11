@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import threading
 import time
+import traceback
 import uuid
 from .catalog import load_catalog
 from .models import Rule, ValidationError
@@ -19,9 +20,10 @@ from .paths import RESOURCE_ROOT, rules_file, runtime_dir
 from .activity_journal import ActivityJournal, ItemActivityTracker, operation_id
 from .experience import ExperienceBook
 from .recommendation_book import RecommendationBook
-from .automation import DEFAULT_SETTINGS, validate_settings, pressure_candidates, free_slots
+from .automation import DEFAULT_SETTINGS, validate_settings, pressure_candidates, free_slots, storage_targets
 from copy import deepcopy
 from .version import VERSION
+from .managed_service import ManagedServiceMixin
 
 BASE = RESOURCE_ROOT
 SLOT_LABELS = {'Weapon':'武器','Helm':'头盔','Chest':'胸甲','Pants':'裤子','Boots':'靴子','Belt':'腰带',
@@ -47,7 +49,7 @@ def item_kind(row):
     return 'material','材料 / 其他'
 
 
-class AssistantService:
+class AssistantService(ManagedServiceMixin):
     def __init__(self, client=None, config=None):
         self.catalog = load_catalog(BASE / 'data/game-catalog.json')
         tables = json.loads((BASE / 'data/game-catalog.json').read_text(encoding='utf-8'))['tables']
@@ -82,6 +84,7 @@ class AssistantService:
         self.guard = threading.RLock()
         self.cancelled = threading.Event()
         self.closed = threading.Event()
+        self.monitor_wake = threading.Event()
         self.rules = []
         self.config_error = ''
         try:
@@ -101,6 +104,7 @@ class AssistantService:
         self.progress = None
         self.history = []
         self.worker = None
+        self._init_managed()
         self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.monitor_thread.start()
         self.recommendation_thread = threading.Thread(target=self._recommendation_loop, daemon=True)
@@ -297,6 +301,8 @@ class AssistantService:
             'collectibles':list(self.item_ui['collectibles'].values())}
 
     def _persist(self, rules):
+        if self.managed.running or self.operation_kind=='managed':
+            raise ValidationError('请先暂停托管，再修改或导入筛选规则。')
         if self.config_error:
             raise ValidationError(self.config_error)
         self.config.parent.mkdir(parents=True, exist_ok=True)
@@ -435,20 +441,24 @@ class AssistantService:
     def _rules(self):
         with self.guard: return list(self.rules)
 
-    def _publish(self, snapshot):
+    def _publish(self, snapshot, *, refresh_character=True):
         carriage = None
         if snapshot and hasattr(self.client,'carriage_snapshot'):
             try: carriage = self.client.carriage_snapshot()
             except Exception as exc: carriage = {'available':False,'complete':False,'count':0,'items':[],'reason':str(exc)}
         if snapshot: self.activity.observe(snapshot,carriage)
         character = {'available':False,'reason':'连接游戏后读取当前角色。','equipment':[]}
-        if snapshot and hasattr(self.client, 'character_snapshot'):
+        if snapshot and not refresh_character:
+            with self.guard: character = deepcopy(self.character)
+        elif snapshot and hasattr(self.client, 'character_snapshot'):
             try:
                 character = self.client.character_snapshot()
                 if character.get('available') and character.get('session') != snapshot.get('bridge_session'):
                     character = {'available':False,'reason':'角色连接已变化，等待下一次读取。','equipment':[]}
             except Exception as exc:
                 character = {'available':False,'reason':'角色读取暂不可用：'+str(exc),'equipment':[]}
+        if snapshot and character.get('available') and character.get('session') != snapshot.get('bridge_session'):
+            character = {'available':False,'reason':'角色连接已变化，等待下一次读取。','equipment':[]}
         with self.guard:
             self.snapshot = snapshot
             self.character = character
@@ -510,6 +520,7 @@ class AssistantService:
                 self.character = {'available':False,'reason':'游戏已退出，请重新连接。','equipment':[]}
                 self.monitoring = False
                 self.automation_running = False
+                self.stop_managed(reason='游戏已退出，托管已停止。')
                 self.carriage = {'available':False,'count':0,'items':[]}
                 self.loot_state = None
                 self.message = '游戏已退出，请重新启动游戏并连接。'
@@ -527,6 +538,7 @@ class AssistantService:
             result['app_version'] = VERSION
             result['character'] = self._character_payload(character)
             result['compatibility'] = dict(getattr(self.client,'compatibility',{'phase':'idle','message':'连接时自动检测游戏兼容性'}))
+            result['managed'] = {'running':self.managed.running,'phase':self.managed.phase,'status':self.managed.status}
         if not snap: return result
         adapted = self.adapter.adapt_snapshot(snap)
         observations = {(i.container,i.index):i for i in adapted.items}
@@ -601,6 +613,7 @@ class AssistantService:
             if self.closed.is_set(): raise ValidationError('助手已退出，请重新启动。')
             if self.updating: raise ValidationError('正在更新程序，请稍候。')
             if self.busy: raise ValidationError('当前操作尚未完成，请稍候或停止操作。')
+            if self.managed.running: raise ValidationError('请先暂停托管，再执行手动背包操作。')
             if kind not in ('connect','disconnect','read','lock_selected','lock_rules','unlock_all','move_items'):
                 raise ValidationError('不支持的操作。')
             if kind!='connect' and not self.client.connected: raise ValidationError('请先连接游戏。')
@@ -647,7 +660,7 @@ class AssistantService:
         with self.guard: self.operation_kind = kind
         try:
             if kind!='observe': record('web_operation_started', kind=kind)
-            if kind not in ('observe','monitor'):
+            if kind not in ('observe','monitor','managed'):
                 self.journal.append('system','operation_started',{
                     'connect':'连接游戏','disconnect':'断开游戏','read':'刷新物品清单',
                     'lock_selected':'锁定所选装备','lock_rules':'按规则锁定装备','unlock_all':'全部解锁装备',
@@ -656,6 +669,7 @@ class AssistantService:
                 self.client.connect()
                 self.activity.reset()
                 self._publish(self.client.snapshot())
+                self._managed_refresh_control()
                 message = '已连接游戏，背包和仓库已读取。'
             elif kind=='disconnect':
                 self.client.close()
@@ -663,9 +677,12 @@ class AssistantService:
                 message = '已断开游戏连接。'
             elif kind in ('read','observe'):
                 self._publish(self.client.snapshot())
+                self._managed_refresh_control()
                 message = '装备清单已刷新。'
             elif kind=='monitor':
                 message = self._monitor_once()
+            elif kind=='managed':
+                message = self._managed_once()
             elif kind=='move_items':
                 self._publish(self.client.snapshot())
                 with self.guard: self.progress = {'done':0,'total':len(payload['expected'])}
@@ -699,16 +716,19 @@ class AssistantService:
                 if kind not in ('read','monitor','observe') or ('锁定' in message) or ('自动整理：' in message):
                     self.history.insert(0, {'time':time.strftime('%H:%M:%S'),'text':message})
                     self.history = self.history[:12]
-            if kind not in ('observe','monitor'):
+            if kind not in ('observe','monitor','managed'):
                 self.journal.append('system','operation_finished',message,context={'operation':kind,'cancelled':self.cancelled.is_set()})
             if kind!='observe': record('web_operation_finished', kind=kind)
         except Exception as exc:
-            if kind in ('monitor','observe') and isinstance(exc, SnapshotChangedError):
+            failure_traceback = traceback.format_exc()
+            if kind in ('monitor','observe','managed') and isinstance(exc, SnapshotChangedError):
                 # Keep both switches and the pending loot identities. Nothing
                 # from an inconsistent read is published or used for a write.
                 with self.guard:
                     self.error = ''
                     if kind=='monitor': self.message = '监控运行中：物品正在变化，等待下一轮完整读取。'
+                    if kind=='managed': self.managed.status = '物品正在变化，等待下一轮完整读取。'
+                    if kind=='managed': self.managed.pending = None
                     if self.automation_running:
                         self.automation_status = '自动整理运行中：物品正在变化，等待下一轮检查。'
                 record('web_operation_retry', kind=kind, error=str(exc))
@@ -720,20 +740,26 @@ class AssistantService:
                 self.automation_running = False
                 self.automation_status = '自动整理已停止：'+str(exc)
                 self.loot_state = None
+                if kind=='managed': self.managed.stop('托管已停止：'+str(exc))
             # Show real state after partial batches instead of keeping stale locks.
             if self.client.connected:
                 try: self._publish(self.client.snapshot())
                 except Exception:
                     self.client.close()
                     self._publish(None)
-            record('web_operation_failed', kind=kind, error=str(exc))
+            record('web_operation_failed', kind=kind, error=str(exc),
+                   error_type=type(exc).__name__, traceback=failure_traceback)
             if kind=='move_items':
                 for row in payload['expected']: self._record_transfer_failure(row,payload['target'],exc)
             self.journal.append('error','operation_failed','操作失败：'+str(exc),context={'operation':kind})
         finally:
             with self.guard:
+                if kind=='managed': self._managed_finish_stop()
                 self.busy = False
                 self.operation_kind = None
+                if (kind=='managed' and self.managed.running and self.managed_fast_followup
+                        and not self.cancelled.is_set() and not self.closed.is_set()):
+                    self.monitor_wake.set()
 
     def _rule_candidates(self, snapshot, candidates):
         allowed = {r.get('instance_id') for r in candidates}
@@ -782,6 +808,7 @@ class AssistantService:
         if not isinstance(enabled,bool): raise ValidationError('监控开关必须为布尔值。')
         with self.guard:
             if enabled:
+                if self.managed.running: raise ValidationError('托管正在运行，请先暂停托管。')
                 if not self.client.connected: raise ValidationError('请先连接游戏。')
                 if self.busy: raise ValidationError('请等待当前操作完成后开启监控。')
                 if not any(r.enabled for r in self.rules): raise ValidationError('请先保存并启用至少一条规则。')
@@ -799,6 +826,7 @@ class AssistantService:
 
     def stop(self):
         self.cancelled.set()
+        self.stop_managed()
         with self.guard:
             self.monitoring = False
             self.automation_running = False
@@ -813,12 +841,15 @@ class AssistantService:
             key=row.get('internal_name');entry=self.item_names.get(key,{})
             row['name']=entry.get('Chinese (Simplified)') or entry.get('English') or key
             row['icon']=self.item_ui['items'].get(key,{}).get('icon') or self.ui['equipment'].get(key,{}).get('icon')
+            row['kind']=self._describe_item(key)[1]
         return value
 
     def save_automation(self,raw):
         settings=validate_settings(raw,self.item_ui['collectibles'])
         with self.guard:
             if self.closed.is_set(): raise ValidationError('助手已退出。')
+            if self.managed.running or self.operation_kind=='managed':
+                raise ValidationError('请先暂停托管，再修改自动整理设置。')
             self.automation_config.parent.mkdir(parents=True,exist_ok=True)
             temp=self.automation_config.with_suffix('.json.tmp')
             temp.write_text(json.dumps(settings,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
@@ -833,6 +864,7 @@ class AssistantService:
         if not isinstance(enabled,bool): raise ValidationError('自动整理开关无效。')
         with self.guard:
             if enabled:
+                if self.managed.running: raise ValidationError('托管正在运行，请先暂停托管。')
                 if not self.client.connected: raise ValidationError('请先连接游戏。')
                 if self.busy: raise ValidationError('请等待当前操作完成。')
                 if not self.snapshot or not self.snapshot.get('complete'): raise ValidationError('请先刷新完整的物品清单。')
@@ -868,13 +900,18 @@ class AssistantService:
             with self.guard: self.automation_status='物品正在变化，等待下一次完整读取。'
             return self.automation_status
         changes=[];waiting=[];budget=8
-        def move_one(row):
+        def move_one(row,pages):
             nonlocal snapshot,budget
             if not active(): return False
             if not snapshot.get('transfer',{}).get('available'):
                 waiting.append('搬运条件尚未核验，等待刷新。');return False
+            try: targets=storage_targets(snapshot,pages)
+            except ValidationError as exc:
+                waiting.append(str(exc));return False
+            if not targets:
+                waiting.append('所选仓库页尚未开放，物品保留在背包；请检查存放页。');return False
             try:
-                result=self.client.move_items([row],'storage',active)
+                result=self.client.move_items([row],'storage',active,target_indices=targets)
                 self._record_item_commit('items_transferred',result)
             except MemoryReadError as exc:
                 if any(v in str(exc) for v in ('空格不足','发生变化','正在变化','已取消')):
@@ -889,19 +926,20 @@ class AssistantService:
             self._publish(snapshot)
             if not snapshot.get('complete'): raise CarriageUnavailable('搬运后物品正在变化，等待下一次读取。')
             return True
-        if settings['gems']['enabled']:
+        for group,kind in (('gems','gem'),('runes','rune')):
+            if not settings[group]['enabled']: continue
             blocked=set()
             while budget and active():
-                gems=[r for r in snapshot['containers']['inventory']['slots'] if item_kind(r)[0]=='gem' and not r.get('issues') and r.get('transfer_key') and r['transfer_key'] not in blocked]
-                if not gems: break
-                if not move_one(gems[0]):
-                    blocked.add(gems[0]['transfer_key'])
+                selected=[r for r in snapshot['containers']['inventory']['slots'] if item_kind(r)[0]==kind and not r.get('issues') and r.get('transfer_key') and r['transfer_key'] not in blocked]
+                if not selected: break
+                if not move_one(selected[0],settings[group]['pages']):
+                    blocked.add(selected[0]['transfer_key'])
                     budget-=1
         if settings['pressure']['enabled'] and budget and active():
             candidates,self.pressure_active=pressure_candidates(snapshot,settings['pressure'],self.pressure_active)
             if self.pressure_active and not candidates: waiting.append('背包空间紧张，当前没有符合入库范围的装备。')
             while candidates and budget and active():
-                if not move_one(candidates[0]): break
+                if not move_one(candidates[0],settings['pressure']['pages']): break
                 candidates,self.pressure_active=pressure_candidates(snapshot,settings['pressure'],self.pressure_active)
         if settings['carriage']['enabled'] and budget and active():
             carriage=self.client.carriage_snapshot()
@@ -909,10 +947,10 @@ class AssistantService:
             with self.guard: self.carriage=carriage
             if not carriage.get('available'): waiting.append(carriage.get('reason','马车尚未出现。'))
             else:
-                selected=set(settings['carriage']['items'])
+                selected=set(settings['carriage']['types'])
                 for row in carriage.get('items',[]):
                     if not budget or not active(): break
-                    if row['internal_name'] not in selected or not row.get('collectable'): continue
+                    if self._describe_item(row['internal_name'])[1] not in selected or not row.get('collectable'): continue
                     if free_slots(snapshot)<=0:
                         waiting.append('背包已满，马车物品保留，等待腾出空格。');break
                     try:
@@ -959,17 +997,21 @@ class AssistantService:
         return '监控中：现有装备已记录，等待符合规则的新装备。'
 
     def _monitor_loop(self):
-        while not self.closed.wait(2):
+        while not self.closed.is_set():
+            self.monitor_wake.wait(2)
+            self.monitor_wake.clear()
+            if self.closed.is_set(): break
             with self.guard:
                 if self.busy or self.updating or not self.client.connected: continue
                 self.busy = True
-                self.operation_kind = 'monitor' if self.monitoring or self.automation_running else 'observe'
+                self.operation_kind = 'managed' if self.managed.running else 'monitor' if self.monitoring or self.automation_running else 'observe'
                 self.worker = threading.Thread(target=self._work,args=(self.operation_kind,{}),daemon=True)
                 self.worker.start()
 
     def close(self):
         self.stop()
         self.closed.set()
+        self.monitor_wake.set()
         worker = self.worker
         if worker and worker is not threading.current_thread(): worker.join(10)
         if self.recommendation_thread is not threading.current_thread(): self.recommendation_thread.join(10)

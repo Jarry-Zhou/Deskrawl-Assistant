@@ -70,6 +70,19 @@ class CharacterMathTests(unittest.TestCase):
         result=preview(item(1,[(20,10),(21,1)]),c,{'items':{}})
         self.assertEqual(0,result['before']);self.assertGreater(result['delta'],0);self.assertIsNone(result['percent'])
 
+    def test_early_game_equipment_uses_actual_bonuses_even_without_random_affixes(self):
+        for rarity in (0, 1, 2):
+            with self.subTest(rarity=rarity):
+                c = character(equipment=[item(1, [(20, 10), (21, 1)], equipped_slot=0, item_uid='old')])
+                c['model']['caches'][536][20] = 10
+                result = preview(item(1, [(20, 20), (21, 1)], rarity=rarity), c, {'items': {}})
+                self.assertTrue(result['available']); self.assertGreater(result['delta'], 0)
+                self.assertEqual('old', result['comparisons'][0]['replaced_uid'])
+                # Common armor without random affixes has a valid zero gain,
+                # rather than an unknown score that could bypass the policy.
+                no_affixes = preview(item(mods=[], rarity=rarity), character(), {'items': {}})
+                self.assertTrue(no_affixes['available']); self.assertEqual(0, no_affixes['delta'])
+
     def test_preview_does_not_mutate_live_model(self):
         c=character();original=deepcopy(c)
         self.assertTrue(preview(item(mods=[(1,100)]),c,{'items':{}})['available'])

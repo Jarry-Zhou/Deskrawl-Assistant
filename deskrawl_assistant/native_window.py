@@ -78,7 +78,7 @@ def activate_existing(port):
         json.load(response)
 
 
-def main(port=18741):
+def main(port=18741, *, test_managed=False):
     running = existing_service(port)
     if running:
         if running.get('desktop'):
@@ -90,9 +90,15 @@ def main(port=18741):
     webview.settings['ALLOW_DOWNLOADS'] = True
     webview.settings['OPEN_EXTERNAL_LINKS_IN_BROWSER'] = True
     webview.settings['OPEN_DEVTOOLS_IN_DEBUG'] = False
-    host = AssistantServer(port)
+    service = None
+    if test_managed:
+        from .runtime_client import RuntimeClient
+        from .web_service import AssistantService
+        service = AssistantService(client=RuntimeClient(managed_test_mode=True))
+    host = AssistantServer(port, service=service)
     try:
-        window = webview.create_window('Deskrawl 装备助手 v' + VERSION,host.url+'?desktop=1',
+        title = 'Deskrawl 装备助手 v' + VERSION + (' · 托管测试版' if test_managed else '')
+        window = webview.create_window(title,host.url+'?desktop=1',
             width=1280,height=820,min_size=(980,680),resizable=True,
             background_color='#11151c',text_select=True,zoomable=False)
         hooks = WindowHooks(window,host.service)
