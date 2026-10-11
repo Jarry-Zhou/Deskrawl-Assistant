@@ -343,10 +343,14 @@ class IronRuleNativeBoundaryTests(unittest.TestCase):
         self.inventory(action, reader, read, [equipment(str(n)) for n in range(39)])
         read.guards = [(1000+24, struct.pack('<Q',40)), (1032,bytes(40*8))]
         action._require_stored_inventory(read)
-        # Allow roots/scene/map guards in addition to the 40-slot inventory.
-        guards = read.guards+[(90000+n*8,bytes(8)) for n in range(25)]
-        compile_mailbox(0x100000,0x180000000,action.profile,0x300000,0x400000,100,
-                        [Invocation('TownPortalSystem.frj',1)],guards)
+        # Live validation measured 276 records with 28 equipment and 12 other
+        # items. Reserve more scene/reward/difficulty overhead for a gear-filled
+        # bag; the former 25-record allowance missed this real boundary.
+        guards = read.guards+[(90000+n*8,bytes(8)) for n in range(100)]
+        encoded = compile_mailbox(0x100000,0x180000000,action.profile,0x300000,0x400000,100,
+                                  [Invocation('TownPortalSystem.frj',1)],guards)
+        self.assertGreater(struct.unpack_from('<I', encoded, 56)[0], 256)
+        self.assertLessEqual(len(encoded), 16384)
 
     def test_empty_list_guards_count_and_version_without_unused_backing_capacity(self):
         reader = Mock(); reader.memory.u64.return_value = 99

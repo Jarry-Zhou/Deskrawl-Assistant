@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "build": "Deskrawl 1.0.2a / Steam 25842017",
-  "verified_kinds": ["return_town", "enter_map", "equip", "salvage", "open_chest", "collect_ground"],
+  "verified_kinds": ["return_town", "enter_map", "switch_difficulty", "equip", "sell", "salvage", "open_chest", "collect_ground"],
   "sha256": {
     "GameAssembly.dll": "d46f0a321e8e07646cca37c7460e58fbfecc47ade5027ea2e00fc71f0fec0565",
     "UnityPlayer.dll": "9feedb4527a30fae4762bff45d204f8e85b90851b2c8ae8d24f436f7d474667b",

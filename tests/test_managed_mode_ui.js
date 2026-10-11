@@ -116,7 +116,7 @@ test('difficulty settings preserve old configuration and choose maps from the se
   assert.ok(ui.requiredCapabilities(s).includes('difficulty'));
 });
 
-test('repeat at current difficulty can run with verified actions while switching and pushing need the test entry',()=>{
+test('a partially verified profile permits current difficulty repeat but blocks unavailable switching and pushing',()=>{
   const s=settings();s.cleanup.equipment_action='salvage';s.cleanup.equipment_fallback='salvage';
   s.cleanup.equipment_policies={};
   const available=capabilities({available:true,native_verified:true});
@@ -127,6 +127,22 @@ test('repeat at current difficulty can run with verified actions while switching
   s.farming.mode='push';assert.equal(ui.controlState(packet,s,true).canStart,false);
   s.farming.mode='repeat';s.farming.difficulty='Nightmare';
   assert.equal(ui.controlState(packet,s,true).canStart,false);
+});
+
+test('the release profile permits sale and cross difficulty push through the ordinary page',()=>{
+  const profile=require('../data/game-actions-profile.json');
+  const kinds={travel:['return_town','enter_map'],difficulty:['switch_difficulty'],equip:['equip'],
+    sell:['sell'],salvage:['salvage'],chests:['open_chest'],ground_pickup:['collect_ground']};
+  const ready={phase:'idle',control_available:true,capabilities:{transfer:true,lock:true,test_mode:false}};
+  for(const [key,actions] of Object.entries(kinds)){
+    const verified=actions.every(kind=>profile.verified_kinds.includes(kind));
+    ready.capabilities[key]={available:verified,native_verified:verified,test_enabled:false};
+  }
+  const s=ui.equipmentPreset(settings({auto_equip:{enabled:true},
+    farming:{enabled:true,mode:'push',difficulty:'Nightmare',dungeon_id:12,free_threshold:4}}),'sell_low');
+  for(const key of ['difficulty','sell','salvage','equip'])assert.ok(ui.requiredCapabilities(s).includes(key));
+  const state=ui.controlState(ready,s,true);
+  assert.equal(state.canStart,true);assert.deepEqual(state.missing,[]);
 });
 
 test('explicit local test capability can start while incompatible actions remain unavailable',()=>{

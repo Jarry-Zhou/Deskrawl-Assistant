@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from deskrawl_assistant.game_actions import GameActions
 from deskrawl_assistant.native_dispatcher import (
     Argument, Invocation, NativeActionError, compile_mailbox, build_trampoline,
-    load_profile, MainThreadDispatcher, DONE, CANCELLED, GUARD_FAILED, REJECTED, INVALID,
+    load_profile, MainThreadDispatcher, MAX_GUARDS, DONE, CANCELLED, GUARD_FAILED, REJECTED, INVALID,
 )
 from deskrawl_assistant.native_memory import MemoryReadError
 
@@ -26,17 +26,32 @@ class ActionBoundaryTests(unittest.TestCase):
         dispatcher.installed = False
         actions = GameActions(reader, dispatcher=dispatcher)
         self.assertEqual(actions.verified_kinds,
-            {'return_town','enter_map','equip','salvage','open_chest','collect_ground'})
+            {'return_town','enter_map','switch_difficulty','equip','sell','salvage','open_chest','collect_ground'})
         state = actions.capabilities()
-        for key in ('travel','equip','salvage','chests','ground_pickup'):
+        self.assertTrue(state['native_verified'])
+        self.assertFalse(state['test_mode'])
+        self.assertEqual(state['reason'], '')
+        for key in ('travel','difficulty','equip','sell','salvage','chests','ground_pickup'):
             self.assertTrue(state[key]['available'])
             self.assertTrue(state[key]['native_verified'])
             self.assertFalse(state[key]['test_enabled'])
-        for key in ('sell','difficulty'):
+            self.assertEqual(state[key]['reason'], '')
+        dispatcher.install.assert_not_called()
+        dispatcher.invoke.assert_not_called()
+
+    def test_fully_verified_release_still_blocks_changed_game_build(self):
+        reader, dispatcher = Mock(), Mock()
+        dispatcher.installed = False
+        dispatcher.verify.side_effect = ValueError('构建指纹不同')
+        actions = GameActions(reader, dispatcher=dispatcher)
+        state = actions.capabilities()
+        self.assertTrue(state['native_verified'])
+        self.assertFalse(state['compatible'])
+        for key in ('travel','difficulty','equip','sell','salvage','chests','ground_pickup'):
             self.assertFalse(state[key]['available'])
-            self.assertFalse(state[key]['native_verified'])
-            with self.assertRaisesRegex(NativeActionError, '尚未实机验收'):
-                actions.execute('sell' if key=='sell' else 'switch_difficulty', {})
+        for kind in ('sell','switch_difficulty'):
+            with self.assertRaisesRegex(NativeActionError, '构建指纹不同'):
+                actions.execute(kind, {})
         dispatcher.install.assert_not_called()
         dispatcher.invoke.assert_not_called()
 
@@ -219,6 +234,14 @@ class ActionBoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             compile_mailbox(*params, [Invocation('TownPortalSystem.frj', 1, require_true=True)], [])
 
+    def test_expanded_guard_table_still_enforces_record_and_allocation_bounds(self):
+        params = (0x100000, 0x180000000, load_profile(), 0x300000, 0x400000, 100)
+        calls = [Invocation('hm.ecc', arguments=(Argument.integer(0),))]
+        with self.assertRaisesRegex(ValueError, '前置校验数据超出限制'):
+            compile_mailbox(*params, calls, [(0x500000, bytes((MAX_GUARDS + 1) * 8))])
+        with self.assertRaisesRegex(ValueError, '后台指令数据超出限制'):
+            compile_mailbox(*params, [Invocation('hm.ecc', arguments=(Argument(raw=bytes(16384)),))], [])
+
     def test_game_exit_after_submission_never_allows_retry(self):
         for unreadable in (False,True):
             with self.subTest(unreadable=unreadable):
@@ -361,6 +384,19 @@ class LocalMainThreadMailboxTests(unittest.TestCase):
         status = self.run_command([Invocation('hm.ecc',arguments=(Argument.integer(3),))],
             [(C.addressof(guard),b'changed!')])
         self.assertEqual(status,GUARD_FAILED)
+        self.assertFalse(self.seen)
+
+    def test_full_bag_budget_checks_guards_beyond_record_256_before_any_call(self):
+        contents = bytes((n % 251 for n in range(300 * 8)))
+        guard = C.create_string_buffer(contents)
+        address = C.addressof(guard)
+        guards = [(address + n * 8, contents[n * 8:(n + 1) * 8]) for n in range(300)]
+        calls = [Invocation('hm.ecc', arguments=(Argument.integer(3),))]
+        self.assertEqual(self.run_command(calls, guards), DONE)
+        self.assertEqual(len(self.seen), 1)
+        self.seen.clear()
+        guard[299 * 8] = bytes([contents[299 * 8] ^ 1])
+        self.assertEqual(self.run_command(calls, guards), GUARD_FAILED)
         self.assertFalse(self.seen)
 
     def test_cancelled_and_wrong_thread_never_invoke(self):

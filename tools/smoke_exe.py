@@ -18,7 +18,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.2'
+NAME = 'Deskrawl装备助手-v1.2.3'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -56,6 +56,9 @@ def main():
     assert 'deskrawl_assistant/web/inventory-tools.js' in normalized
     assert 'deskrawl_assistant/update_replace.ps1' in normalized
     assert 'data/compatibility-baseline.json' in normalized
+    actions_profile = json.loads(archive.extract(normalized['data/game-actions-profile.json']))
+    assert set(actions_profile['verified_kinds']) == {
+        'return_town','enter_map','switch_difficulty','equip','sell','salvage','open_chest','collect_ground'}
     assert any('capstone' in n.lower() and n.lower().endswith('.dll') for n in names)
     folder = ROOT / 'build' / ('exe独立测试 '+uuid.uuid4().hex[:8])
     folder.mkdir(parents=True)
@@ -109,7 +112,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.2'
+                assert request('/api/state')['app_version'] == '1.2.3'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -146,6 +149,7 @@ def main():
         assert request('/automation-tools.js') and request('/managed-mode.js')
         assert '托管模式' in request('/').decode('utf-8')
         report['checks'].append('托管页面与动作配置内置；新用户装备1/2/3、符文4、宝石5；断线不误报解锁，托管默认停止')
+        report['checks'].append('全部八种托管原生动作列入已验证配置；普通启动无需测试参数，未连接时不执行动作')
         report['checks'].append('空规则、监控默认关闭；独立 exe 在中文和空格路径正常启动')
         assert '__SESSION_TOKEN__' not in request('/').decode('utf-8')
         assert b'async function api' in request('/app.js')

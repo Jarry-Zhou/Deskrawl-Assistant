@@ -139,7 +139,10 @@ class GameActions:
             compatible = True
         except (MemoryReadError, OSError, ValueError, KeyError) as exc:
             compatible, reason = False, str(exc)
-        result = {'compatible': compatible, 'native_verified': len(self.verified_kinds) == len(KINDS),
+        fully_verified = len(self.verified_kinds) == len(KINDS)
+        if compatible and fully_verified:
+            reason = ''
+        result = {'compatible': compatible, 'native_verified': fully_verified,
             'build': self.profile['build'], 'reason': reason, 'installed': self.dispatcher.installed,
             'test_mode': self.allow_unverified is True}
         for key, kinds in CAPABILITIES.items():
