@@ -85,6 +85,36 @@ class LootCaptureTests(unittest.TestCase):
         self.monitor.feed(data)
         self.assertFalse(self.files())
 
+    def test_reenable_preserves_earliest_plan_observations_and_file_count(self):
+        data = bundle('LegendaryBelt1','Divine')
+        self.monitor.feed(data)
+        data['observations'] = [observed()]
+        self.monitor.feed(data)
+        original = self.saved()
+        self.monitor.set_enabled(False)
+        self.monitor.set_enabled(True)
+        data['preview']['run']['current_wave'] = 5
+        data['raw_plan']['waves'][0]['loot']['items'][0]['itemLevel'] = 100
+        self.monitor.feed(data)
+        restored = self.saved()
+        self.assertEqual(restored['raw_plan'],original['raw_plan'])
+        self.assertEqual(restored['first_read_at'],original['first_read_at'])
+        self.assertEqual(restored['first_read_wave'],original['first_read_wave'])
+        self.assertEqual(restored['observed_high_value'],original['observed_high_value'])
+        self.assertEqual(restored['latest_raw_plan'],data['raw_plan'])
+        self.assertEqual(self.monitor.status()['saved_runs'],1)
+
+    def test_corrupt_saved_evidence_is_not_overwritten_after_reenable(self):
+        data = bundle('LegendaryBelt1','Divine')
+        self.monitor.feed(data)
+        target = self.files()[0]
+        target.write_text('{broken evidence',encoding='utf-8')
+        self.monitor.set_enabled(False)
+        self.monitor.set_enabled(True)
+        with self.assertRaises(ValueError): self.monitor.feed(data)
+        self.assertEqual(target.read_text(encoding='utf-8'),'{broken evidence')
+        self.assertEqual(self.monitor.status()['saved_runs'],1)
+
     def test_actual_high_value_absent_from_plan_captures_cached_ordinary_plan(self):
         data = bundle()
         self.monitor.feed(data)

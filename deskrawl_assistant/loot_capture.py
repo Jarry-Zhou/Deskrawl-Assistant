@@ -94,6 +94,34 @@ class LootCaptureMonitor:
             if self.enabled:
                 self.error = '本次监控读取或保存失败，将自动重试；其他功能继续运行。'
 
+    def _restore(self, key, entry):
+        """Re-enabling/revisiting a run must not overwrite earlier evidence."""
+        target = self.directory/(key+'.json')
+        if not target.exists(): return entry
+        if target.stat().st_size > 32*1024*1024:
+            raise ValueError('已有掉落留档超出读取上限。')
+        saved = json.loads(target.read_text(encoding='utf-8'))
+        if (not isinstance(saved,dict) or saved.get('schema_version') != 1
+                or saved.get('association') != entry['association']
+                or not isinstance(saved.get('first_read_at'),str)
+                or not isinstance(saved.get('planned_high_value'),list)
+                or not isinstance(saved.get('observed_high_value'),list)):
+            raise ValueError('已有掉落留档无法核验，保留原文件。')
+        first = saved.get('raw_plan')
+        if entry['first_plan'] is not None and (not isinstance(first,dict)
+                or first.get('runId') != entry['first_plan']['runId']):
+            raise ValueError('已有掉落留档场次不一致，保留原文件。')
+        observed = saved['observed_high_value']
+        if any(not isinstance(row,dict) or not isinstance(row.get('item_uid'),str) for row in observed):
+            raise ValueError('已有掉落观测无法核验，保留原文件。')
+        entry.update(first_read_at=saved['first_read_at'], first_read_wave=saved.get('first_read_wave'),
+            first_plan=first, latest_plan=saved.get('latest_raw_plan') or first,
+            planned_hits=saved['planned_high_value'], observed_hits=observed,
+            observed_ids={row['item_uid'] for row in observed}, saved=True)
+        if isinstance(saved.get('saved_at'),str):
+            self.last_saved = max(self.last_saved or '',saved['saved_at'])
+        return entry
+
     def _save(self, key, entry):
         document = {'schema_version':1, 'source':'external_read_only_RunPlan',
             'capture_scope':'RunPlan context and complete RunWave.loot/PlanItem/PlanModifier fields; not a network packet.',
@@ -149,9 +177,9 @@ class LootCaptureMonitor:
                 digest = plan_hash(raw)
                 key = hashlib.sha256((session+'\0'+raw['runId']).encode()).hexdigest()
                 if key not in self.runs:
-                    self.runs[key] = {'first_read_at':now(), 'first_read_wave':preview['run']['current_wave'],
+                    self.runs[key] = self._restore(key, {'first_read_at':now(), 'first_read_wave':preview['run']['current_wave'],
                         'first_plan':deepcopy(raw), 'latest_plan':deepcopy(raw), 'plan_hash':digest,
-                        'association':'same_run', 'planned_hits':[], 'observed_hits':[], 'observed_ids':set()}
+                        'association':'same_run', 'planned_hits':[], 'observed_hits':[], 'observed_ids':set()})
                 entry = self.runs[key]
                 changed = entry['latest_plan'] != raw
                 entry['latest_plan'] = deepcopy(raw)
@@ -189,6 +217,7 @@ class LootCaptureMonitor:
                             entry = {'first_read_at':now(), 'first_read_wave':None, 'first_plan':None,
                                 'latest_plan':None, 'plan_hash':None, 'association':'unattributed',
                                 'planned_hits':[], 'observed_hits':[], 'observed_ids':set()}
+                            entry = self._restore(key,entry)
                             self.runs[key] = entry
                         else: key, entry = entry_pair
                         if uid in entry['observed_ids']: continue
