@@ -23,7 +23,7 @@ TEMPLATE = FIXTURE['containers']['inventory']['slots'][0]
 
 def equipment(index=0, *, container='inventory', key='LegendaryBelt3', **extra):
     value = deepcopy(TEMPLATE)
-    value.update(slot_index=index,container=container,name_key=key,internal_name=key,
+    value.update(item_level=1,base_rarity=3,slot_index=index,container=container,name_key=key,internal_name=key,
                  item_uid=f'offline-{container}-{index}',instance_id=f'offline-{container}-{index}',
                  transfer_key=f'transfer-{container}-{index}',is_black_mist=False,is_ancient=False,issues=[])
     value.update(extra)
@@ -152,6 +152,7 @@ class ManagedServiceTests(unittest.TestCase):
                  'status':({}, {}, {}), 'conditional':({}, {}), 'conversions':[]}
         stats = final_stats(model)
         self.hero = {'available':True, 'session':'offline-session', 'captured_at':'synthetic',
+            'level':1, 'max_level':100,
             'equipment':worn, 'class_mask':4, 'primary':1, 'stats':stats, 'model':model,
             'comparison_model':model, 'attack':panel_attack(stats,1)}
         self.client.character_snapshot = Mock(side_effect=lambda:deepcopy(self.hero))

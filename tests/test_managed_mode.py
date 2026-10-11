@@ -12,6 +12,7 @@ def equipment(uid, slot=0, container='inventory', **extra):
                 container=container, slot_index=slot, kind='equipment', is_equipment=True,
                 locked=False, movable=True, matches=False, review=False, count=1, rarity=3,
                 is_ancient=False, is_black_mist=False)
+    row.update(item_level=1, equip_slot=8, base_rarity=3)
     row.update(extra)
     return row
 
@@ -26,7 +27,7 @@ def observation(items=(), town=False, capacity=40, allowed=range(150), **extra):
     return dict(complete=True, session='same-player', items=values,
                 counts={'inventory': {'capacity': capacity, 'occupied': sum(r['container'] == 'inventory' for r in values)}},
                 scene={'available': True, 'in_town': town, 'dungeon_id': 'a', 'run': {'status': 'running', 'id': 'run1'}},
-                character={'available': True, 'equipment': []}, storage={'page_size': 50, 'allowed_indices': list(allowed)},
+                character={'available': True, 'level':1, 'max_level':100, 'equipment': []}, storage={'page_size': 50, 'allowed_indices': list(allowed)},
                 carriage={'available': True, 'complete': True, 'items': []},
                 ground={'available': True, 'complete': True, 'items': []}, **extra)
 

@@ -16,6 +16,7 @@ from .native_memory import MemoryReadError, SnapshotChangedError
 from .native_dispatcher import Argument, Invocation, MainThreadDispatcher, NativeActionError, load_profile
 from .action_log import record
 from .item_protection import divine_equipment, disposal_protection, mandatory_storage
+from .equipment_requirements import equip_eligibility
 
 
 KINDS = ('return_town', 'enter_map', 'switch_difficulty', 'equip', 'sell', 'salvage', 'open_chest', 'collect_ground')
@@ -175,6 +176,26 @@ class GameActions:
         if read.boolean(save+193):
             raise NativeActionError('游戏暂时禁止物品操作，请等待在线同步完成')
         return read, manager, area, scene
+
+    def _equip_level(self, read, manager, selected, item):
+        """Re-read the same Player/config fields as ddt before any game call."""
+        from .recommendation_reader import _Copy, decode_obscured_int
+        copy = _Copy(self.reader)
+        combat = copy.verify(copy.ptr(manager + 64), 'PlayerCombatController')
+        player = copy.verify(copy.ptr(combat + 32), 'Player')
+        copy.klass(copy.ptr(copy.ptr(player) + 88), 'Character')
+        config = copy.verify(copy.ptr(manager + 32), 'GameConfig')
+        character = {'available': True,
+                     'level': decode_obscured_int(copy.read(player + 32, 16)),
+                     'max_level': copy.integer(config + 264)}
+        current = {**selected, 'base_rarity': copy.integer(item + 36),
+                   'equip_slot': copy.integer(item + 144)}
+        eligibility = equip_eligibility(current, character)
+        copy.finish()
+        read.guards.extend(copy.guards)
+        if not eligibility['can_equip']:
+            raise NativeActionError(eligibility['reason'])
+        return eligibility
 
     def _enrich_drops(self, read, rows):
         registry, stamp = self.reader.registry()
@@ -617,6 +638,7 @@ class GameActions:
                 target = payload.get('equip_slot', payload.get('target_slot'))
                 if type(target) is not int or not 0 <= target < 12:
                     raise NativeActionError('换装目标槽位无效')
+                self._equip_level(read, manager, selected, item)
                 equipment = read.singleton('EquipmentManager')
                 root = read.singleton('Inventory')
                 from .recommendation_reader import _Copy

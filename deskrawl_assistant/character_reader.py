@@ -121,9 +121,15 @@ def _snapshot(reader):
     save = copy.verify(reader.singleton('SaveSystem'), 'SaveSystem')
     mode, slot = struct.unpack('<ii', copy.read(save + 32, 8))
     label = reader.string(copy.ptr(data + 40)) or '未命名角色'
-    level = decode_obscured_int(copy.read(data + 64, 16))
+    # Match the actual Player level used by EquipmentManager.ddt, rather than
+    # the separately persisted PlayerData level during a level-up transition.
+    level = decode_obscured_int(copy.read(player + 32, 16))
+    config = copy.verify(copy.ptr(manager + 32), 'GameConfig')
+    max_level = copy.integer(config + 264)
     if mode not in (0, 1) or not 0 <= slot < 100 or not 1 <= level <= 200:
         raise MemoryReadError('角色标识或等级无效。')
+    if not 1 <= level <= max_level <= 200:
+        raise MemoryReadError('角色等级上限无效。')
     hp_max, hp = struct.unpack('<qq', copy.read(data + 112, 16, stable=False))
     if not 0 <= hp <= hp_max <= 1e15:
         raise MemoryReadError('当前生命数值无效。')
@@ -171,7 +177,7 @@ def _snapshot(reader):
             reader.memory.read(address, len(raw)) != raw for address, raw in reader.snapshot_stamps):
         raise SnapshotChangedError('穿戴装备在读取时变化，等待下一轮读取。')
     return {'available': True, 'session': reader.session_id, 'character_id': f'{mode}:{slot}:{label}',
-        'name': label, 'level': level, 'class_mask': class_mask, 'primary': primary,
+        'name': label, 'level': level, 'max_level': max_level, 'class_mask': class_mask, 'primary': primary,
         'health': hp, 'health_max': hp_max, 'stats': stats, 'attack': panel_attack(comparison_stats, primary),
         'equipment': equipment, 'model': model, 'comparison_model': comparison_model,
         'comparison_stats': comparison_stats, 'comparison_distance': distance, 'comparison_note': PREVIEW_NOTE,

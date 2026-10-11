@@ -189,7 +189,7 @@ function powerClass(delta){return delta>0?'power-up':delta<0?'power-down':'power
 function powerCell(item){
   if(!item.is_equipment)return '<span class="note">—</span>';
   const p=item.power;
-  if(!p?.available)return `<span class="power-unavailable" title="${esc(p?.reason||'等待读取角色')}">${p?.incompatible?'职业不符':'暂不能比较'}</span>`;
+  if(!p?.available)return `<span class="power-unavailable" title="${esc(p?.reason||'等待读取角色')}">${p?.incompatible?'职业不符':p?.level_blocked?`需 Lv.${esc(p.required_level)}`:'暂不能比较'}</span>`;
   return `<div class="power-cell ${powerClass(p.delta)}" title="${esc(p.note)}"><strong>${p.delta>0?'↑ ':p.delta<0?'↓ ':'＝ '}${powerDelta(p.delta)}${p.percent==null?'':` <span>(${p.percent>0?'+':''}${p.percent.toFixed(1)}%)</span>`}</strong><small>换后 ${powerNumber(p.after)}${p.comparisons.length>1?' · '+esc(p.target_label):''}</small></div>`;
 }
 function renderGems(item){
