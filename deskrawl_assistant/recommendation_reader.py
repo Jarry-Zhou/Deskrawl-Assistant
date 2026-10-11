@@ -223,6 +223,16 @@ class _Copy:
         return self.array(array, stride, element, size, limit)
 
     def dictionary(self, obj, kind='obscured', key_kind='stat', limit=4096):
+        try:
+            return self._dictionary(obj, kind, key_kind, limit)
+        except MemoryReadError:
+            # A changed header or entry block can fail validation before the
+            # caller reaches finish(). Let its existing snapshot retry handle
+            # that change; stable corruption still raises the original error.
+            self.finish()
+            raise
+
+    def _dictionary(self, obj, kind, key_kind, limit):
         if not obj:
             return {}
         self.layout(obj, 'Dictionary`2', {'_entries': 24, '_count': 32, '_freeCount': 40, '_version': 44})
@@ -238,8 +248,11 @@ class _Copy:
                 raise MemoryReadError('推荐属性字典元素布局不一致。')
         out = {}
         for raw in entries:
-            _, next_ = struct.unpack_from('<Ii', raw)
-            if next_ < -1:
+            # The verified game's Mono Dictionary removes an entry by setting
+            # its signed hashCode to -1. next then links the free list and may
+            # be -1 or nonnegative, just like the links of active entries.
+            hash_code = struct.unpack_from('<i', raw)[0]
+            if hash_code < 0:
                 continue
             key = struct.unpack_from('<i' if key_kind == 'stat' else '<Q', raw, 8)[0]
             if key in out:
