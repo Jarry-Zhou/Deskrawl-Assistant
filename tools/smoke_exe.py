@@ -38,7 +38,9 @@ def main():
     assert 'VCRUNTIME140.dll' in names or 'vcruntime140.dll' in names
     normalized = {n.replace('\\','/'):n for n in names}
     icons = {n for n in normalized if n.startswith('deskrawl_assistant/web/icons/')}
-    assert len(icons) == 444
+    loot_items = json.loads(archive.extract(normalized['data/loot-item-ui.json']))['items']
+    assert len(icons) == len(loot_items) == 573
+    assert all('deskrawl_assistant/web'+i['icon'] in icons for i in loot_items.values())
     item_ui = json.loads(archive.extract(normalized['data/item-ui.json']))
     assert len(item_ui['items']) == 235
     assert all('deskrawl_assistant/web'+i['icon'] in icons for i in item_ui['items'].values())

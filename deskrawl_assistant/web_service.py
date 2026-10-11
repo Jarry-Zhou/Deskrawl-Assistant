@@ -109,6 +109,10 @@ class AssistantService(ManagedServiceMixin):
         self.monitor_thread.start()
         self.recommendation_thread = threading.Thread(target=self._recommendation_loop, daemon=True)
         self.recommendation_thread.start()
+        from .loot_capture import LootCaptureMonitor
+        self.loot_capture = LootCaptureMonitor((self.config.parent if config else runtime_dir()) / 'loot-captures')
+        self.loot_capture_thread = threading.Thread(target=self._loot_capture_loop, daemon=True)
+        self.loot_capture_thread.start()
 
     def _describe_item(self, key):
         entry = self.item_names.get(key, {})
@@ -121,7 +125,7 @@ class AssistantService(ManagedServiceMixin):
         return self.journal.page(**filters)
 
     def loot_preview_page(self):
-        """Read the current plan without retaining or recording planned player loot."""
+        """Read the current preview; research files belong to the opt-in monitor."""
         from datetime import datetime, timezone
 
         def empty(phase, reason, warnings=None):
@@ -148,8 +152,31 @@ class AssistantService(ManagedServiceMixin):
         with self.guard:
             if not self.client.connected or self.closed.is_set() or self.updating:
                 value = empty('waiting', '连接游戏后，每次进入在线关卡自动显示掉落计划。')
+            rules = list(getattr(self,'rules',[]))
+        if value.get('available') and hasattr(self,'adapter'):
+            from .loot_preview import decorate_equipment
+            for wave in value['waves']:
+                for item in wave['items']: decorate_equipment(item,rules,self.adapter,self.catalog)
+        if hasattr(self,'loot_capture'): value['capture_monitor'] = self.loot_capture.status()
         value['updated_at'] = datetime.now(timezone.utc).isoformat()
         return value
+
+    def set_loot_capture(self, enabled):
+        if self.closed.is_set(): raise ValidationError('助手已退出。')
+        return self.loot_capture.set_enabled(enabled)
+
+    def _loot_capture_loop(self):
+        while not self.closed.wait(2):
+            if not self.loot_capture.status()['enabled']: continue
+            if self.updating or not self.client.connected:
+                self.loot_capture.waiting('等待连接游戏。' if not self.client.connected else '等待程序更新完成。')
+                continue
+            try:
+                bundle = self.client.loot_capture_snapshot()
+                if self.closed.is_set() or self.updating or not self.client.connected: continue
+                self.loot_capture.feed(bundle)
+            except Exception:
+                self.loot_capture.failed()
 
     def experience_live(self):
         if not self.client.connected:
@@ -567,6 +594,7 @@ class AssistantService(ManagedServiceMixin):
             result['automation'] = {'settings':deepcopy(self.automation_settings),'running':self.automation_running,
                 'status':self.automation_status,'carriage':self._carriage_payload()}
             result['app_version'] = VERSION
+            if hasattr(self,'loot_capture'): result['loot_capture'] = self.loot_capture.status()
             result['character'] = self._character_payload(character)
             result['compatibility'] = dict(getattr(self.client,'compatibility',{'phase':'idle','message':'连接时自动检测游戏兼容性'}))
             result['managed'] = {'running':self.managed.running,'phase':self.managed.phase,'status':self.managed.status}
@@ -1046,4 +1074,5 @@ class AssistantService(ManagedServiceMixin):
         worker = self.worker
         if worker and worker is not threading.current_thread(): worker.join(10)
         if self.recommendation_thread is not threading.current_thread(): self.recommendation_thread.join(10)
+        if self.loot_capture_thread is not threading.current_thread(): self.loot_capture_thread.join(10)
         self.client.close()

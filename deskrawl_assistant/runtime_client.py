@@ -140,6 +140,36 @@ class RuntimeClient:
                 raise RuntimeConnectionError('尚未连接游戏。')
             return read_loot_plan(self._reader)
 
+    def loot_capture_snapshot(self):
+        """Private, read-only evidence. Raw identifiers never go to HTTP state."""
+        from .loot_plan_reader import read_loot_plan
+        with self._guard:
+            if self._reader is None: raise RuntimeConnectionError('尚未连接游戏。')
+            raw = {}
+            session = self._reader.session_id
+            preview = read_loot_plan(self._reader, raw_sink=raw)
+            # A temporarily unreadable inventory/control must not suppress a
+            # valid planned high-value capture. Actual detection waits for a
+            # complete baseline; errors never trigger a game operation.
+            try: snapshot = self.snapshot(save=False)
+            except Exception: snapshot = {}
+            try: control = self.control_snapshot()
+            except Exception: control = {}
+            ground, carriage = control.get('ground') or [], control.get('carriage') or {}
+            complete = (snapshot.get('complete') is True and control.get('available') is True
+                        and isinstance(ground,list) and control.get('ground_complete') is True
+                        and carriage.get('complete') is True)
+            observations = []
+            for container in ('inventory','storage'):
+                for row in snapshot.get('containers',{}).get(container,{}).get('slots',[]):
+                    if row.get('item_uid'): observations.append(dict(row,capture_source=container))
+            for source, collection in (('ground',ground),('carriage',carriage.get('items',[]))):
+                if isinstance(collection,list): observations.extend(dict(row,capture_source=source) for row in collection)
+            return {'session':session, 'preview':preview, 'raw_plan':raw or None,
+                'observations_complete':complete, 'observations':observations,
+                'observation_run':(control.get('run') or {}).get('id'),
+                'character_key':control.get('character_id')}
+
     def lock_equipment(self, expected, validate=lambda row: True):
         from .background_lock import lock_equipment
         with self._guard:

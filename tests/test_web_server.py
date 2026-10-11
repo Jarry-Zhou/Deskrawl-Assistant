@@ -18,6 +18,10 @@ class FakeService:
         return {'available':False,'rows':[],'error':'尚未连接角色'}
     def loot_preview_page(self):
         return {'available':False,'phase':'waiting','run':None,'waves':[]}
+    def set_loot_capture(self, enabled):
+        if type(enabled) is not bool: raise ValueError('开关必须为布尔值')
+        self.actions.append('loot-capture-'+str(enabled))
+        return {'enabled':enabled}
     def recommendation_settings(self,data):
         from deskrawl_assistant.recommendation_book import validate_settings
         return {'settings':validate_settings(data.get('settings',data),['Normal','Nightmare','Inferno'])}
@@ -55,6 +59,18 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertEqual(headers['Content-Type'],'text/javascript; charset=utf-8')
         self.assertIn(b'async function api',body)
+
+    def test_loot_capture_toggle_requires_valid_origin_session_and_boolean(self):
+        for headers in ({'Origin':self.url},{'Origin':'https://other.example','X-Assistant-Token':'test-session-token'}):
+            code,_,_=self.request('/api/loot-capture',{'enabled':True},headers)
+            self.assertEqual(code,403)
+        headers={'Origin':self.url,'X-Assistant-Token':'test-session-token'}
+        code,_,_=self.request('/api/loot-capture',{'enabled':'true'},headers)
+        self.assertEqual(code,400)
+        self.assertFalse(self.service.actions)
+        code,_,body=self.request('/api/loot-capture',{'enabled':True},headers)
+        self.assertEqual(code,200)
+        self.assertEqual(json.loads(body),{'enabled':True})
 
     def test_main_page_renders_current_version_and_session(self):
         from deskrawl_assistant.version import VERSION

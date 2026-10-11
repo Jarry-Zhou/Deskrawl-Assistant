@@ -118,3 +118,26 @@ test('a failed read clears previous items and a subsequent successful read resto
   p.context.getPreview=async()=>plan('recovered');await p.run('loadLootPreview()');
   assert.equal(p.ids.get('loot-preview-map').textContent,'recovered');
 });
+
+test('equipment cards split affix groups and highlight only matched rows',()=>{
+  const p=page();p.context.item={name:'装备',kind:'equipment',rarity:3,groups:{
+    base:[{name:'护甲',display_value:'100',matched:false}],
+    primary:[{name:'敏捷',display_value:'60',matched:true,matched_rules:['组合甲']}],
+    secondary:[{name:'击杀恢复生命',display_value:'15',matched:false}],unknown:[]},
+    effect_groups:[{title:'装备效果',texts:['<color=orange>测试说明</color>'],values:[]}],
+    matches:true,rule_note:'组合甲'};
+  const markup=p.run('lootPreviewItem(item)');
+  for(const text of ['基础属性 · 不参与筛选','主词条','副词条','60 ✓','测试说明','符合规则'])assert.ok(markup.includes(text));
+  assert.match(markup,/affix-row matched/);assert.match(markup,/title="组合甲"/);
+  assert.doesNotMatch(markup,/<color/);
+});
+
+test('unknown rarity is not styled as common and monitor state survives plan clearing',()=>{
+  const p=page();p.context.item={name:'未知',rarity:null};
+  assert.doesNotMatch(p.run('lootPreviewItem(item)'),/loot-rarity-0/);
+  p.context.monitor={enabled:true,saved_runs:2,directory:'C:\\captures',message:'正在监控'};
+  p.run("renderLootCapture(monitor);clearLootPreview('已回城');");
+  assert.equal(p.ids.get('loot-capture-enabled').checked,true);
+  assert.equal(p.ids.get('loot-capture-summary').textContent,'已保存 2 局');
+  assert.equal(p.ids.get('loot-capture-directory').textContent,'C:\\captures');
+});

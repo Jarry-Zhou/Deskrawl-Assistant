@@ -159,6 +159,7 @@ def make_handler(service, token):
                     return self.reply(service.copy_rules(data.get('source_key'),data.get('target_key'),
                         data.get('rule_ids'),data.get('replace_existing',False),data.get('expected_target_ids')))
                 elif path=='/api/monitor': service.set_monitoring(data.get('enabled'))
+                elif path=='/api/loot-capture': return self.reply(service.set_loot_capture(data.get('enabled')))
                 elif path=='/api/automation/settings': return self.reply({'settings':service.save_automation(data.get('settings'))})
                 elif path=='/api/automation/run': service.set_automation_running(data.get('enabled'))
                 elif path=='/api/managed/settings':

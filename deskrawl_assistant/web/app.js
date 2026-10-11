@@ -16,6 +16,7 @@ let updateState=null, updatePolling=false, updateSaving=false, updateNoticeShown
 let experienceManualSavedValues=['','','',''];
 let detailTarget=null, characterSignature='', equippedPreviewId=null, equippedPreviewSignature='';
 let lootPreviewData=null, lootPreviewLoading=false, lootPreviewRequest=0, lootPreviewSignature='';
+let lootCaptureBusy=false;
 let columnFilters={containers:null,locks:null,rules:null}, columnMenuKey=null, columnDraft=new Set(), columnAnchor=null;
 const columnMenus={
   position:{label:'位置',sort:'position',filter:'containers',options:[['inventory','背包'],['storage','仓库']]},
@@ -409,6 +410,7 @@ function updateControls(){
   $('monitor-badge').hidden=!state.monitoring&&!state.automation?.running&&!managedRunning;
 }
 function renderState(){
+  if(state.loot_capture)renderLootCapture(state.loot_capture);
   window.ManagedModeUI?.setConnection(state.connected);
   window.ManagedModeUI?.setCharacter(state.character);
   const compatibility=state.compatibility||{phase:'idle',message:'连接时自动检测游戏兼容性'};
@@ -895,16 +897,43 @@ function clearLootPreview(reason,phase='waiting'){
 function lootPreviewItem(item){
   const kinds={equipment:'装备',gem:'宝石',rune:'符文',chest:'宝箱',material:'材料',other:'其他物品'};
   const modifiers=Array.isArray(item.modifiers)?item.modifiers:[];
-  const rarity=Number(item.rarity),rarityClass=Number.isInteger(rarity)&&rarity>=0&&rarity<=9?' loot-rarity-'+rarity:'';
+  const rarity=item.rarity==null?NaN:Number(item.rarity),rarityClass=Number.isInteger(rarity)&&rarity>=0&&rarity<=9?' loot-rarity-'+rarity:'';
   const icon=typeof item.icon==='string'&&item.icon.startsWith('/icons/')?item.icon:'';
   const equipment=item.kind==='equipment';
   const mistClass=equipment&&item.black_mist&&rarity!==4?' loot-black-mist':'';
   return `<article class="loot-preview-item${rarityClass}${mistClass}"><div class="loot-preview-item-head"><div class="loot-preview-icon">${icon?`<img src="${esc(icon)}" alt="" loading="lazy">`:'<span aria-hidden="true">◇</span>'}</div><div><h3>${esc(item.name||'名称尚未确认')}</h3><p>${esc(item.rarity_label||kinds[item.kind]||'其他物品')}${item.slot_label?' · '+esc(item.slot_label):''}</p></div><strong class="loot-preview-quantity" title="计划数量">×${lootPreviewNumber(item.quantity)}</strong></div>
-    <div class="loot-preview-item-meta">${item.level!==null&&item.level!==undefined?`<span>物品等级 ${esc(item.level)}</span>`:''}${equipment?`<span>${item.sockets===null||item.sockets===undefined?'孔数未确认':esc(item.sockets)+' 孔'}</span>`:''}${item.ancient?'<span class="equipment-tag ancient">远古</span>':''}${item.black_mist?'<span class="equipment-tag mist">黑雾</span>':''}</div>
-    ${modifiers.length?`<ul class="loot-preview-affixes">${modifiers.map(modifier=>`<li>${esc(modifier.text||'词条待确认')}</li>`).join('')}</ul>`:equipment?'<p class="loot-preview-item-note">此装备暂无可显示词条。</p>':''}
+    <div class="loot-preview-item-meta">${item.level!==null&&item.level!==undefined?`<span>物品等级 ${esc(item.level)}</span>`:''}${equipment?`<span>${item.sockets===null||item.sockets===undefined?'孔数未确认':esc(item.sockets)+' 孔'}</span>`:''}${equipment&&item.ancient?'<span class="equipment-tag ancient">远古</span>':''}${equipment&&item.black_mist?'<span class="equipment-tag mist">黑雾</span>':''}${equipment&&item.matches?`<span class="equipment-tag loot-rule-match" title="${esc(item.rule_note)}">符合规则</span>`:''}${equipment&&item.primary_perfect?'<span class="equipment-tag loot-rule-match">主词条全中</span>':''}</div>
+    ${equipment&&item.groups?lootPreviewGroups(item):modifiers.length?`<ul class="loot-preview-affixes">${modifiers.map(modifier=>`<li>${esc(modifier.text||'词条待确认')}</li>`).join('')}</ul>`:equipment?'<p class="loot-preview-item-note">此装备暂无可显示词条。</p>':''}
+    ${renderEffects(item)}${item.effect_note?`<p class="loot-preview-item-note">${esc(item.effect_note)}</p>`:''}
+    ${equipment&&item.rule_note?`<p class="loot-preview-item-note">${esc(item.rule_note)}</p>`:''}
+    ${item.item_key?`<p class="loot-preview-item-id">${esc(item.item_key)}</p>`:''}
     ${item.kind==='chest'&&Number(item.chest_gold)>0?`<p class="loot-preview-item-note">计划箱内金币 ${lootPreviewNumber(item.chest_gold)}（不计入波次合计）</p>`:''}${item.kind==='chest'?'<p class="loot-preview-item-note">箱子内物品需结算后确认。</p>':''}</article>`;
 }
+function lootPreviewGroups(item){
+  const titles={base:'基础属性 · 不参与筛选',primary:'主词条',secondary:'副词条',unknown:'未确认词条'};
+  return Object.entries(titles).map(([group,title])=>{
+    const rows=Array.isArray(item.groups[group])?item.groups[group]:[];
+    return rows.length?`<div class="detail-group loot-affix-group"><h4>${title}</h4>${rows.map(row=>`<div class="affix-row${row.matched?' matched':''}" title="${esc(row.matched?(row.matched_rules||[]).join('、'):row.value_note||'')}"><span>${esc(row.name)}</span><strong>${esc(row.display_value)}${row.matched?' ✓':''}</strong></div>`).join('')}</div>`:'';
+  }).join('');
+}
+function renderLootCapture(value){
+  if(!value)return;
+  if(!lootCaptureBusy)$('loot-capture-enabled').checked=value.enabled===true;
+  $('loot-capture-status').textContent=value.error||value.message||'监控未开启。';
+  $('loot-capture-status').className=value.error?'inline-error':'';
+  const time=value.last_saved?new Date(value.last_saved).toLocaleTimeString('zh-CN',{hour12:false}):'';
+  $('loot-capture-summary').textContent=`已保存 ${lootPreviewNumber(value.saved_runs)} 局${time?' · 最近留档 '+time:''}`;
+  $('loot-capture-directory').textContent=value.directory||'等待读取';
+}
+$('loot-capture-enabled').addEventListener('change',async()=>{
+  if(lootCaptureBusy)return;
+  const enabled=$('loot-capture-enabled').checked;lootCaptureBusy=true;$('loot-capture-enabled').disabled=true;
+  try{const value=await api('loot-capture',{enabled});lootCaptureBusy=false;renderLootCapture(value);}
+  catch(error){lootCaptureBusy=false;$('loot-capture-enabled').checked=!enabled;toast(error.message,true);}
+  finally{$('loot-capture-enabled').disabled=false;}
+});
 function renderLootPreview(data){
+  if(data?.capture_monitor)renderLootCapture(data.capture_monitor);
   if(!data||data.available!==true||data.phase!=='active'||!data.run||!data.run.key){
     clearLootPreview(data?.reason||'当前没有可读取的在线关卡计划。',data?.phase||'unavailable');return;
   }
