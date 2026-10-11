@@ -19,7 +19,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.4'
+NAME = 'Deskrawl装备助手-v1.2.5'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -116,7 +116,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.4'
+                assert request('/api/state')['app_version'] == '1.2.5'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -161,7 +161,8 @@ def main():
         assert request('/style.css')
         page = request('/').decode('utf-8')
         tabs = re.findall(r'data-tab="([^"]+)"', page)
-        assert tabs == ['rules', 'inventory', 'loot-preview', 'managed', 'recommendations', 'experience', 'logs']
+        assert tabs == ['rules', 'inventory', 'managed', 'loot-preview', 'recommendations', 'experience', 'logs']
+        assert 'id="managed-tab-status"' in page
         assert all(page.count('id="'+tab+'-page"') == 1 for tab in tabs)
         assert 'src="/managed-mode.js"' in page
         assert b"$('managed-page').hidden=tab!=='managed'" in request('/app.js')

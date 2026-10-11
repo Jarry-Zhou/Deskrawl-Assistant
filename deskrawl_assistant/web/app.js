@@ -409,7 +409,14 @@ function updateControls(){
   $('stop').hidden=!state.busy&&!state.monitoring&&!state.automation?.running&&!managedRunning;
   $('monitor-badge').hidden=!state.monitoring&&!state.automation?.running&&!managedRunning;
 }
+function renderManagedTab(packet){
+  const running=state?.connected===true&&packet?.running===true;
+  $('managed-tab-status').hidden=!running;
+  $('managed-tab-status').title=running?(packet.status||'托管正在运行。'):'';
+  $('managed-tab').setAttribute('aria-label',running?'托管模式，运行中':'托管模式');
+}
 function renderState(){
+  renderManagedTab(state.managed);
   if(state.loot_capture)renderLootCapture(state.loot_capture);
   window.ManagedModeUI?.setConnection(state.connected);
   window.ManagedModeUI?.setCharacter(state.character);
@@ -444,7 +451,7 @@ async function pollState(){
   if(polling||exiting)return;
   polling=true;
   try{state=await api('state');renderState();}
-  catch(error){clearLootPreview('助手服务已断开，请重新启动后连接游戏。','unavailable');$('footer-state').textContent='助手服务已断开，请重新双击启动文件。';if(!state)$('operation-message').textContent=error.message;}
+  catch(error){renderManagedTab(null);clearLootPreview('助手服务已断开，请重新启动后连接游戏。','unavailable');$('footer-state').textContent='助手服务已断开，请重新双击启动文件。';if(!state)$('operation-message').textContent=error.message;}
   finally{polling=false;}
 }
 async function action(kind,data={}){

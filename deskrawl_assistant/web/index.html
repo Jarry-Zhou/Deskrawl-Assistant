@@ -27,7 +27,16 @@
     <a id="update-release" href="https://github.com/awesomehy/Deskrawl-Assistant/releases" target="_blank" rel="noopener noreferrer">发行记录 ↗</a>
     <button id="check-update" class="button ghost">检查更新</button><button id="install-update" class="button primary" hidden>下载并更新（重启）</button>
   </section>
-  <nav class="tabs" aria-label="功能页签"><button class="tab active" data-tab="rules" role="tab" aria-selected="true">装备筛选规则 <span id="rule-count">0</span></button><button class="tab" data-tab="inventory" role="tab" aria-selected="false">背包与仓库</button><button class="tab" data-tab="loot-preview" role="tab" aria-selected="false">掉落预览</button><button class="tab" data-tab="managed" role="tab" aria-selected="false">托管模式</button><button class="tab" data-tab="recommendations" role="tab" aria-selected="false">刷图推荐</button><button class="tab" data-tab="experience" role="tab" aria-selected="false">经验收益</button><button class="tab" data-tab="logs" role="tab" aria-selected="false">日志</button><span id="monitor-badge" hidden><i></i>持续监控中</span></nav>
+  <nav class="tabs" aria-label="功能页签">
+    <button class="tab active" data-tab="rules" role="tab" aria-selected="true">装备筛选规则 <span id="rule-count">0</span></button>
+    <button class="tab" data-tab="inventory" role="tab" aria-selected="false">背包与仓库</button>
+    <button id="managed-tab" class="tab" data-tab="managed" role="tab" aria-selected="false">托管模式<span id="managed-tab-status" class="managed-tab-status" role="status" hidden><i aria-hidden="true"></i>运行中</span></button>
+    <button class="tab" data-tab="loot-preview" role="tab" aria-selected="false">掉落预览</button>
+    <button class="tab" data-tab="recommendations" role="tab" aria-selected="false">刷图推荐</button>
+    <button class="tab" data-tab="experience" role="tab" aria-selected="false">经验收益</button>
+    <button class="tab" data-tab="logs" role="tab" aria-selected="false">日志</button>
+    <span id="monitor-badge" hidden><i></i>持续监控中</span>
+  </nav>
   <main>
     <section id="rules-page" role="tabpanel">
       <div class="page-heading"><div><h1>装备筛选规则</h1><p>先找到传说装备，再设定要保留的词条组合。</p></div><div class="heading-actions"><button id="import-rules" class="button ghost">导入规则</button><button id="export-rules" class="button ghost">导出规则</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></div>

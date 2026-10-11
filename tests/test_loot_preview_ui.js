@@ -43,7 +43,7 @@ function plan(key='first',items=[{name:'测试装备',kind:'equipment',rarity:3,
 
 test('merged navigation switches all seven pages and preserves managed activation',()=>{
   const p=page();p.run('loadLootPreview=()=>{};');
-  assert.deepEqual(p.tabs.map(tab=>tab.dataset.tab),['rules','inventory','loot-preview','managed','recommendations','experience','logs']);
+  assert.deepEqual(p.tabs.map(tab=>tab.dataset.tab),['rules','inventory','managed','loot-preview','recommendations','experience','logs']);
   for(const selected of p.tabs.map(tab=>tab.dataset.tab)){
     p.run('switchTab('+JSON.stringify(selected)+')');
     for(const tab of p.tabs)assert.equal(p.ids.get(tab.dataset.tab+'-page').hidden,tab.dataset.tab!==selected);

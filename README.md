@@ -1,12 +1,12 @@
 # Deskrawl 装备助手
 
-为 Deskrawl 提供装备筛选、物品整理与自动刷图的 Windows x64 工具。使用独立窗体，无需安装 Python。当前版本：**v1.2.4**。
+为 Deskrawl 提供装备筛选、物品整理与自动刷图的 Windows x64 工具。使用独立窗体，无需安装 Python。当前版本：**v1.2.5**。
 
 如果觉得本软件对你有帮助，欢迎在 [GitHub 项目](https://github.com/awesomehy/Deskrawl-Assistant) 点亮 **Star**！
 
 ## 下载与使用
 
-**[下载 v1.2.4 exe](https://github.com/awesomehy/Deskrawl-Assistant/releases/download/v1.2.4/Deskrawl-Assistant-v1.2.4.exe)** · [全部 Releases 与更新记录](https://github.com/awesomehy/Deskrawl-Assistant/releases)
+**[下载 v1.2.5 exe](https://github.com/awesomehy/Deskrawl-Assistant/releases/download/v1.2.5/Deskrawl-Assistant-v1.2.5.exe)** · [全部 Releases 与更新记录](https://github.com/awesomehy/Deskrawl-Assistant/releases)
 
 1. 下载并双击 exe；启动游戏、进入角色，在助手顶部点击“连接游戏”。主城和战斗场景均可使用。
 2. 在“装备筛选规则”中配置并启用规则，到“背包与仓库”检查结果，按需开启持续监控和自动整理。
@@ -20,8 +20,8 @@
 | --- | --- |
 | 装备筛选规则 | 按职业、部位选择传说装备，配置多套主／副词条组合；至少命中指定数量即保留，支持导入、导出和复制规则。 |
 | 背包与仓库 | 查看角色属性、穿戴装备、词条及宝石；显示换装战力预估，支持表头筛选排序、自动锁定、双向搬运与按类型分区整理。 |
-| 掉落预览 | 进入在线关卡后查看各波次计划物品、词条、金币和药水充能，每 2 秒刷新。[使用说明](docs/掉落预览说明.md) |
 | 托管模式 | 自动换装、复刷／跨难度推图、空间不足回城，批量拾取并按品质收纳、出售或分解，最后开宝箱；统计累计掉落。[配置说明](docs/托管模式开发说明.md) |
+| 掉落预览 | 进入在线关卡后查看各波次计划物品、效果和分组词条，命中高亮；支持高价值掉落原始数据留档。[使用说明](docs/掉落预览说明.md) |
 | 刷图推荐 | 根据当前角色比较关卡经验与收益，正常刷图时自动校准耗时。[使用说明](docs/刷图推荐说明.md) |
 | 经验收益 | 采样或手动记录每关经验与耗时，比较预计每小时收益。[使用说明](docs/经验收益说明.md) |
 | 日志 | 查看新增物品、锁定、搬运及操作记录，支持搜索与历史查询。 |
@@ -48,7 +48,7 @@
 
 ## 开发与更新记录
 
-[版本记录](docs/版本记录.md) · [1.2.4 验收说明](docs/1.2.4验收说明.md) · [源码运行与构建](docs/开发与构建.md) · [第三方资源说明](NOTICE.md)
+[版本记录](docs/版本记录.md) · [1.2.5 验收说明](docs/1.2.5验收说明.md) · [源码运行与构建](docs/开发与构建.md) · [第三方资源说明](NOTICE.md)
 
 ## 贡献
 
