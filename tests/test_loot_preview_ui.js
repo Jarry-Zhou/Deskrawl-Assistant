@@ -1,0 +1,120 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+
+function page(){
+  const directory=path.join(__dirname,'../deskrawl_assistant/web');
+  const html=fs.readFileSync(path.join(directory,'index.html'),'utf8');
+  const ids=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],{
+    hidden:false,disabled:false,textContent:'',innerHTML:'',value:'',dataset:{},
+    addEventListener(){},replaceChildren(){this.innerHTML='';},contains(){return false;},
+    classList:{toggle(){},add(){},remove(){}},setAttribute(){}
+  }]));
+  const tabs=[...html.matchAll(/data-tab="([^"]+)"/g)].map(match=>({
+    dataset:{tab:match[1]},classList:{toggle(){}},setAttribute(){},addEventListener(){}
+  }));
+  const timers=[],managed=[];
+  const document={
+    getElementById(id){assert.ok(ids.has(id),'Missing merged element: '+id);return ids.get(id);},
+    querySelector(){return {content:'isolated-test-token',addEventListener(){}};},
+    querySelectorAll(selector){return selector==='.tab'?tabs:[];},addEventListener(){}
+  };
+  const context=vm.createContext({document,location:{search:''},URLSearchParams,
+    window:{addEventListener(){},ManagedModeUI:{setActive:value=>managed.push(value)}},
+    setInterval:(callback,delay)=>{timers.push({callback,delay});return timers.length;},
+    setTimeout(){},clearTimeout(){},clearInterval(){},console});
+  const source=fs.readFileSync(path.join(directory,'app.js'),'utf8');
+  assert.equal((source.match(/^boot\(\);$/gm)||[]).length,1);
+  vm.runInContext(source.replace(/^boot\(\);$/m,''),context,{filename:'app.js'});
+  const run=code=>vm.runInContext(code,context);
+  run('renderInventory=()=>{};loadLogs=()=>{};loadExperience=()=>{};loadRecommendations=()=>{};');
+  return {context,run,ids,tabs,timers,managed};
+}
+
+function plan(key='first',items=[{name:'测试装备',kind:'equipment',rarity:3,quantity:1,level:800,
+    sockets:2,modifiers:[{text:'敏捷 +60'}]}]){
+  return {available:true,phase:'active',run:{key,map_name:key,current_wave:1,total_waves:1},
+    totals:{items:items.length,equipment:items.filter(item=>item.kind==='equipment').length,gold:300,potion_charges:2},
+    waves:[{number:1,state:'current',gold:300,potion_charges:2,items}],warnings:[],updated_at:'2026-10-11T12:00:00Z'};
+}
+
+test('merged navigation switches all seven pages and preserves managed activation',()=>{
+  const p=page();p.run('loadLootPreview=()=>{};');
+  assert.deepEqual(p.tabs.map(tab=>tab.dataset.tab),['rules','inventory','loot-preview','managed','recommendations','experience','logs']);
+  for(const selected of p.tabs.map(tab=>tab.dataset.tab)){
+    p.run('switchTab('+JSON.stringify(selected)+')');
+    for(const tab of p.tabs)assert.equal(p.ids.get(tab.dataset.tab+'-page').hidden,tab.dataset.tab!==selected);
+    assert.equal(p.managed.at(-1),selected==='managed');
+  }
+});
+
+test('an available plan with no items still displays coins and potion charges',()=>{
+  const p=page();p.context.packet=plan('empty',[]);p.run('renderLootPreview(packet)');
+  assert.equal(p.ids.get('loot-preview-gold').textContent,'300');
+  assert.equal(p.ids.get('loot-preview-potions').textContent,'2');
+  assert.equal(p.ids.get('loot-preview-items').textContent,'0');
+  assert.equal(p.ids.get('loot-preview-empty').hidden,false);
+  assert.match(p.ids.get('loot-preview-waves').innerHTML,/此波无计划物品/);
+});
+
+test('new runs replace previous items and unavailable plans clear every summary',()=>{
+  const p=page();p.context.packet=plan('old',[{name:'旧装备',quantity:1}]);p.run('renderLootPreview(packet)');
+  p.context.packet=plan('new',[{name:'新装备',quantity:1}]);p.run('renderLootPreview(packet)');
+  assert.match(p.ids.get('loot-preview-waves').innerHTML,/新装备/);
+  assert.doesNotMatch(p.ids.get('loot-preview-waves').innerHTML,/旧装备/);
+  p.context.packet={available:false,phase:'waiting',reason:'已回城'};p.run('renderLootPreview(packet)');
+  assert.equal(p.ids.get('loot-preview-waves').innerHTML,'');
+  for(const key of ['items','gold','potions','wave'])assert.equal(p.ids.get('loot-preview-'+key).textContent,'—');
+});
+
+test('untrusted names, affixes and icon attributes are escaped and remote icons omitted',()=>{
+  const p=page();p.context.item={name:'<script>bad()</script>',kind:'equipment',rarity:3,
+    modifiers:[{text:'<img src=x onerror=bad()>'}],icon:'https://example.invalid/image.png'};
+  const markup=p.run('lootPreviewItem(item)');
+  assert.match(markup,/&lt;script&gt;/);assert.match(markup,/&lt;img/);
+  assert.doesNotMatch(markup,/<script>|<img src=x|example\.invalid/);
+  p.context.item.icon='/icons/a" onerror="bad()';
+  assert.match(p.run('lootPreviewItem(item)'),/a&quot; onerror=&quot;/);
+});
+
+test('a pending read cannot repopulate a preview cleared by disconnection',async()=>{
+  const p=page();let resolve;
+  p.context.getPreview=()=>new Promise(done=>{resolve=done;});
+  p.run('state={connected:true};api=()=>getPreview();');
+  const pending=p.run('loadLootPreview()');
+  p.run("clearLootPreview('已断开');state.connected=false;");
+  resolve(plan('obsolete'));await pending;
+  assert.equal(p.ids.get('loot-preview-waves').innerHTML,'');
+  assert.equal(p.ids.get('loot-preview-map').textContent,'等待读取关卡');
+  assert.equal(p.ids.get('loot-preview-refresh').disabled,false);
+});
+
+test('black mist and divine previews retain the same quality distinction as managed equipment',()=>{
+  const p=page();p.context.item={name:'黑雾装备',kind:'equipment',rarity:3,black_mist:true};
+  assert.match(p.run('lootPreviewItem(item)'),/class="loot-preview-item loot-rarity-3 loot-black-mist"/);
+  p.context.item.rarity=4;
+  assert.doesNotMatch(p.run('lootPreviewItem(item)'),/class="[^"]*loot-black-mist/);
+});
+
+test('polling runs only while the preview tab is active and avoids overlapping reads',async()=>{
+  const p=page();let calls=0,resolve;
+  p.context.getPreview=()=>{calls++;return new Promise(done=>{resolve=done;});};
+  p.run('state={connected:true};api=()=>getPreview();');
+  const timer=p.timers.find(value=>String(value.callback).includes("activeTab==='loot-preview'"));
+  assert.equal(timer.delay,2000);
+  p.run("activeTab='managed'");timer.callback();assert.equal(calls,0);
+  p.run("activeTab='loot-preview'");timer.callback();timer.callback();assert.equal(calls,1);
+  resolve(plan());await new Promise(setImmediate);
+  assert.match(p.ids.get('loot-preview-waves').innerHTML,/测试装备/);
+});
+
+test('a failed read clears previous items and a subsequent successful read restores the new plan',async()=>{
+  const p=page();p.context.packet=plan('old');p.run('renderLootPreview(packet);state={connected:true};');
+  p.context.getPreview=async()=>{throw new Error('temporary failure');};p.run('api=()=>getPreview();');
+  await p.run('loadLootPreview()');assert.equal(p.ids.get('loot-preview-waves').innerHTML,'');
+  p.context.getPreview=async()=>plan('recovered');await p.run('loadLootPreview()');
+  assert.equal(p.ids.get('loot-preview-map').textContent,'recovered');
+});

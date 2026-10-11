@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -18,7 +19,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.3'
+NAME = 'Deskrawl装备助手-v1.2.4'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -46,6 +47,7 @@ def main():
     assert not any('activity.sqlite3' in n or 'experience.sqlite3' in n for n in names)
     assert 'data/experience-types.json' in normalized
     assert 'data/recommendation-types.json' in normalized
+    assert 'data/loot-plan-types.json' in normalized
     assert 'data/recommendation-catalog.json' in normalized
     assert not any('recommendations.sqlite3' in n for n in names)
     assert any('_sqlite3' in n for n in names)
@@ -112,7 +114,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.3'
+                assert request('/api/state')['app_version'] == '1.2.4'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -156,8 +158,19 @@ def main():
         assert b'openCombinationManager' in request('/rule-tools.js')
         assert request('/style.css')
         page = request('/').decode('utf-8')
+        tabs = re.findall(r'data-tab="([^"]+)"', page)
+        assert tabs == ['rules', 'inventory', 'loot-preview', 'managed', 'recommendations', 'experience', 'logs']
+        assert all(page.count('id="'+tab+'-page"') == 1 for tab in tabs)
+        assert 'src="/managed-mode.js"' in page
+        assert b"$('managed-page').hidden=tab!=='managed'" in request('/app.js')
+        assert b"$('loot-preview-page').hidden=tab!=='loot-preview'" in request('/app.js')
+        report['checks'].append('七个页签完整且没有重复；托管页面与掉落预览的导航同时保留')
         assert 'id="equipped-dialog"' in page and page.count('data-column="') == 7
         assert '单体 Boss 基准战力' in page
+        assert 'id="loot-preview-page"' in page
+        preview = request('/api/loot-preview')
+        assert preview['phase'] == 'waiting' and preview['run'] is None and not preview['waves']
+        report['checks'].append('掉落预览界面、独立类型配置及只读接口内置，断连时无旧计划')
         assert b'InventoryTools' in request('/inventory-tools.js')
         report['checks'].append('角色装备独立弹窗、七个表头菜单及固定 Boss 场景说明已随 exe 内置')
         recommendation = request('/api/recommendations')
@@ -243,6 +256,13 @@ def main():
             assert state['connected'] and state['complete'] and not state['error'], state['message']
             assert state['items']
             assert not state['monitoring']
+            preview = request('/api/loot-preview')
+            assert preview['phase'] in {'active','waiting'}, preview['reason']
+            if preview['available']:
+                assert preview['run']['key'] and preview['waves']
+                assert preview['totals']['items'] == sum(len(w['items']) for w in preview['waves'])
+                assert preview['totals']['gold'] == sum(w['gold'] for w in preview['waves'])
+            report['checks'].append('打包版只读取得当前在线计划或明确等待状态，物品与金币合计一致')
             live = request('/api/experience')['live']
             if live['available']:
                 assert live['total_xp'] >= live['current_xp'], live
@@ -298,6 +318,13 @@ def main():
             report['checks'].append('实际装备的基础属性独立显示，不混入主副词条')
             report['checks'].append('装备预览包含数值与命中状态；基础属性不高亮')
             report['checks'].append('打包后的 exe 成功只读连接实际游戏并取得完整背包和仓库清单')
+            request('/api/action', {'kind':'disconnect'})
+            deadline = time.monotonic()+10
+            while request('/api/state')['busy'] and time.monotonic()<deadline:
+                time.sleep(.1)
+            preview = request('/api/loot-preview')
+            assert preview['run'] is None and not preview['waves'] and not any(preview['totals'].values())
+            report['checks'].append('断开实际游戏后整份计划清空，无残留掉落')
         old_token = token
         finish()
         start()
