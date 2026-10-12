@@ -501,7 +501,7 @@ class LifecycleTests(unittest.TestCase):
         world['scene'].update(dungeon_id='a', run={'id': 'a2', 'status': 'running'}); engine.next_action(world)
         world['scene']['run']['status'] = 'success'
         action = engine.next_action(world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
-        self.assertEqual(engine.next_action(town)['dungeon_id'], 'a')
+        self.assertEqual(engine.next_action(town)['dungeon_id'], 'b')
 
     def test_repeat_finished_map_always_returns_and_cleans_before_same_map_entry(self):
         engine = ManagedMode(settings()); world = observation(); engine.start(world)
@@ -513,11 +513,12 @@ class LifecycleTests(unittest.TestCase):
         town['items'][0]['container'] = 'storage'; town['counts']['inventory']['occupied'] = 0
         action = engine.next_action(town); self.assertEqual(action['kind'], 'enter_dungeon'); self.assertEqual(action['dungeon_id'], 'a')
 
-    def test_first_push_map_failure_pauses_without_guessing_previous(self):
+    def test_first_campaign_map_failure_repeats_first_map(self):
         s = settings(); s['farming']['mode'] = 'push'
         engine = ManagedMode(s); world = observation(); engine.start(world)
         world['scene']['run']['status'] = 'failed'
-        self.assertIsNone(engine.next_action(world)); self.assertEqual(engine.phase, 'paused')
+        self.assertEqual(engine.next_action(world)['kind'],'return_town')
+        self.assertTrue(engine.running);self.assertEqual(engine.target_dungeon,'a')
 
     def test_character_change_and_incomplete_reads_never_execute(self):
         engine = ManagedMode(settings()); world = observation(); engine.start(world)

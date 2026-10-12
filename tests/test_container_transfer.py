@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from deskrawl_assistant.container_transfer import FrozenSlotTransaction, move_items, plan_transfers, replace_fields
-from deskrawl_assistant.native_memory import MemoryReadError
+from deskrawl_assistant.native_memory import MemoryReadError, SnapshotChangedError, GameBusyError
 from test_container_transfer_probe import FakeMemory
 
 
@@ -62,7 +62,7 @@ class TransferTests(unittest.TestCase):
     def test_game_item_gate_rejects_transfer_without_any_write(self):
         pair=self.pair()
         self.p.put(self.save+193,b'\1')
-        with self.assertRaisesRegex(MemoryReadError,'暂时禁止'):
+        with self.assertRaisesRegex(GameBusyError,'暂时禁止'):
             self.tx.move_many([pair],[])
         src,dst,full,empty=pair
         self.assertEqual(self.p.read(src,48),full)
@@ -132,8 +132,28 @@ class TransferTests(unittest.TestCase):
     @patch('deskrawl_assistant.container_transfer.FrozenSlotTransaction')
     def test_stale_selection_is_rejected_before_transaction(self,tx,access):
         self.fake_reader()
-        with self.assertRaisesRegex(RuntimeError,'已变化或移动'):
+        with self.assertRaisesRegex(SnapshotChangedError,'已变化或移动'):
             move_items(self.reader,[{'transfer_key':'stale'}],'inventory')
+        tx.assert_not_called()
+
+    @patch('deskrawl_assistant.container_transfer.access_state',return_value=({'storage_indices':[0]},[]))
+    @patch('deskrawl_assistant.container_transfer.FrozenSlotTransaction')
+    def test_changed_source_header_replans_without_opening_transaction(self,tx,access):
+        row,_ = self.fake_reader()
+        self.reader.transfer_key = lambda *args:'changed-token'
+        with self.assertRaisesRegex(SnapshotChangedError,'来源物品发生变化'):
+            move_items(self.reader,[row],'inventory')
+        tx.assert_not_called()
+
+    @patch('deskrawl_assistant.container_transfer.access_state',return_value=({'storage_indices':[0]},[]))
+    @patch('deskrawl_assistant.container_transfer.FrozenSlotTransaction')
+    def test_invalid_selection_is_not_a_retryable_snapshot_change(self,tx,access):
+        row,_ = self.fake_reader()
+        for expected in ([{}],[row,row]):
+            with self.subTest(expected=expected):
+                with self.assertRaises(MemoryReadError) as caught:
+                    move_items(self.reader,expected,'inventory')
+                self.assertNotIsInstance(caught.exception,SnapshotChangedError)
         tx.assert_not_called()
 
     @patch('deskrawl_assistant.container_transfer.access_state',return_value=({'storage_indices':[0]},[]))

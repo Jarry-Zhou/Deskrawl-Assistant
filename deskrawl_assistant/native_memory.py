@@ -68,6 +68,10 @@ class SnapshotChangedError(MemoryReadError):
     """The live game changed a verified object while it was being copied."""
 
 
+class GameBusyError(SnapshotChangedError):
+    """A known temporary game gate blocked an action before any mutation."""
+
+
 def game_pids():
     snapshot = K.CreateToolhelp32Snapshot(2, 0)
     if snapshot == C.c_void_p(-1).value:

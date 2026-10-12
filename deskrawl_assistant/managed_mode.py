@@ -12,16 +12,20 @@ import math
 
 from .models import ValidationError
 from .game_panel_log import DisposalLogCursor
-from .item_protection import divine_equipment, mandatory_storage, disposal_protection, is_rune
+from .item_protection import divine_equipment, mandatory_storage, disposal_protection, is_rune, town_rewards_clear
 from .storage_preferences import DEFAULT_STORAGE_PAGES
 from .equipment_requirements import equip_eligibility
+from .progression import (DEFAULT_PROGRESSION, DEFAULT_LIFE, DEFAULT_MERCHANT,
+                          validate_growth, enabled as growth_enabled, growth_action, next_purchase, PURCHASE_BATCH_LIMIT)
 
 
 DEFAULT_SETTINGS = {
+    'progression': deepcopy(DEFAULT_PROGRESSION), 'life_skills': deepcopy(DEFAULT_LIFE),
+    'merchant': deepcopy(DEFAULT_MERCHANT),
     'background': {'rule_monitoring': True, 'inventory_automation': True},
     'auto_equip': {'enabled': False, 'minimum_delta': 1, 'slot_locks': {}, 'disabled_slots': []},
     'farming': {'enabled': False, 'mode': 'repeat', 'dungeon_id': None, 'difficulty':'current',
-                'progression': [], 'free_threshold': 4},
+                'progression': [], 'repeat_maps': [], 'free_threshold': 4},
     'cleanup': {'equipment_action': 'store', 'equipment_fallback': 'sell', 'equipment_policies': {},
                 'equipment_pages': list(DEFAULT_STORAGE_PAGES['equipment']), 'rune_action': 'store', 'rune_pages': list(DEFAULT_STORAGE_PAGES['rune']),
                 'gem_action': 'store', 'gem_pages': list(DEFAULT_STORAGE_PAGES['gem'])},
@@ -48,9 +52,12 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
         raise ValidationError('托管配置格式无效。')
     raw = deepcopy(raw)
     raw.setdefault('background', deepcopy(DEFAULT_SETTINGS['background']))
+    for name in ('progression', 'life_skills', 'merchant'):
+        raw.setdefault(name, deepcopy(DEFAULT_SETTINGS[name]))
     if set(raw) != set(DEFAULT_SETTINGS): raise ValidationError('托管配置格式无效。')
     if isinstance(raw.get('farming'),dict):
         raw['farming'].setdefault('difficulty','current')
+        raw['farming'].setdefault('repeat_maps',[])
     if isinstance(raw.get('auto_equip'),dict):
         raw['auto_equip'].setdefault('disabled_slots',[])
     if isinstance(raw.get('cleanup'),dict):
@@ -92,7 +99,21 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
             isinstance(i,dict) and set(i)=={'dungeon_id','difficulty'} and type(i['dungeon_id']) in (int,str)
             and i['difficulty'] in DIFFICULTIES) for i in p) or len({str(i) for i in p})!=len(p)):
         raise ValidationError('推进关卡顺序无效。')
-    if f['enabled'] and f['dungeon_id'] is None:
+    repeats = f['repeat_maps']
+    if isinstance(repeats,list) and not repeats and f['dungeon_id'] is not None:
+        repeats = [{'dungeon_id':f['dungeon_id'],'difficulty':f['difficulty'],'runs':1}]
+    if (not isinstance(repeats,list) or len(repeats)>2 or any(
+            not isinstance(row,dict) or set(row)!={'dungeon_id','difficulty','runs'}
+            or type(row['dungeon_id']) not in (int,str) or not str(row['dungeon_id'])
+            or row['difficulty'] not in ('current',*DIFFICULTIES)
+            or type(row['runs']) is not int or not 1<=row['runs']<=10000 for row in repeats)):
+        raise ValidationError('重复刷图需要一张或两张关卡，每张循环次数为 1 至 10000。')
+    if len({(str(row['dungeon_id']),row['difficulty']) for row in repeats})!=len(repeats):
+        raise ValidationError('重复刷图的两张关卡不能相同。')
+    f['repeat_maps'] = deepcopy(repeats)
+    if f['mode']=='repeat' and repeats:
+        f['dungeon_id'],f['difficulty'] = repeats[0]['dungeon_id'],repeats[0]['difficulty']
+    if f['enabled'] and f['mode']=='repeat' and not repeats:
         raise ValidationError('请先选择托管关卡。')
     if c['equipment_action'] not in ('sell', 'salvage', 'store') or c['equipment_fallback'] not in ('sell', 'salvage'):
         raise ValidationError('未命中装备处理方式无效。')
@@ -117,6 +138,7 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
         if not pages and not (name=='rune_pages' and allow_empty_rune_pages) and (
                 name in ('equipment_pages','rune_pages') or c[name.replace('_pages', '_action')] == 'store'):
             raise ValidationError('请勾选用于存放物品的仓库页。')
+    validate_growth(result)
     return result
 
 
@@ -585,6 +607,9 @@ class ManagedMode:
         self.target_dungeon = self.settings['farming']['dungeon_id']
         self.target_difficulty = None if self.settings['farming']['difficulty']=='current' else self.settings['farming']['difficulty']
         self.push_failed = False
+        self.repeat_index = 0
+        self.repeat_completed = 0
+        self.repeat_maps = []
         self.handled_runs = set()
         self.force_dispose = set()
         self.equip_reserved = None
@@ -597,17 +622,39 @@ class ManagedMode:
         self.finishing = False
         self.pressure_active = False
         self.finish_empty_reads = 0
+        self.merchant_pending = False
+        self.merchant_opened = False
+        self.merchant_cleanup_pending = False
+        self.merchant_received_uids = set()
+        self.merchant_counts = {}
+        self.merchant_last_balance = None
+        self.merchant_last_capacity = None
+        self.growth_wait = ''
 
     def start(self, observation):
         if self.running or self.pending: raise ValidationError('托管已在运行。')
         if observation.get('complete') is not True: raise ValidationError('请先完整读取背包与仓库。')
-        if not self.settings['auto_equip']['enabled'] and not self.settings['farming']['enabled']:
-            raise ValidationError('请至少开启自动换装或自动刷图。')
+        if not self.settings['auto_equip']['enabled'] and not self.settings['farming']['enabled'] and not growth_enabled(self.settings):
+            raise ValidationError('请至少开启一项托管功能。')
         self.__init__(self.settings)
+        self.merchant_received_uids.update(observation.get('merchant_uids',[]))
         self.running = True
         self.session = observation.get('session', observation.get('bridge_session'))
         if self.target_difficulty is None:
             self.target_difficulty = observation.get('scene',{}).get('difficulty')
+        if self.settings['farming']['enabled']:
+            if self.settings['farming']['mode']=='push':
+                target = observation.get('farming_start')
+                if target:
+                    self.target_dungeon,self.target_difficulty = target['dungeon_id'],target['difficulty']
+            else:
+                initial_difficulty = observation.get('scene',{}).get('difficulty')
+                self.repeat_maps = [dict(row,difficulty=initial_difficulty if row['difficulty']=='current' else row['difficulty'])
+                                    for row in self.settings['farming']['repeat_maps']]
+                first = self.repeat_maps[0]
+                self.target_dungeon,self.target_difficulty = first['dungeon_id'],first['difficulty']
+        if not self.settings['farming']['enabled']:
+            self.target_dungeon = observation.get('scene', {}).get('dungeon_id')
         self.metrics.observe(observation)
         self.phase = 'cleanup' if self.settings['farming']['enabled'] and self._town(observation) else 'farming'
         self.reward_barrier = self.phase == 'cleanup'
@@ -663,7 +710,9 @@ class ManagedMode:
                 'status': self.status, 'pending': deepcopy(self.pending), 'last_success': self.last_success,
                 'target_dungeon': self.target_dungeon, 'target_difficulty':self.target_difficulty,
                 'last_success_difficulty':self.last_success_difficulty,
-                'push_failed': self.push_failed, 'statistics': self.metrics.state()}
+                'merchant_counts': deepcopy(self.merchant_counts), 'push_failed': self.push_failed,
+                'repeat_index':self.repeat_index,'repeat_completed':self.repeat_completed,
+                'repeat_maps':deepcopy(self.repeat_maps),'statistics': self.metrics.state()}
 
     @staticmethod
     def _town(observation):
@@ -741,6 +790,18 @@ class ManagedMode:
             if action.get('target') == 'storage': self.metrics.committed(action_id, row, 'transfer', result.get('quantity'))
         elif action['kind'] == 'equip':
             self.equip_reserved = None
+        elif action['kind'] == 'merchant_open':
+            self.merchant_opened = True
+        elif action['kind'] == 'merchant_close':
+            self.merchant_opened = False
+            self.merchant_cleanup_pending = False
+        elif action['kind'] == 'merchant_buy':
+            self.merchant_opened = result.get('merchant_open') is True
+            self.merchant_cleanup_pending = True
+            key = str(action['shop_slot'])
+            self.merchant_counts[key] = self.merchant_counts.get(key, 0) + action.get('quantity',1)
+            self.merchant_received_uids.update(result.get('received_uids',[]))
+            self.cleanup_processing = False
         elif action['kind'] == 'return_town':
             self.phase = 'cleanup'
             self.cleanup_processing = False
@@ -748,7 +809,7 @@ class ManagedMode:
             self.phase = 'farming'
         elif action['kind'] == 'switch_difficulty':
             self.phase = 'cleanup'
-        if action['kind'] in ('return_town', 'collect_ground', 'collect_carriage', 'open_chest'):
+        if action['kind'] in ('return_town', 'collect_ground', 'collect_carriage', 'open_chest', 'merchant_buy'):
             self.reward_barrier = True; self.barrier_reads = 0
         if action['kind'] == 'open_chest':
             self.cleanup_processing = False
@@ -769,6 +830,25 @@ class ManagedMode:
                               for r in observation.get('character', {}).get('equipment', []))
             else:
                 visible = not matches or sum(_quantity(r) for r in matches) < _quantity(old)
+        elif kind in ('allocate_talent', 'learn_life_skill'):
+            group = 'talents' if kind == 'allocate_talent' else 'life_skills'
+            state = observation.get('progression', {})
+            visible = (state.get('available') is True and state.get('class_mask') == action['class_mask']
+                       and state[group]['ranks'].get(action['node_id'], 0) == action['expected_rank'] + 1)
+        elif kind == 'set_skill':
+            state = observation.get('progression', {})
+            visible = state.get('available') is True and state['skills']['equipped'] == action['skill_slots']
+        elif kind == 'merchant_open':
+            visible = observation.get('progression', {}).get('merchant', {}).get('open') is True
+        elif kind == 'merchant_close':
+            visible = observation.get('progression', {}).get('merchant', {}).get('open') is False
+        elif kind == 'merchant_refresh':
+            state=observation.get('progression',{})
+            visible=state.get('available') is True and set(action['shop_slots']) <= {r['slot'] for r in state.get('merchant',{}).get('stock',[])}
+        elif kind == 'merchant_buy':
+            state = observation.get('progression', {})
+            visible = (state.get('available') is True
+                       and state['soul_shards']['current'] == action['before_shards'] - action['expected_price']*action.get('quantity',1))
         elif kind == 'return_town':
             visible = self._town(observation)
         elif kind == 'enter_dungeon':
@@ -931,9 +1011,41 @@ class ManagedMode:
             self.status = '等待完整读取马车与地面掉落。'
         return None, complete
 
+    def merchant_batch_ready(self, observation):
+        bag=[r for r in observation['items'] if r.get('container')=='inventory']
+        return (bool(bag) and self._bag_free(observation)>0 and all(r.get('item_uid') in self.merchant_received_uids
+                and item_kind(r)=='equipment' and self._safe(r) and not self._review(r)
+                and self._quality_known(r) for r in bag)
+                and town_rewards_clear(observation))
+
+    def _merchant_purchase(self, observation):
+        state=observation['progression'];shop=state['merchant']
+        selected={int(k) for k,v in self.settings['merchant']['weights'].items() if v>0}
+        missing=sorted(selected-{r['slot'] for r in shop['stock']})
+        if missing:
+            return self._action('merchant_refresh',class_mask=state['class_mask'],shop_slots=missing,
+                reason='商人预缓存库存用完，等待游戏同步补充库存后继续购买。')
+        purchase=next_purchase(self.settings['merchant'],state,self.merchant_counts,
+                               max_quantity=min(PURCHASE_BATCH_LIMIT,self._bag_free(observation)))
+        if not purchase:return None
+        if not shop.get('open'):
+            return self._action('merchant_open',class_mask=state['class_mask'],reason='奖励整理完成，打开神秘商人。')
+        self.phase='shopping';return self._action(**purchase)
+
     def _cleanup(self, observation, all_items):
         if not self._town(observation):
             return self._action('return_town', reason='返回主城后整理奖励。')
+        state = observation.get('progression', {})
+        if self.merchant_cleanup_pending:
+            if state.get('available') is not True or state.get('busy') is True:
+                self.status = '等待游戏完成商人同步，购买已确认，不会重复扣款。'; return None
+            if not self.finishing and self.merchant_pending and self.merchant_batch_ready(observation):
+                action=self._merchant_purchase(observation)
+                if action:return action
+            if state.get('merchant', {}).get('open'):
+                return self._action('merchant_close', class_mask=state['class_mask'], reason='关闭神秘商人后筛选和整理购买的装备。')
+            self.merchant_opened = False
+            self.merchant_cleanup_pending = False
         settings = self.settings['cleanup']
         bag = [r for r in all_items if r.get('container') == 'inventory']
         if not self.cleanup_processing and self._bag_free(observation) > 0:
@@ -988,6 +1100,8 @@ class ManagedMode:
                 if self._protected(row): continue
                 if row.get('matches') is not False: continue
                 handling, pages = equipment_policy(settings,row), settings['equipment_pages']
+                if row.get('item_uid') in self.merchant_received_uids and handling=='store':
+                    handling=equipment_policy(settings,row,fallback=True)
             elif kind in ('rune', 'gem'):
                 if row.get('locked') is True: continue
                 handling, pages = settings[kind + '_action'], settings[kind + '_pages']
@@ -1009,10 +1123,41 @@ class ManagedMode:
                 if self._bag_free(observation) == 0: return self._pause('背包没有空格，暂不能安全打开宝箱。')
                 return self._action('open_chest', row, reason='奖励处理完毕，打开宝箱后重新扫描。')
         if self.finishing:
+            if self.merchant_opened and observation.get('progression', {}).get('merchant', {}).get('open'):
+                return self._action('merchant_close', class_mask=observation['progression']['class_mask'], reason='结束消费，关闭神秘商人。')
             self.finish_empty_reads += 1
             if self.finish_empty_reads < 2:
                 self.status = '奖励已整理，等待再次确认马车卸货与地面掉落已清空。'; return None
             self.stop('托管已停止：已回城并完成奖励整理。')
+            return None
+        state = observation.get('progression', {})
+        if growth_enabled(self.settings):
+            action, self.growth_wait = growth_action(self.settings, state)
+            if action: self.phase = 'growing'; return self._action(**action)
+        if self.settings['merchant']['enabled'] and self.merchant_pending:
+            # The previous batch has completed all rule/lock/disposal stages.
+            if state.get('available') is not True:
+                return self._pause(state.get('reason') or '灵魂碎片与商人读取未确认，暂不消费。')
+            if state.get('busy') is True:
+                self.status = '等待游戏完成在线商人同步，暂不消费。'; return None
+            if any(item_kind(r) == 'equipment' and (not self._safe(r) or self._review(r)) for r in bag):
+                return self._pause('背包仍有待核验装备，保留当前奖励，暂不继续购买。')
+            shop = state['merchant']
+            if shop.get('unlock_known') is not True or shop.get('unlocked') is not True:
+                return self._pause('神秘商人尚未解锁或解锁状态未确认，暂不购买。')
+            if shop.get('available') is not True: return self._pause(shop.get('reason') or '主城神秘商人尚未确认。')
+            if not shop.get('stock') and not shop.get('open'):
+                return self._action('merchant_open', class_mask=state['class_mask'], reason='奖励整理完成，打开神秘商人读取报价。')
+            if self._bag_free(observation)==0:return self._pause('背包没有空格，暂不购买。')
+            purchase=self._merchant_purchase(observation)
+            if purchase:return purchase
+            if self.merchant_opened and shop.get('open'):
+                return self._action('merchant_close', class_mask=state['class_mask'], reason='剩余预算不足购买下一件计划商品，关闭神秘商人。')
+            self.merchant_pending = False
+            self.merchant_last_balance = state['soul_shards']['current']
+            self.merchant_last_capacity = state['soul_shards']['maximum']
+        if not self.settings['farming']['enabled']:
+            self.phase = 'waiting'; self.status = self.growth_wait or '整理和消费完成，继续监控成长。'
             return None
         if self._bag_free(observation) < self.settings['farming']['free_threshold']:
             return self._pause('整理后背包空格仍少于回城门槛，保留装备或材料占用较多，请先处理容量。')
@@ -1031,36 +1176,34 @@ class ManagedMode:
         self.handled_runs.add(str(run_id))
         dungeon = run.get('dungeon_id', observation.get('scene', {}).get('dungeon_id'))
         difficulty = run.get('difficulty') or observation.get('scene',{}).get('difficulty') or self.target_difficulty
+        # A run active at startup can belong to another map. Do not count it.
+        if str(dungeon)!=str(self.target_dungeon) or difficulty!=self.target_difficulty: return
         if status == 'success':
             self.last_success = dungeon
             self.last_success_difficulty = difficulty
-            if self.settings['farming']['mode'] == 'push' and not self.push_failed:
-                progression = self.settings['farming']['progression']
-                pos = None
-                for n,point in enumerate(progression):
-                    key,tier = (point['dungeon_id'],point['difficulty']) if isinstance(point,dict) else (point,None)
-                    if str(key)==str(dungeon) and (tier is None or tier==difficulty):
-                        pos = n
-                        break
-                following = progression[pos+1] if pos is not None and pos+1<len(progression) else None
-                if isinstance(following,dict):
-                    self.target_dungeon,self.target_difficulty = following['dungeon_id'],following['difficulty']
-                elif following is not None:
-                    self.target_dungeon = following
-                else:
-                    self.target_dungeon,self.target_difficulty = dungeon,difficulty
-        elif self.settings['farming']['mode'] == 'push':
-            self.push_failed = True
-            if self.last_success is None:
-                self._pause('首个关卡未能通过，暂无已通过关卡可复刷，请调整起始关卡。')
-            else:
-                self.target_dungeon = self.last_success
-                self.target_difficulty = self.last_success_difficulty
+        if self.settings['farming']['mode']=='repeat':
+            self.repeat_completed += 1
+            if self.repeat_completed>=self.repeat_maps[self.repeat_index]['runs']:
+                self.repeat_completed = 0
+                self.repeat_index = (self.repeat_index+1)%len(self.repeat_maps)
+                target = self.repeat_maps[self.repeat_index]
+                self.target_dungeon,self.target_difficulty = target['dungeon_id'],target['difficulty']
+            return
+        points = [row if isinstance(row,dict) else {'dungeon_id':row,'difficulty':difficulty}
+                  for row in self.settings['farming']['progression']]
+        pos = next((i for i,row in enumerate(points) if str(row['dungeon_id'])==str(dungeon) and row['difficulty']==difficulty),None)
+        self.push_failed = status=='failed'
+        if pos is None:
+            self._pause('当前关卡未在已核验的推图路线中，等待重新读取关卡。')
+            return
+        index = min(pos+1,len(points)-1) if status=='success' else max(0,pos-1)
+        self.target_dungeon,self.target_difficulty = points[index]['dungeon_id'],points[index]['difficulty']
 
     def next_action(self, observation):
         if not self.running or self.pending is not None: return None
         if observation.get('complete') is not True:
             self.status = '等待完整背包与仓库读取。'; return None
+        self.merchant_received_uids.update(observation.get('merchant_uids',[]))
         session = observation.get('session', observation.get('bridge_session'))
         if self.session is not None and session != self.session:
             return self._pause('游戏连接或角色已改变，托管已暂停。')
@@ -1068,12 +1211,31 @@ class ManagedMode:
             all_items = observation_items(observation)
             if not self._effect_visible(observation, all_items): return None
             self.metrics.observe(observation)
+            scene = observation.get('scene', {})
+            if scene.get('scene_changing') is True or scene.get('teleporting') is True:
+                self.status = '等待游戏完成场景切换，不重复请求。'; return None
+            if scene.get('online_saving') is True:
+                self.status = '等待游戏完成在线同步。'; return None
+            if growth_enabled(self.settings) and observation.get('progression', {}).get('busy') is True:
+                self.status = '等待游戏完成在线同步，已确认的动作不会重复执行。'; return None
             if self.finishing:
                 scene = observation.get('scene', {})
                 if scene.get('available') is not True or scene.get('scene_changing') is True:
                     self.status = '正在结束托管，等待场景稳定后回城整理。'; return None
                 self.phase = 'cleanup' if self._town(observation) else 'returning'
                 return self._cleanup(observation, all_items)
+            if self.settings['merchant']['enabled']:
+                state = observation.get('progression', {})
+                if state.get('available') is not True:
+                    self.status = state.get('reason') or '等待读取灵魂碎片容量。'; return None
+                shards = state['soul_shards']
+                trigger = shards['current'] * 100 >= shards['maximum'] * self.settings['merchant']['trigger_percent']
+                changed = (self.merchant_last_balance is None or shards['current'] > self.merchant_last_balance
+                           or shards['maximum'] != self.merchant_last_capacity)
+                if trigger and changed: self.merchant_pending = True
+                if self.merchant_pending:
+                    self.phase = 'cleanup' if self._town(observation) else 'returning'
+                    return self._cleanup(observation, all_items)
             if self.settings['farming']['enabled']:
                 scene = observation.get('scene', {})
                 if scene.get('available') is False:
@@ -1097,13 +1259,18 @@ class ManagedMode:
                 if scene.get('dungeon_id') is not None and str(scene['dungeon_id']) != str(self.target_dungeon):
                     self.phase = 'returning'
                     return self._action('return_town', reason='当前关卡与托管目标不同，回城整理后切换关卡。')
+            if self._town(observation) and any(r.get('container')=='inventory'
+                    and r.get('item_uid') in self.merchant_received_uids for r in all_items):
+                self.phase='cleanup';return self._cleanup(observation,all_items)
+            action, self.growth_wait = growth_action(self.settings, observation.get('progression', {}))
+            if action: self.phase = 'growing'; return self._action(**action)
             action = self._background_lock(all_items)
             if action: return action
             action = self._equip(observation, all_items)
             if action: return action
             action = self._background_organize(observation, all_items)
             if action: return action
-            self.status = '正在刷图，等待奖励或更好的装备。' if self.settings['farming']['enabled'] else '正在监控固定面板战力提升。'
+            self.status = self.growth_wait or ('正在刷图，等待奖励或更好的装备。' if self.settings['farming']['enabled'] else '正在监控装备与成长目标。')
             return None
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
             return self._pause('托管读取未确认，已暂停：' + str(exc))

@@ -12,10 +12,67 @@ from deskrawl_assistant.native_dispatcher import (
     Argument, Invocation, NativeActionError, compile_mailbox, build_trampoline,
     load_profile, MainThreadDispatcher, MAX_GUARDS, DONE, CANCELLED, GUARD_FAILED, REJECTED, INVALID,
 )
-from deskrawl_assistant.native_memory import MemoryReadError
+from deskrawl_assistant.native_memory import MemoryReadError, GameBusyError
 
 
 class ActionBoundaryTests(unittest.TestCase):
+    def test_inventory_context_reads_scene_and_online_gates_without_campaign(self):
+        reader,dispatcher,read=Mock(),Mock(),Mock()
+        game=GameActions(reader,dispatcher=dispatcher)
+        game._context=Mock(return_value=(read,1,2000,1))
+        game._online_state=Mock(return_value={'online_saving':True,'online_pending_requests':2})
+        read.singleton.return_value=3000;read.boolean.side_effect=lambda address:address==3076
+        game.control_snapshot=Mock()
+        value=game.action_context_snapshot()
+        self.assertTrue(value['scene']['in_town']);self.assertTrue(value['scene']['teleporting'])
+        self.assertTrue(value['scene']['online_saving']);self.assertEqual(value['scene']['online_pending_requests'],2)
+        game._context.assert_called_once_with(allow_busy=True);read.finish.assert_called_once()
+        game.control_snapshot.assert_not_called();dispatcher.invoke.assert_not_called()
+
+    def test_disposal_receipt_keeps_complete_post_action_snapshot(self):
+        reader,dispatcher=Mock(),Mock();game=GameActions(reader,dispatcher=dispatcher)
+        snapshot={'complete':True,'bridge_session':'same','containers':{'inventory':{'slots':[]}}}
+        reader.snapshot.return_value=snapshot
+        selected={'slot_index':0,'item_uid':'removed'}
+        self.assertTrue(game._confirm_effect('salvage',selected,{}))
+        self.assertIs(selected['_confirmed_snapshot'],snapshot)
+
+    def test_online_queue_blocks_travel_before_any_call(self):
+        reader,dispatcher,read=Mock(),Mock(),Mock()
+        read.singleton.side_effect=lambda name:{'SaveSystem':1000,'CloudClient':2000}[name]
+        read.boolean.return_value=False
+        read.integer.side_effect=lambda address:{1032:1,2276:3}[address]
+        actions=GameActions(reader,dispatcher=dispatcher)
+        with self.assertRaisesRegex(GameBusyError,'待处理请求 3'):
+            actions._return_town_call(read,5,6)
+        dispatcher.invoke.assert_not_called()
+
+    def test_offline_travel_gate_does_not_require_cloud_client(self):
+        reader,dispatcher,read=Mock(),Mock(),Mock()
+        read.singleton.side_effect=lambda name:1000 if name=='SaveSystem' else self.fail('Unexpected cloud read')
+        read.boolean.return_value=False;read.integer.return_value=0
+        actions=GameActions(reader,dispatcher=dispatcher)
+        self.assertEqual(actions._require_travel_ready(read),{'online_saving':False,'online_pending_requests':0})
+        dispatcher.invoke.assert_not_called()
+
+    def test_invalid_queue_count_stays_a_hard_failure(self):
+        reader,dispatcher,read=Mock(),Mock(),Mock()
+        read.singleton.side_effect=lambda name:{'SaveSystem':1000,'CloudClient':2000}[name]
+        read.boolean.return_value=False
+        read.integer.side_effect=lambda address:{1032:1,2276:-1}[address]
+        with self.assertRaisesRegex(NativeActionError,'队列状态异常'):
+            GameActions(reader,dispatcher=dispatcher)._require_travel_ready(read)
+        dispatcher.invoke.assert_not_called()
+
+    def test_online_busy_blocks_mutation_context_but_allows_receipt_reads(self):
+        reader, dispatcher, read = Mock(), Mock(), Mock()
+        read.singleton.return_value=1000;read.integer.return_value=1;read.boolean.return_value=True
+        actions=GameActions(reader,dispatcher=dispatcher)
+        with patch('deskrawl_assistant.game_actions._Read',return_value=read):
+            with self.assertRaisesRegex(GameBusyError,'在线同步'):actions._context()
+            self.assertEqual(actions._context(allow_busy=True)[-1],1)
+        dispatcher.invoke.assert_not_called()
+
     def unverified_profile(self):
         profile = load_profile()
         profile['verified_kinds'] = []
@@ -26,16 +83,39 @@ class ActionBoundaryTests(unittest.TestCase):
         dispatcher.installed = False
         actions = GameActions(reader, dispatcher=dispatcher)
         self.assertEqual(actions.verified_kinds,
-            {'return_town','enter_map','switch_difficulty','equip','sell','salvage','open_chest','collect_ground'})
+            {'return_town','enter_map','switch_difficulty','equip','sell','salvage','open_chest','collect_ground',
+             'allocate_talent','merchant_open','merchant_buy','merchant_close','merchant_refresh'})
         state = actions.capabilities()
-        self.assertTrue(state['native_verified'])
+        self.assertFalse(state['native_verified'])
         self.assertFalse(state['test_mode'])
-        self.assertEqual(state['reason'], '')
-        for key in ('travel','difficulty','equip','sell','salvage','chests','ground_pickup'):
+        self.assertIn('尚未实机验收', state['reason'])
+        for key in ('travel','difficulty','equip','sell','salvage','chests','ground_pickup','merchant','talents'):
             self.assertTrue(state[key]['available'])
             self.assertTrue(state[key]['native_verified'])
             self.assertFalse(state[key]['test_enabled'])
             self.assertEqual(state[key]['reason'], '')
+        for key in ('life_skills', 'skills'):
+            self.assertFalse(state[key]['available'])
+            self.assertFalse(state[key]['native_verified'])
+        dispatcher.install.assert_not_called()
+        dispatcher.invoke.assert_not_called()
+
+    def test_verified_growth_dispatch_works_without_test_mode_and_other_growth_stays_blocked(self):
+        reader, dispatcher, growth = Mock(), Mock(), Mock()
+        actions = GameActions(reader, dispatcher=dispatcher)
+        with patch.object(actions, 'progression_runtime', return_value=growth):
+            for kind in ('allocate_talent','merchant_open','merchant_buy','merchant_close','merchant_refresh'):
+                with self.subTest(kind=kind):
+                    growth.execute.return_value = {'effect_confirmed': True, 'native_verified': False}
+                    result = actions.execute(kind, {'class_mask': 4})
+                    self.assertTrue(result['effect_confirmed'])
+                    self.assertTrue(result['native_verified'])
+                    growth.execute.assert_called_with(kind, {'class_mask': 4}, cancel_event=None, validate=unittest.mock.ANY)
+            count = growth.execute.call_count
+            for kind in ('learn_life_skill', 'set_skill'):
+                with self.assertRaisesRegex(NativeActionError, '尚未实机验收'):
+                    actions.execute(kind, {'class_mask': 4})
+            self.assertEqual(growth.execute.call_count, count)
         dispatcher.install.assert_not_called()
         dispatcher.invoke.assert_not_called()
 
@@ -45,7 +125,7 @@ class ActionBoundaryTests(unittest.TestCase):
         dispatcher.verify.side_effect = ValueError('构建指纹不同')
         actions = GameActions(reader, dispatcher=dispatcher)
         state = actions.capabilities()
-        self.assertTrue(state['native_verified'])
+        self.assertFalse(state['native_verified'])
         self.assertFalse(state['compatible'])
         for key in ('travel','difficulty','equip','sell','salvage','chests','ground_pickup'):
             self.assertFalse(state[key]['available'])

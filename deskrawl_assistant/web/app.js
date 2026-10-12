@@ -57,6 +57,11 @@ function classesLabel(mask){
 function gearIcon(gear,cls='gear-icon'){
   return `<div class="${cls}">${gear?.icon?`<img src="${esc(gear.icon)}" alt="${esc(gear.name)}">`:''}</div>`;
 }
+function itemNameClass(item){
+  if(item?.is_equipment&&(item.rarity===4||item.is_divine===true))return 'item-quality-4';
+  if(item?.is_equipment&&item.is_black_mist===true)return 'item-quality-black-mist';
+  return Number.isInteger(item?.rarity)&&item.rarity>=0&&item.rarity<=5?'item-quality-'+item.rarity:'item-quality-unknown';
+}
 function rulesFor(key){return (state?.rules||[]).filter(r=>r.equipment_keys.includes(key));}
 function switchTab(tab){
   closeColumnMenu();
@@ -197,7 +202,7 @@ function renderGems(item){
   if(!item.is_equipment)return '';
   if(!item.gems_known)return '<p class="detail-hint">镶嵌宝石尚未读取</p>';
   const gems=item.gems||[],slots=item.sockets??0;
-  return `<div class="detail-group gem-preview"><h4>镶嵌宝石 · ${gems.length} / ${esc(slots)} 孔</h4>${gems.map(g=>`<div class="socketed-gem">${g.icon?`<img src="${esc(g.icon)}" alt="">`:''}<div><strong>${esc(g.name)}</strong>${g.effects?g.effects.values.map(v=>`<p><span>${esc(v.name)}</span><b>${esc(v.display_value)}</b></p>`).join('')+(g.effects.texts||[]).map(t=>`<p>${esc(String(t).replace(/<[^>]+>/g,''))}</p>`).join(''):'<p>效果尚未适配</p>'}</div></div>`).join('')}${slots>gems.length?`<p class="detail-hint">${slots-gems.length} 个空孔</p>`:!slots?'<p class="detail-hint">无宝石孔位</p>':''}</div>`;
+  return `<div class="detail-group gem-preview"><h4>镶嵌宝石 · ${gems.length} / ${esc(slots)} 孔</h4>${gems.map(g=>`<div class="socketed-gem">${g.icon?`<img src="${esc(g.icon)}" alt="">`:''}<div><strong class="quality-item-name ${itemNameClass(g)}">${esc(g.name)}</strong>${g.effects?g.effects.values.map(v=>`<p><span>${esc(v.name)}</span><b>${esc(v.display_value)}</b></p>`).join('')+(g.effects.texts||[]).map(t=>`<p>${esc(String(t).replace(/<[^>]+>/g,''))}</p>`).join(''):'<p>效果尚未适配</p>'}</div></div>`).join('')}${slots>gems.length?`<p class="detail-hint">${slots-gems.length} 个空孔</p>`:!slots?'<p class="detail-hint">无宝石孔位</p>':''}</div>`;
 }
 function renderComparison(item){
   const p=item.power;
@@ -219,7 +224,7 @@ function renderCharacter(){
   $('character-warnings').hidden=!c.available||!c.warnings?.length;$('character-warnings').textContent=c.warnings?.join(' ')||'';
   const slotLabels=['武器','头盔','胸甲','裤子','靴子','腰带','戒指 1','戒指 2','项链','护肩','手套','披风'];
   const attributesOpen=$('character-content').querySelector('.all-character-attributes')?.open;
-  $('character-content').innerHTML=!c.available?'<div class="empty-state">'+esc(c.reason)+'</div>':`<div class="equipped-grid">${slotLabels.map((label,n)=>{const item=c.equipment.find(i=>i.equipped_slot===n);return item?`<button class="equipped-card ${equippedPreviewId===item.selection_id?'active':''}" data-equipped="${esc(item.selection_id)}"><span class="equipped-slot">${label}</span><div>${item.icon?`<img src="${esc(item.icon)}" alt="">`:''}<strong>${esc(item.name)}</strong></div>${equipmentTags(item)}<small>Lv.${esc(item.level)} · +${esc(item.upgrade??0)} · ${item.occupied_sockets}/${esc(item.sockets??'?')} 孔</small></button>`:`<div class="equipped-card empty"><span class="equipped-slot">${label}</span><small>未穿戴</small></div>`;}).join('')}</div><details class="all-character-attributes" ${attributesOpen?'open':''}><summary>全部角色属性 · ${c.attributes.length} 项</summary><div class="character-attribute-grid">${c.attributes.map(a=>`<div><span>${esc(a.name)}</span><strong>${esc(a.display_value)}</strong></div>`).join('')}</div></details>`;
+  $('character-content').innerHTML=!c.available?'<div class="empty-state">'+esc(c.reason)+'</div>':`<div class="equipped-grid">${slotLabels.map((label,n)=>{const item=c.equipment.find(i=>i.equipped_slot===n);return item?`<button class="equipped-card ${equippedPreviewId===item.selection_id?'active':''}" data-equipped="${esc(item.selection_id)}"><span class="equipped-slot">${label}</span><div>${item.icon?`<img src="${esc(item.icon)}" alt="">`:''}<strong class="quality-item-name ${itemNameClass(item)}">${esc(item.name)}</strong></div>${equipmentTags(item)}<small>Lv.${esc(item.level)} · +${esc(item.upgrade??0)} · ${item.occupied_sockets}/${esc(item.sockets??'?')} 孔</small></button>`:`<div class="equipped-card empty"><span class="equipped-slot">${label}</span><small>未穿戴</small></div>`;}).join('')}</div><details class="all-character-attributes" ${attributesOpen?'open':''}><summary>全部角色属性 · ${c.attributes.length} 项</summary><div class="character-attribute-grid">${c.attributes.map(a=>`<div><span>${esc(a.name)}</span><strong>${esc(a.display_value)}</strong></div>`).join('')}</div></details>`;
 }
 function resultBadge(item){
   if(!item.is_equipment)return '<span class="badge miss">—</span>';
@@ -238,7 +243,7 @@ function renderInventory(){
     itemSignature=signature;
     $('item-rows').innerHTML=view.map(i=>`<tr data-item="${esc(i.selection_id)}" class="${i.selection_id===detailId?'active':''} ${i.primary_perfect?'primary-perfect-item':''}" tabindex="0">
       <td><input type="checkbox" data-item-select="${esc(i.selection_id)}" aria-label="选择${esc(i.name)}" ${selectedItems.has(i.selection_id)?'checked':''} ${!i.selection_id?'disabled':''}></td>
-      <td><div class="item-name">${i.icon?`<img src="${esc(i.icon)}" alt="">`:''}<div><strong>${esc(i.name)}</strong><small>${esc(i.slot_label)} ${equipmentTags(i)}</small></div></div></td>
+      <td><div class="item-name">${i.icon?`<img src="${esc(i.icon)}" alt="">`:''}<div><strong class="quality-item-name ${itemNameClass(i)}">${esc(i.name)}</strong><small>${esc(i.slot_label)} ${equipmentTags(i)}</small></div></div></td>
       <td>${i.container==='inventory'?'背包':'仓库'} · ${Number(i.slot_index)+1}</td><td>${esc(i.count)}</td><td>${esc(i.level??'—')}</td><td>${i.is_equipment?i.upgrade==null?'未确认':'+'+esc(i.upgrade):'—'}</td><td title="已镶嵌 / 总孔位">${i.is_equipment?i.sockets==null?'未确认':(i.gems_known?i.occupied_sockets+'/':'')+i.sockets+' 孔':'—'}</td>
       <td>${i.is_equipment?`<span class="badge ${i.locked?'locked':'unlocked'}">${i.locked===true?'已锁定':i.locked===false?'未锁定':'未确认'}</span>`:'<span class="note">—</span>'}</td><td>${powerCell(i)}</td><td>${resultBadge(i)}</td></tr>`).join('');
     $('inventory-empty').hidden=view.length>0;
@@ -261,12 +266,12 @@ function renderDetail(){
   if(!item){$('item-detail').innerHTML='<div class="empty-state">点击物品查看详情</div>';return;}
   const worn=item.container==='equipped';
   const moveButton=worn?'':`<button class="button detail-move" data-move-item="${esc(item.selection_id)}" data-target="${item.container==='inventory'?'storage':'inventory'}" ${!item.movable||state.busy?'disabled':''}>${item.container==='inventory'?'移入仓库':'取回背包'}</button>`;
-  if(!item.is_equipment){$('item-detail').innerHTML=`<div class="detail-title">${item.icon?`<img src="${esc(item.icon)}" alt="">`:`<div class="item-placeholder">${esc(item.kind_label[0])}</div>`}<div><h3>${esc(item.name)}</h3><small>${esc(item.kind_label)}</small></div></div><div class="detail-meta">数量 ${esc(item.count)} · ${item.container==='inventory'?'背包':'仓库'}第 ${Number(item.slot_index)+1} 格</div>${renderEffects(item)}<p class="detail-hint">${esc(item.effect_note||'')}</p><p class="detail-hint">${item.kind==='gem'?`同种同等级宝石优先堆叠${item.max_stack>1?`，每组最多 ${esc(item.max_stack)} 颗`:''}，剩余数量放入空格。`:'整组移动到目标空格，保留原有数量。'}不参与装备词条筛选。</p>${moveButton}`;return;}
+  if(!item.is_equipment){$('item-detail').innerHTML=`<div class="detail-title">${item.icon?`<img src="${esc(item.icon)}" alt="">`:`<div class="item-placeholder">${esc(item.kind_label[0])}</div>`}<div><h3 class="quality-item-name ${itemNameClass(item)}">${esc(item.name)}</h3><small>${esc(item.kind_label)}</small></div></div><div class="detail-meta">数量 ${esc(item.count)} · ${item.container==='inventory'?'背包':'仓库'}第 ${Number(item.slot_index)+1} 格</div>${renderEffects(item)}<p class="detail-hint">${esc(item.effect_note||'')}</p><p class="detail-hint">${item.kind==='gem'?`同种同等级宝石优先堆叠${item.max_stack>1?`，每组最多 ${esc(item.max_stack)} 颗`:''}，剩余数量放入空格。`:'整组移动到目标空格，保留原有数量。'}不参与装备词条筛选。</p>${moveButton}`;return;}
   $('item-detail').innerHTML=equipmentPreviewHtml(item,moveButton);
 }
 function equipmentPreviewHtml(item,moveButton=''){
   const worn=item.container==='equipped';
-  return `<div class="detail-title">${item.icon?`<img src="${esc(item.icon)}" alt="">`:''}<div><h3>${esc(item.name)}</h3><small>${esc(item.slot_label)} · ${esc(classesLabel(item.class_mask))}</small></div></div>
+  return `<div class="detail-title">${item.icon?`<img src="${esc(item.icon)}" alt="">`:''}<div><h3 class="quality-item-name ${itemNameClass(item)}">${esc(item.name)}</h3><small>${esc(item.slot_label)} · ${esc(classesLabel(item.class_mask))}</small></div></div>
     <div class="detail-meta"><span>${worn?'已穿戴 · ':''}${esc(item.rarity_label)} · Lv.${esc(item.level)}</span><span>强化 ${item.upgrade==null?'未确认':'+'+esc(item.upgrade)} · ${esc(item.sockets??'未确认')} 孔</span></div>${equipmentTags(item)}
     ${worn?'':renderComparison(item)}
     ${['base','primary','secondary','unknown'].map(g=>{const values=item.groups[g]||[];return values.length?`<div class="detail-group"><h4>${{base:'基础属性 · 不参与筛选',primary:'主词条',secondary:'副词条',unknown:'待核验词条'}[g]}</h4><div class="type-list">${values.map(v=>`<div class="affix-row ${v.matched?'matched':''}" data-affix-key="${esc(v.key)}" title="${esc(v.value_note||(v.matched?'命中规则：'+v.matched_rules.join('、'):''))}"><span class="affix-name">${esc(v.name)}</span><strong class="affix-value">${esc(v.display_value??'未读取')}</strong>${v.matched?'<small class="affix-hit" aria-label="命中规则">✓</small>':''}</div>`).join('')}</div></div>`:'';}).join('')}

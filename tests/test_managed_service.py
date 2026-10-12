@@ -14,6 +14,8 @@ from deskrawl_assistant.character import final_stats, panel_attack
 from deskrawl_assistant.managed_mode import DEFAULT_SETTINGS, identity
 from deskrawl_assistant.managed_service import progression_from_catalog, required_capabilities, campaign_route
 from deskrawl_assistant.models import ValidationError
+from deskrawl_assistant.native_memory import SnapshotChangedError
+from deskrawl_assistant.native_dispatcher import NativeActionError, REJECTED, GUARD_FAILED
 from deskrawl_assistant.web_service import AssistantService
 
 
@@ -115,6 +117,65 @@ class FakeManagedClient:
 
 
 class ManagedServiceTests(unittest.TestCase):
+    def test_disposal_reuses_receipt_and_wakes_next_step_with_fresh_inventory_and_scene(self):
+        self.client.items=[equipment(0),equipment(1)]
+        self.client.character_snapshot=Mock(return_value={'available':False,'equipment':[]})
+        config=self.settings(farming=True,auto_equip=False);config['cleanup']['equipment_action']='sell'
+        self.service.save_managed(config);self.service.set_managed_running(True)
+        self.client.action_context_snapshot=Mock(return_value={'available':True,'scene':{'available':True,'in_town':True}})
+        self.client.control_snapshot=Mock(wraps=self.client.control_snapshot)
+        self.client.character_snapshot.reset_mock();self.client.captures=0
+        def native(kind,payload):
+            self.assertIn(kind,('sell','salvage'))
+            self.client.items=[r for r in self.client.items if identity(r)!=identity(payload['item'])]
+            return {'effect_confirmed':True,'quantity':1,'_receipt_snapshot':self.client.snapshot()}
+        self.client.native_handler=native
+        self.service._work('managed',{})
+        self.assertEqual(self.client.captures,3)  # planning, fresh preflight, actual receipt
+        self.assertEqual(self.client.character_snapshot.call_count,1)
+        self.client.control_snapshot.assert_called_once()
+        self.client.action_context_snapshot.assert_called_once()
+        self.assertTrue(self.service.monitor_wake.is_set())
+        self.assertEqual(len(self.service.state()['items']),1)
+        event=next(r for r in self.service.journal.page(limit=50)['entries'] if r['event']=='managed_action')
+        self.assertNotIn('_receipt_snapshot',event['context']['result'])
+
+    def test_light_preflight_scene_change_does_not_dispose_outside_town(self):
+        self.ready(farming=True,auto_equip=False)
+        before=self.service._managed_observation();item=before['items'][0]
+        self.client.action_context_snapshot=Mock(return_value={'available':True,'scene':{'available':True,'in_town':False,'in_dungeon':True}})
+        result=self.service._managed_execute({'kind':'sell','item':item},before)
+        self.assertTrue(result.get('retryable'));self.assertEqual(self.client.actions,[])
+
+    def test_cancel_during_disposal_receipt_never_schedules_another_write(self):
+        config=self.settings(farming=True,auto_equip=False);config['cleanup']['equipment_action']='sell'
+        self.service.save_managed(config);self.service.set_managed_running(True)
+        def native(kind,payload):
+            self.service.stop_managed(pause=True)
+            self.client.items=[]
+            return {'effect_confirmed':True,'quantity':1,'_receipt_snapshot':self.client.snapshot()}
+        self.client.native_handler=native
+        self.service._work('managed',{})
+        self.assertEqual(len(self.client.actions),1)
+        self.assertFalse(self.service.managed.running)
+        self.assertFalse(self.service.monitor_wake.is_set())
+
+    def test_merchant_junk_never_uses_free_storage_and_receipt_survives_service_reload(self):
+        item=equipment(0);self.client.items=[item]
+        self.service.journal.append('system','managed_action','bought',context={
+            'action':{'kind':'merchant_buy'},'result':{'verified':True,'received_uid':item['item_uid']}})
+        self.service._init_managed()
+        self.service._managed_refresh_control()
+        cfg=self.settings(farming=True,auto_equip=False)
+        cfg['cleanup'].update(equipment_action='store',equipment_fallback='salvage')
+        self.service.save_managed(cfg);self.service.set_managed_running(True)
+        def native(kind,payload):
+            self.assertEqual(kind,'salvage');self.client.items=[]
+            return {'effect_confirmed':True,'quantity':1}
+        self.client.native_handler=native
+        self.service._work('managed',{})
+        self.assertEqual([a[0] for a in self.client.actions],['salvage'])
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -139,6 +200,160 @@ class ManagedServiceTests(unittest.TestCase):
     def ready(self, *, farming=False, auto_equip=True):
         self.service.save_managed(self.settings(farming=farming,auto_equip=auto_equip))
         self.service.set_managed_running(True)
+
+    def returning_world(self):
+        self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
+        self.client.run_status='success'
+        self.ready(farming=True,auto_equip=False)
+
+    def test_rejected_return_waits_then_requests_once_and_confirms_scene(self):
+        self.returning_world()
+        self.client.native_handler=Mock(side_effect=[NativeActionError('原生拒绝',state=REJECTED),
+            {'transition_requested':True}])
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._work('managed',{})
+        self.assertTrue(self.service.managed.running);self.assertFalse(self.service.error)
+        self.assertIsNone(self.service.managed.pending)
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=101):
+            self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,1)
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=103):
+            self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,2)
+        self.assertIsNotNone(self.service.managed_transition);self.assertIsNone(self.service.managed_retry)
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=104):
+            self.service._work('managed',{})  # Await the accepted transition, without another request.
+        self.assertEqual(self.client.native_handler.call_count,2)
+        self.client.in_town=True
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=105):
+            self.service._work('managed',{})
+        self.assertIsNone(self.service.managed_transition)
+        self.assertTrue(self.service.managed.running)
+
+    def test_external_return_during_backoff_is_detected_without_replaying(self):
+        self.returning_world()
+        self.client.native_handler=Mock(side_effect=NativeActionError('原生拒绝',state=REJECTED))
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._work('managed',{})
+        self.client.in_town=True;self.client.items=[equipment(locked=True)]
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=101):
+            self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,1)
+        self.assertIsNone(self.service.managed_retry)
+        self.assertTrue(self.service.managed.running)
+
+    def test_online_queue_waits_without_submitting_a_return_request(self):
+        self.returning_world()
+        raw=self.client.control_snapshot();raw['online_pending_requests']=2
+        with patch.object(self.client,'control_snapshot',return_value=raw):
+            self.service._work('managed',{})
+        self.assertTrue(self.service.managed.running);self.assertFalse(self.service.error)
+        self.assertEqual(self.client.actions,[])
+        self.assertIn('待处理请求 2',self.service.managed.status)
+
+    def test_scene_transition_waits_without_duplicate_return_request(self):
+        self.returning_world()
+        raw=self.client.control_snapshot();raw['teleporting']=True
+        with patch.object(self.client,'control_snapshot',return_value=raw):
+            self.service._work('managed',{})
+        self.assertTrue(self.service.managed.running);self.assertEqual(self.client.actions,[])
+
+    def test_accepted_transition_can_wait_for_busy_game_but_never_replays(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._work('managed',{})
+        raw=self.client.control_snapshot();raw['teleporting']=True
+        with patch.object(self.client,'control_snapshot',return_value=raw):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=160):
+                self.service._work('managed',{})
+            self.assertTrue(self.service.managed.running)
+            self.assertTrue(self.service.managed_transition['extended'])
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=221):
+                self.service._work('managed',{})
+        self.assertFalse(self.service.managed.running)
+        self.assertEqual(self.client.native_handler.call_count,1)
+
+    def test_user_stop_cancels_deferred_return(self):
+        self.returning_world()
+        self.client.native_handler=Mock(side_effect=NativeActionError('原生拒绝',state=REJECTED))
+        self.service._work('managed',{})
+        self.assertIsNotNone(self.service.managed_retry)
+        self.service.stop_managed()
+        self.assertIsNone(self.service.managed_retry)
+        self.assertFalse(self.service.managed.running)
+        self.assertEqual(self.client.native_handler.call_count,1)
+
+    def test_repeated_return_rejection_pauses_and_preserves_session_statistics(self):
+        self.returning_world()
+        self.client.items.append(equipment(9))
+        self.client.native_handler=Mock(side_effect=NativeActionError('原生拒绝',state=REJECTED))
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._work('managed',{})
+        totals=deepcopy(self.service.managed.metrics.state())
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=221):
+            self.service._work('managed',{})
+        self.assertFalse(self.service.managed.running);self.assertEqual(self.service.managed.phase,'paused')
+        self.assertTrue(self.service.managed_can_resume)
+        self.assertEqual(self.service.managed.metrics.state(),totals)
+        self.assertIn('统计已保留',self.service.managed.status)
+
+    def test_preinvoke_native_guard_failure_replans_and_rechecks_item_protection(self):
+        cfg=self.settings(farming=True)
+        cfg['cleanup']['equipment_policies']['legendary']={'action':'salvage','fallback':'salvage'}
+        self.client.items[0]['locked']=False
+        self.service.save_managed(cfg);self.service.set_managed_running(True)
+        self.client.native_handler=Mock(side_effect=NativeActionError('指令未执行',state=GUARD_FAILED))
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._work('managed',{})
+        self.assertTrue(self.service.managed.running);self.assertIsNone(self.service.managed.pending)
+        self.client.items[0]['base_rarity']=4
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=103):
+            self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,1)
+        self.assertEqual(self.client.actions[-1][0],'lock')
+
+    def test_uncertain_return_and_destructive_rejections_are_never_retried(self):
+        for returning,uncertain in ((True,True),(False,False)):
+            with self.subTest(returning=returning):
+                self.service.stop_managed()
+                self.client.in_town=not returning;self.client.items=[equipment(locked=False)]
+                self.client.current_map='offline-map';self.client.run_status='success'
+                cfg=self.settings(farming=True)
+                cfg['cleanup']['equipment_policies']['legendary']={'action':'salvage','fallback':'salvage'}
+                self.service.save_managed(cfg);self.service.set_managed_running(True)
+                self.client.native_handler=Mock(side_effect=NativeActionError('拒绝',state=REJECTED,uncertain=uncertain))
+                self.service._work('managed',{})
+                self.assertFalse(self.service.managed.running)
+                self.assertIsNone(self.service.managed_retry)
+                self.assertEqual(self.client.native_handler.call_count,1)
+
+    def test_transfer_prewrite_change_keeps_running_and_rechecks_protection(self):
+        self.client.items[0]['locked'] = False
+        self.ready(farming=True,auto_equip=False)
+        def changed_before_write(*args,**kwargs):
+            self.client.items[0].update(base_rarity=4)
+            raise SnapshotChangedError('所选物品已变化或移动，请刷新后重新选择')
+        with patch.object(self.client,'move_items',side_effect=changed_before_write) as move:
+            self.service._work('managed',{})
+        move.assert_called_once()
+        self.assertTrue(self.service.managed.running)
+        self.assertIsNone(self.service.managed.pending)
+        self.assertFalse(self.service.error)
+        self.assertEqual(self.client.actions,[])
+        self.service._work('managed',{})
+        self.assertEqual(self.client.actions,[('lock',self.client.items[0]['item_uid'])])
+        self.assertTrue(self.service.managed.running)
+
+    def test_unconfirmed_transfer_error_still_stops_without_replay(self):
+        self.client.items[0]['locked'] = False
+        self.ready(farming=True,auto_equip=False)
+        with patch.object(self.client,'move_items',side_effect=RuntimeError('转移回读不一致')) as move:
+            self.service._work('managed',{})
+        move.assert_called_once()
+        self.assertFalse(self.service.managed.running)
+        self.assertIn('转移回读不一致',self.service.error)
+        self.assertEqual(self.client.actions,[])
 
     def early_game(self, rarity=0, *, worn_key=None, restricted=True):
         """Exercise real adapter/preview/executor plumbing with synthetic gear."""
@@ -359,6 +574,68 @@ class ManagedServiceTests(unittest.TestCase):
         self.assertEqual(route[boundary],{'dungeon_id':'Forest1','difficulty':'Inferno'})
         self.assertEqual(campaign_route(self.service.managed_catalog,'Volcano7','Inferno'),
                          [{'dungeon_id':'Volcano7','difficulty':'Inferno'}])
+
+    def test_growth_presets_and_purchase_counts_survive_save_and_reload_for_all_classes(self):
+        from deskrawl_assistant.progression import catalog
+        settings=self.settings()
+        for mask,hero in catalog()['heroes'].items():
+            node=next(n for n in hero['talents'] if n['point_requirement']==0 and not n['prerequisite'])
+            ability=next(n for n in hero['abilities'] if 0 in n['slots'])
+            settings['progression']['talent_targets'][mask]={node['id']:2}
+            settings['progression']['skill_stages'][mask]=[{'level':1,'slots':[ability['id'],None,None,None]}]
+        settings['life_skills']['priorities']=['LifeSkill 66','LifeSkill 31']
+        settings['merchant'].update(trigger_percent=93,spend_to_percent=17)
+        settings['merchant']['weights'].update({'2':10,'3':1})
+        saved=self.service.save_managed(settings)
+        self.assertEqual(json.loads(self.service.managed_config.read_text(encoding='utf-8')),saved)
+        self.service._init_managed()
+        self.assertEqual(self.service.managed_config_error,'')
+        self.assertEqual(self.service.managed.settings,saved)
+        self.assertEqual((saved['merchant']['trigger_percent'],saved['merchant']['spend_to_percent']),(93,17))
+        self.assertEqual(self.client.actions,[])
+
+    def test_price_previews_are_read_even_when_automatic_purchases_are_disabled(self):
+        self.assertFalse(self.service.managed.settings['merchant']['enabled'])
+        self.client.progression_snapshot=Mock(return_value={'available':True,'merchant':{'preview':[]}})
+        self.service._managed_refresh_control()
+        self.client.progression_snapshot.assert_called_once_with(merchant=True)
+        self.assertFalse(self.service.managed.settings['merchant']['enabled']);self.assertEqual(self.client.actions,[])
+
+    def test_locked_or_unknown_merchant_cannot_be_enabled_and_legacy_config_cannot_start(self):
+        settings=self.settings(auto_equip=True);settings['merchant']['enabled']=True
+        settings['merchant']['weights']['2']=10
+        for shop in ({},{'unlock_known':True,'unlocked':False},{'unlock_known':False,'unlocked':True}):
+            self.service.managed_growth={'available':True,'merchant':shop}
+            with self.assertRaisesRegex(ValidationError,'不能启用'):self.service.save_managed(settings)
+        self.service.managed.settings=settings
+        self.assertTrue(any('尚未解锁' in reason for reason in self.service.managed_page()['blocked_reasons']))
+        self.assertEqual(self.client.actions,[])
+        self.service.managed_growth={'available':True,'gold':0,'merchant':{'unlock_known':True,'unlocked':True}}
+        # Already paid for the unlock: current gold no longer controls access.
+        self.assertTrue(self.service.save_managed(settings)['merchant']['enabled'])
+
+    def test_push_start_uses_highest_native_unlock_not_legacy_selected_map(self):
+        self.client.maps=[{'id':key,'unlocked':True,'can_enter':True,'supported':True} for key in ('Forest1','Volcano7')]
+        self.service._managed_refresh_control()
+        settings=self.settings(farming=True);settings['farming'].update(mode='push',dungeon_id=None)
+        self.service.save_managed(settings)
+        self.assertEqual(self.service.managed_page()['automatic_start'],{'dungeon_id':'Volcano7','difficulty':'Inferno'})
+        self.service.set_managed_running(True)
+        self.assertEqual((self.service.managed.target_dungeon,self.service.managed.target_difficulty),('Volcano7','Inferno'))
+        self.assertEqual(self.service.managed.settings['farming']['progression'][0],{'dungeon_id':'Forest1','difficulty':'Normal'})
+        self.assertEqual(self.client.actions,[]) # Starting itself never executes a game action.
+
+    def test_repeat_start_validates_both_maps_and_resolved_difficulty_duplicates(self):
+        settings=self.settings(farming=True)
+        settings['farming']['repeat_maps']=[{'dungeon_id':'offline-map','difficulty':'current','runs':2},
+                                          {'dungeon_id':'offline-map','difficulty':'Nightmare','runs':3}]
+        self.client.difficulties[1]['unlocked']=False;self.service._managed_refresh_control()
+        self.service.save_managed(settings)
+        with self.assertRaisesRegex(ValidationError,'目标难度尚未解锁'):self.service.set_managed_running(True)
+        settings['farming']['repeat_maps'][1]['difficulty']='Normal'
+        self.service.save_managed(settings)
+        with self.assertRaisesRegex(ValidationError,'关卡不能相同'):self.service.set_managed_running(True)
+        self.assertFalse(self.service.managed.running);self.assertEqual(self.client.actions,[])
 
     def test_resume_after_crossing_difficulty_keeps_original_route(self):
         self.client.maps = [{'id':key,'map_id':key,'unlocked':True,'can_enter':True,'supported':True}
@@ -828,8 +1105,8 @@ class ManagedServiceTests(unittest.TestCase):
         self.assertEqual([a[0] for a in self.client.actions], ['collect_carriage'] * 2)
         self.assertTrue(self.service.monitor_wake.is_set())
         self.service.monitor_wake.clear()
-        self.service._work('managed', {})  # Disposal uses the normal freshness barrier.
-        self.assertFalse(self.service.monitor_wake.is_set())
+        self.service._work('managed', {})  # Disposal still uses a fresh inventory barrier.
+        self.assertTrue(self.service.monitor_wake.is_set())
 
     def test_pickup_cancel_during_receipt_never_wakes_next_action(self):
         self.client.items = []

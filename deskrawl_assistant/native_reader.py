@@ -329,13 +329,13 @@ class NativeReader:
         inline = block.split(b"\0", 1)[0]
         try:
             name = inline.decode("ascii")
-            if name and all(c.isalnum() or c in "_-." for c in name):
+            if name and all(c.isalnum() or c in "_-. " for c in name):
                 return name
         except UnicodeError:
             pass
         pointer = struct.unpack_from("<Q", block)[0]
         name = p.cstring(pointer, 128)
-        if name and all(c.isalnum() or c in "_-." for c in name):
+        if name and all(c.isalnum() or c in "_-. " for c in name):
             return name
         raise MemoryReadError("物品资源名称尚未解析")
 

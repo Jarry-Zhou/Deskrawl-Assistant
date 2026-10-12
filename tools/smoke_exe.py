@@ -19,7 +19,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.5'
+NAME = 'Deskrawl装备助手-v1.2.6'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -62,7 +62,15 @@ def main():
     assert 'data/compatibility-baseline.json' in normalized
     actions_profile = json.loads(archive.extract(normalized['data/game-actions-profile.json']))
     assert set(actions_profile['verified_kinds']) == {
-        'return_town','enter_map','switch_difficulty','equip','sell','salvage','open_chest','collect_ground'}
+        'return_town','enter_map','switch_difficulty','equip','sell','salvage','open_chest','collect_ground',
+        'allocate_talent','merchant_open','merchant_buy','merchant_close','merchant_refresh'}
+    growth = json.loads(archive.extract(normalized['data/progression-catalog.json']))
+    assert set(growth['heroes']) == {'1','2','4','8'}
+    growth_icons = {n for n in normalized if n.startswith('deskrawl_assistant/web/progression-icons/')}
+    assert len(growth_icons) == 333
+    assert all('deskrawl_assistant/web'+node['icon'] in growth_icons for hero in growth['heroes'].values()
+        for node in hero['talents'] + hero['abilities'])
+    assert all('deskrawl_assistant/web'+node['icon'] in growth_icons for node in growth['life_skills'] + growth['shop'])
     assert any('capstone' in n.lower() and n.lower().endswith('.dll') for n in names)
     folder = ROOT / 'build' / ('exe独立测试 '+uuid.uuid4().hex[:8])
     folder.mkdir(parents=True)
@@ -116,7 +124,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.5'
+                assert request('/api/state')['app_version'] == '1.2.6'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -153,7 +161,13 @@ def main():
         assert request('/automation-tools.js') and request('/managed-mode.js')
         assert '托管模式' in request('/').decode('utf-8')
         report['checks'].append('托管页面与动作配置内置；新用户装备1/2/3、符文4、宝石5；断线不误报解锁，托管默认停止')
-        report['checks'].append('全部八种托管原生动作列入已验证配置；普通启动无需测试参数，未连接时不执行动作')
+        report['checks'].append('原八种托管动作及商人、天赋已验证入口正常开放；生活技能与技能切换保留显式测试入口，未连接时不执行动作')
+        assert managed['settings']['merchant']['trigger_percent'] == 85
+        assert managed['settings']['merchant']['spend_to_percent'] == 0
+        assert not any(managed['settings']['merchant']['weights'].values())
+        assert request('/managed-growth.js')
+        assert managed['progression_catalog'] == growth
+        report['checks'].append('四职业成长字典及319张天赋、技能、生活技能和商人图标及14张界面纹理内置；新用户85%触发、保留0%、购买件数全0')
         report['checks'].append('空规则、监控默认关闭；独立 exe 在中文和空格路径正常启动')
         assert '__SESSION_TOKEN__' not in request('/').decode('utf-8')
         assert b'async function api' in request('/app.js')
@@ -199,6 +213,12 @@ def main():
         assert not request('/api/state')['automation']['running']
         managed_settings = managed['settings']
         managed_settings['cleanup'].update(equipment_pages=[5],rune_pages=[2,4],gem_pages=[1])
+        managed_settings['progression']['talent_targets'] = {'4': {'HunterTalent0': 10, 'HunterTalent2': 2}}
+        managed_settings['progression']['skill_stages'] = {'4': [{'level': 1, 'slots': ['HunterBasicAttack1', None, None, None]}]}
+        managed_settings['life_skills']['priorities'] = [growth['life_skills'][0]['id']]
+        managed_settings['merchant'].update(trigger_percent=93, spend_to_percent=17)
+        managed_settings['merchant']['weights']['2'] = 1
+        managed_settings['merchant']['weights']['7'] = 10
         saved_managed = request('/api/managed/settings', {'settings':managed_settings})['settings']
         assert saved_managed['cleanup']['rune_pages'] == [2,4]
         assert not request('/api/managed')['running']
@@ -339,6 +359,7 @@ def main():
         assert state['automation']['settings'] == settings and not state['automation']['running']
         restored_managed = request('/api/managed')
         assert restored_managed['settings'] == saved_managed and not restored_managed['running']
+        report['checks'].append('战斗天赋、生活技能路径、技能组合及自定义93%/17%商人比例与购买件数，保存后重启完整保留')
         report['checks'].append('自定义托管分区、未解锁页选择与自动整理偏好重启后保留，默认方案不覆盖本地配置')
         assert request('/api/recommendations')['settings'] == recommendation_settings
         assert request('/api/experience')['recent'][0]['id'] == xp_sample['id']

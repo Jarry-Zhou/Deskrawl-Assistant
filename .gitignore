@@ -73,6 +73,7 @@ docs/*
 !docs/1.2.5验收说明.md
 !docs/开发与构建.md
 !docs/托管模式开发说明.md
+!docs/神秘商人接口分析.md
 !docs/screenshots/
 
 !docs/经验收益说明.md
@@ -85,3 +86,11 @@ docs/*
 !docs/刷图推荐说明.md
 !docs/recommendation-model.md
 !docs/掉落预览说明.md
+
+!data/progression-catalog.json
+!tools/extract_progression_catalog.py
+!tools/verify_progression_profile.py
+!tools/preview_growth_ui.py
+!tools/managed_test_settings.py
+!docs/1.2.6开发说明.md
+!docs/1.2.6验收说明.md

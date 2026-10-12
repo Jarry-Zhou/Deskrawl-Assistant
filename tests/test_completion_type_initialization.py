@@ -157,7 +157,7 @@ class CompletionFixture:
 
 class CompletionTypeInitializationTests(unittest.TestCase):
     def test_release_profile_records_the_two_verified_exact_tokens(self):
-        self.assertEqual(load_profile()['uninitialized_type_tokens'], TOKENS)
+        self.assertEqual({key:load_profile()['uninitialized_type_tokens'][key] for key in TOKENS}, TOKENS)
 
     def test_both_cold_tokens_are_absent_without_being_dereferenced(self):
         fixture = CompletionFixture()

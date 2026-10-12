@@ -9,7 +9,7 @@ from ctypes import wintypes as W
 import json
 import struct
 import time
-from .native_memory import K, MemoryReadError
+from .native_memory import K, MemoryReadError, SnapshotChangedError, GameBusyError
 from .paths import RESOURCE_ROOT
 from .activity_journal import operation_id
 from .game_compatibility import native_rva, assert_current
@@ -33,7 +33,7 @@ def ensure_items_writable(reader, save=None):
     save = reader.singleton('SaveSystem') if save is None else save
     blocked = reader.memory.read(save+193,1)
     if blocked == b'\1':
-        raise MemoryReadError('游戏暂时禁止物品操作，请稍后重试')
+        raise GameBusyError('游戏暂时禁止物品操作，等待在线同步完成。')
     if blocked != b'\0':
         raise MemoryReadError('游戏物品操作状态异常，未写入')
     return save
@@ -245,9 +245,9 @@ class FrozenSlotTransaction:
         try:
             for address,before,_ in changes:
                 if p.read(address,48)!=before:
-                    raise MemoryReadError('槽位在准备期间发生变化，未移动物品')
+                    raise SnapshotChangedError('槽位在准备期间发生变化，未移动物品')
             if any(p.read(a,len(v))!=v for a,v in guards):
-                raise MemoryReadError('物品或仓库权限发生变化，请刷新后重试')
+                raise SnapshotChangedError('物品或仓库权限发生变化，请刷新后重试')
             if time.monotonic()-started>1: raise MemoryReadError('验证耗时异常，未移动物品')
             base = self.reader.module['base']
             if p.i32(base+native_rva(self.reader,'gc_mode_rva',GC_MODE_RVA)) not in (0,1): raise MemoryReadError('GC 写屏障状态未确认')
@@ -297,7 +297,7 @@ def move_items(reader,expected,target,validate=lambda:True,on_commit=None,*,targ
     if target not in ('inventory','storage') or not expected:
         raise MemoryReadError('请选择物品和移动方向')
     snapshot = reader.snapshot()
-    if not snapshot['complete']: raise MemoryReadError('物品正在变化，请刷新后重试')
+    if not snapshot['complete']: raise SnapshotChangedError('物品正在变化，请刷新后重试')
     access,guards = access_state(reader)
     allowed = set(access['storage_indices'])
     restricted = None
@@ -312,8 +312,12 @@ def move_items(reader,expected,target,validate=lambda:True,on_commit=None,*,targ
     source_name = 'storage' if target=='inventory' else 'inventory'
     current = {r.get('transfer_key'):r for r in snapshot['containers'][source_name]['slots']}
     keys = [r.get('transfer_key') for r in expected]
-    if any(not k or k not in current for k in keys) or len(set(keys))!=len(keys):
-        raise MemoryReadError('所选物品已变化或移动，请刷新后重新选择')
+    if any(not k for k in keys) or len(set(keys))!=len(keys):
+        raise MemoryReadError('所选物品标识缺失或重复，请刷新后重新选择')
+    if any(k not in current for k in keys):
+        # This is before a transaction exists: nothing was written. Automated
+        # callers can discard the plan and repeat all rule/capacity checks.
+        raise SnapshotChangedError('所选物品已变化或移动，请刷新后重新选择')
     p = reader.memory
     arrays = {}
     for name,klass,offset in [('inventory','Inventory',56),('storage','Storage',48)]:
@@ -342,7 +346,7 @@ def move_items(reader,expected,target,validate=lambda:True,on_commit=None,*,targ
         head = p.read(source,48)
         # Rebuild the same fingerprint; never accept an address from the caller.
         if reader.transfer_key(source_name,row['slot_index'],source,head,row)!=key:
-            raise MemoryReadError('来源物品发生变化，请刷新后重试')
+            raise SnapshotChangedError('来源物品发生变化，请刷新后重试')
         stackable = row.get('item_type')==6 and row.get('item_class')=='GemData' and not row.get('item_uid') and not row.get('is_equipment')
         item = struct.unpack_from('<Q',head,16)[0]
         maximum = p.i32(item+136) if stackable else 1

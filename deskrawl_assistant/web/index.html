@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/style.css">
   <script src="/inventory-tools.js" defer></script>
   <script src="/automation-tools.js" defer></script>
+  <script src="/managed-growth.js" defer></script>
   <script src="/managed-mode.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/rule-tools.js" defer></script>
@@ -117,15 +118,57 @@
           <section class="panel managed-card">
             <div class="managed-card-heading"><div><span class="eyebrow">02 · 自动刷图 / 推图</span><h2>选择刷图方式</h2></div><label class="managed-toggle"><input id="managed-farming" type="checkbox">启用</label></div>
             <div class="managed-farming-fields">
-              <label>刷图模式<select id="managed-farm-mode"><option value="repeat">复刷 · 重复指定关卡</option><option value="push">推图 · 失败后回退复刷</option></select></label>
-              <label>起始难度<select id="managed-difficulty"><option value="current">沿用启动时当前难度</option><option value="Normal">普通</option><option value="Nightmare">噩梦</option><option value="Inferno">炼狱</option></select></label>
-              <label class="managed-map-field"><span id="managed-map-label">复刷关卡</span><select id="managed-map"><option value="">连接后读取关卡</option></select></label>
+              <label class="managed-map-field">刷图模式<select id="managed-farm-mode"><option value="push">自动推图</option><option value="repeat">重复刷图</option></select></label>
+              <div id="managed-push-preview" class="managed-push-preview" hidden><span>自动选择最高已解锁关卡</span><strong id="managed-push-target">连接后读取</strong><small>胜利 → 下一关 · 失败 → 上一关 · 提升后继续挑战</small></div>
+              <div id="managed-repeat-fields" class="managed-repeat-fields">
+                <label class="managed-repeat-toggle"><input id="managed-repeat-two" type="checkbox">轮换两张图</label>
+                <div class="managed-repeat-map"><span class="managed-repeat-number">1</span><label>难度<select id="managed-difficulty"><option value="current">沿用启动时当前难度</option><option value="Normal">普通</option><option value="Nightmare">噩梦</option><option value="Inferno">炼狱</option></select></label><label>关卡<select id="managed-map"><option value="">连接后读取关卡</option></select></label><label class="managed-repeat-count-label">每轮局数<input id="managed-repeat-count" type="number" min="1" max="10000" step="1" value="1"></label></div>
+                <div id="managed-repeat-second" class="managed-repeat-map" hidden><span class="managed-repeat-number">2</span><label>难度<select id="managed-difficulty-two"><option value="current">沿用启动时当前难度</option><option value="Normal">普通</option><option value="Nightmare">噩梦</option><option value="Inferno">炼狱</option></select></label><label>关卡<select id="managed-map-two"><option value="">连接后读取关卡</option></select></label><label>每轮局数<input id="managed-repeat-count-two" type="number" min="1" max="10000" step="1" value="1"></label></div>
+              </div>
               <label class="managed-threshold">回城整理<span>背包剩余空格 &lt; <input id="managed-free-threshold" type="number" min="1" max="2048" step="1" value="4" aria-label="触发回城的背包剩余格阈值"> 格</span></label>
             </div>
             <p id="managed-farm-note" class="managed-footnote">通关后重复进入选定关卡；背包空格不足时先回城整理，再继续刷图。</p>
+            <p id="managed-farm-progress" class="managed-footnote" role="status" hidden></p>
           </section>
+          <div id="managed-growth">
+            <section class="panel managed-card">
+              <div class="managed-card-heading"><div><span class="eyebrow">03 · 灵魂碎片</span><h2>回城消费神秘商人</h2></div><label class="managed-toggle"><input id="managed-merchant" type="checkbox">启用</label></div>
+              <p id="managed-shard-state" class="managed-card-note">连接后读取实际碎片上限。</p>
+              <p id="managed-merchant-unlock" class="managed-card-note" role="status">连接后确认商人解锁状态。</p>
+              <div class="growth-thresholds"><label>容量达到 <input id="managed-shard-trigger" type="number" min="1" max="100" value="85"> % 时回城</label><label>购买后保留 <input id="managed-shard-reserve" type="number" min="0" max="99" value="0"> % 碎片</label></div>
+              <details open><summary>神秘商人 · 购买计划 <small>0 表示跳过；按菜单顺序买完每个部位的件数，再循环</small></summary><div id="managed-shop-weights" class="growth-shop-weights"></div></details>
+              <p id="managed-shop-price-note" class="managed-footnote" aria-live="polite">连接后显示价格，购买计划可提前配置。</p>
+              <div class="managed-save-bar growth-save-bar"><span id="managed-shop-save-state" class="note" role="status">设置已保存</span><button id="managed-shop-save" class="button" type="button" title="同时保存当前页面的托管设置">保存购买计划</button></div>
+              <p class="managed-footnote">实际容量随生活技能变化（2000 → 3000）。先整理全部奖励，再连续购买至背包满或预算不足，统一筛选、锁定和换装。保留装备入库；商人未命中装备直接按品质出售／分解，若该品质配置为入库，则使用其满仓备用方式。保护装备无法入库时暂停消费。</p>
+            </section>
+            <section class="panel managed-card growth-planner">
+              <div class="managed-card-heading"><div><span class="eyebrow">04 · 成长规划</span><h2>预先点好，逐步养成</h2></div><span id="managed-growth-class" class="growth-class-state" role="status" aria-label="当前角色职业">连接后识别职业</span></div>
+              <p class="managed-card-note">连接后显示当前职业的天赋与技能，按职业保存方案；生活技能通用。先规划并保存，再启用对应开关，由托管按可用点数、金币和等级执行。</p>
+              <div class="growth-game-tabs" role="tablist" aria-label="成长规划"><button id="growth-tab-talents" type="button" role="tab" data-growth-tab="talents" aria-controls="growth-view-talents" aria-selected="true">战斗天赋</button><button id="growth-tab-life" type="button" role="tab" data-growth-tab="life" aria-controls="growth-view-life" aria-selected="false">生活技能</button><button id="growth-tab-skills" type="button" role="tab" data-growth-tab="skills" aria-controls="growth-view-skills" aria-selected="false">技能配置</button></div>
+              <div id="growth-view-talents" class="growth-game-view" role="tabpanel" aria-labelledby="growth-tab-talents">
+                <div class="growth-game-toolbar"><span id="managed-talent-total">目标 0 点</span><label class="managed-toggle"><input id="managed-talents" type="checkbox">自动点天赋</label><button id="managed-talent-clear" class="text-button" type="button">清空预设</button></div>
+                <p class="growth-help">最多预设 70 点。左键 +1，Shift + 左键点满（剩余点数内），右键 −1。左侧进度与门槛按预设投入点数点亮；节点下方为目标点数，小圆点表示实际已学。</p>
+                <div id="managed-talent-tree" class="growth-tree-scroll" aria-label="战斗天赋规划"></div>
+                <p id="growth-talent-feedback" class="growth-feedback" aria-live="polite"></p>
+              </div>
+              <div id="growth-view-life" class="growth-game-view" role="tabpanel" aria-labelledby="growth-tab-life" hidden>
+                <div class="growth-game-toolbar"><label class="managed-toggle"><input id="managed-life" type="checkbox">自动点生活技能</label><label>保留金币 <input id="managed-life-gold" type="number" min="0" max="2147483647" step="1" value="0"></label></div>
+                <p id="managed-life-note" class="growth-help">点击节点选择优先路径，自动补齐前置；先沿优先路径学习，再逐步点满所有节点。</p>
+                <div class="growth-life-tools"><input id="managed-life-search" type="search" placeholder="搜索节点或效果…" aria-label="搜索生活技能"><button type="button" id="growth-life-zoom-out" aria-label="缩小生活技能树">−</button><span id="growth-life-zoom-label">100%</span><button type="button" id="growth-life-zoom-in" aria-label="放大生活技能树">+</button><button type="button" id="growth-life-center">回到中心</button></div>
+                <div class="growth-life-board"><aside id="growth-life-summary" class="growth-life-summary"></aside><div id="managed-life-nodes" class="growth-life-viewport" aria-label="生活技能树，拖动空白区域移动视图" tabindex="0"></div></div>
+                <div class="growth-priority-heading"><strong>优先路径</strong><button id="growth-life-clear" class="text-button" type="button">清空优先路径</button></div><ol id="managed-life-priorities" class="growth-priorities"></ol>
+              </div>
+              <div id="growth-view-skills" class="growth-game-view" role="tabpanel" aria-labelledby="growth-tab-skills" hidden>
+                <div class="growth-game-toolbar"><span id="growth-skill-status">连接后显示当前技能</span><label class="managed-toggle"><input id="managed-skills" type="checkbox">自动切换技能</label><button id="growth-skills-clear" class="text-button" type="button">清空预设</button></div>
+                <p class="growth-help">直接点击图标预设技能；再次点击取消。未到解锁等级继续使用当前技能，等级满足后自动换上。</p>
+                <div id="managed-skill-stages" class="growth-skills-layout"></div>
+                <p id="growth-skills-note" class="growth-help"></p>
+              </div>
+              <div class="managed-save-bar growth-save-bar"><span id="managed-growth-save-state" class="note" role="status">设置已保存</span><button id="managed-growth-save" class="button" type="button" title="保存战斗天赋、生活技能优先路径和技能预设，同时保存当前页面的托管设置">保存成长预设</button></div>
+            </section>
+          </div>
           <section class="panel managed-card managed-cleanup-card">
-            <div class="managed-card-heading"><div><span class="eyebrow">03 · 回城整理</span><h2>保留什么，如何处理其他奖励</h2></div><span class="badge locked">先保留 · 后处置</span></div>
+            <div class="managed-card-heading"><div><span class="eyebrow">05 · 回城整理</span><h2>保留什么，如何处理其他奖励</h2></div><span class="badge locked">先保留 · 后处置</span></div>
             <p class="managed-footnote">新用户默认：装备 1／2／3 页、符文 4 页、宝石 5 页。只使用已解锁的所选页；没有可用目标页时保留物品并暂停，可修改分区后继续。</p>
             <div class="managed-policy-presets"><span>未命中装备快捷设置</span><button class="button ghost" type="button" data-managed-preset="sell_low">普通 / 优秀出售，其余分解</button><button class="button ghost" type="button" data-managed-preset="sell">全部出售</button><button class="button ghost" type="button" data-managed-preset="salvage">全部分解</button><button class="button ghost" type="button" data-managed-preset="store">全部入库</button></div>
             <div class="managed-cleanup-table-wrap"><table class="managed-cleanup-table"><thead><tr><th>物品范围</th><th>处理方式</th><th>仓库满时</th><th>存放仓库页签</th></tr></thead><tbody>

@@ -28,6 +28,14 @@ def carriage(items=()):
 
 
 class JournalTests(unittest.TestCase):
+    def test_purchase_provenance_survives_restart_and_excludes_unconfirmed_receipts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'journal.sqlite3';journal=ActivityJournal(path)
+            for result in ({'verified':True,'received_uid':'one'}, {'verified':True,'received_uids':['two','three']},
+                           {'verified':False,'received_uid':'uncertain'}):
+                journal.append('system','managed_action','purchase',context={'action':{'kind':'merchant_buy'},'result':result})
+            journal.append('system','managed_action','other',context={'action':{'kind':'transfer'},'result':{'verified':True,'received_uid':'other'}})
+            self.assertEqual(ActivityJournal(path).merchant_item_uids(),{'one','two','three'})
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.path=Path(self.tmp.name)/'activity.sqlite3'

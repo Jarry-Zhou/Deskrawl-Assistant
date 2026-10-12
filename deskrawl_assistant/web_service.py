@@ -13,7 +13,7 @@ from .rules import LockPlanner, rules_from_dict, evaluate, DEFAULT_MIN_CONFIDENC
 from .runtime_adapter import RuntimeAdapter, RuntimeReadEvidence, headline_stats
 from .stat_display import preview_value
 from .runtime_client import RuntimeClient
-from .native_memory import SnapshotChangedError
+from .native_memory import SnapshotChangedError, GameBusyError
 from .loot_monitor import LootState
 from .action_log import record
 from .paths import RESOURCE_ROOT, rules_file, runtime_dir
@@ -56,6 +56,7 @@ class AssistantService(ManagedServiceMixin):
         self.item_names = {key:entry for table in ('Equipments','Items') for key,entry in tables[table]['entries'].items()}
         self.ui = json.loads((BASE / 'data/equipment-ui.json').read_text(encoding='utf-8'))
         self.item_ui = json.loads((BASE / 'data/item-ui.json').read_text(encoding='utf-8'))
+        self.loot_item_ui = json.loads((BASE / 'data/loot-item-ui.json').read_text(encoding='utf-8'))
         self.pools = json.loads((BASE / 'data/affix-groups-static.json').read_text(encoding='utf-8'))
         self.adapter = RuntimeAdapter(self.catalog, BASE / 'data/affix-groups-static.json')
         self.client = client or RuntimeClient()
@@ -534,6 +535,7 @@ class AssistantService(ManagedServiceMixin):
             meta = self.item_ui['items'].get(key,{})
             groups = meta.get('effect_groups',[])
             gems.append({'key':key,'name':self._describe_item(key)[0],'icon':meta.get('icon'),
+                'rarity':self.loot_item_ui['items'].get(key,{}).get('rarity'),
                 'effects':groups[category] if len(groups)==3 else None})
         return {'rarity':rarity,'rarity_label':{0:'普通',1:'优秀',2:'稀有',3:'传说',4:'神圣',5:'符文套装'}.get(rarity,'未知'),
             'is_ancient':row.get('is_ancient'),'is_black_mist':row.get('is_black_mist'),
@@ -608,6 +610,8 @@ class AssistantService(ManagedServiceMixin):
             localized = self.item_names.get(row.get('internal_name'),{})
             entry = self.catalog.equipment.get(key)
             meta = self.ui['equipment'].get(key, {}) if kind=='equipment' else self.item_ui['items'].get(row.get('internal_name'),{})
+            rarity = row.get('base_rarity',row.get('rarity'))
+            if type(rarity) is not int or rarity not in range(6): rarity = None
             adapted_item = observations.get((row.get('container'),row.get('slot_index')))
             observation = adapted_item.observation if adapted_item else None
             groups = {'base':[],'primary':[],'secondary':[],'unknown':[]}
@@ -649,7 +653,7 @@ class AssistantService(ManagedServiceMixin):
                 'name':entry.label if entry else localized.get('Chinese (Simplified)') or localized.get('English') or row.get('internal_name','未识别物品'),
                 'container':row.get('container'),'slot_index':row.get('slot_index'),
                 'locked':row.get('locked'),'level':row.get('item_level'),'upgrade':row.get('upgrade_level'),
-                **(self._equipment_facts(row) if kind=='equipment' else {}),
+                **(self._equipment_facts(row) if kind=='equipment' else {'rarity':rarity}),
                 'icon':meta.get('icon'),'slot':meta.get('slot'),'slot_label':SLOT_LABELS.get(meta.get('slot'), '未知部位') if kind=='equipment' else kind_label,
                 'class_mask':meta.get('class_mask',0),'groups':groups,'matches':match,'matched_combinations':matched_combinations,
                 'review':review,'reasons':reasons,'primary_perfect':bool(primary_perfect),
@@ -780,6 +784,9 @@ class AssistantService(ManagedServiceMixin):
             if kind!='observe': record('web_operation_finished', kind=kind)
         except Exception as exc:
             failure_traceback = traceback.format_exc()
+            if kind=='managed' and isinstance(exc,GameBusyError):
+                self._managed_defer(None,str(exc),'game_busy')
+                return
             if kind in ('monitor','observe','managed') and isinstance(exc, SnapshotChangedError):
                 # Keep both switches and the pending loot identities. Nothing
                 # from an inconsistent read is published or used for a write.

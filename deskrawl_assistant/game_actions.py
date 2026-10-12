@@ -12,16 +12,19 @@ import hashlib
 import struct
 import time
 
-from .native_memory import MemoryReadError, SnapshotChangedError
+from .native_memory import MemoryReadError, SnapshotChangedError, GameBusyError
 from .native_dispatcher import Argument, Invocation, MainThreadDispatcher, NativeActionError, load_profile
 from .action_log import record
 from .item_protection import divine_equipment, disposal_protection, mandatory_storage
 from .equipment_requirements import equip_eligibility
 
 
-KINDS = ('return_town', 'enter_map', 'switch_difficulty', 'equip', 'sell', 'salvage', 'open_chest', 'collect_ground')
+from .progression import NEW_ACTIONS
+
+KINDS = ('return_town', 'enter_map', 'switch_difficulty', 'equip', 'sell', 'salvage', 'open_chest', 'collect_ground') + NEW_ACTIONS
 CAPABILITIES = {'travel': ('return_town', 'enter_map'), 'equip': ('equip',), 'sell': ('sell',),
-    'difficulty': ('switch_difficulty',), 'salvage': ('salvage',), 'chests': ('open_chest',), 'ground_pickup': ('collect_ground',)}
+    'difficulty': ('switch_difficulty',), 'salvage': ('salvage',), 'chests': ('open_chest',), 'ground_pickup': ('collect_ground',), 'talents': ('allocate_talent',),
+    'life_skills': ('learn_life_skill',), 'skills': ('set_skill',), 'merchant': ('merchant_open', 'merchant_buy', 'merchant_close', 'merchant_refresh')}
 
 
 def normalise_run(run, completed, dead=False):
@@ -126,6 +129,7 @@ class GameActions:
         self._last_terminal_run = None
         self._last_character = None
         self._panel_log_cache = {}
+        self._progression = None
 
     def capabilities(self):
         """Read-only check; local test opt-in never claims completed validation."""
@@ -155,13 +159,22 @@ class GameActions:
                            else '' if compatible and verified else reason)}
         return result
 
+    def progression_runtime(self):
+        if self._progression is None:
+            from .progression_runtime import ProgressionRuntime
+            self._progression = ProgressionRuntime(self)
+        return self._progression
+
+    def progression_snapshot(self, *, merchant=False):
+        return self.progression_runtime().snapshot(merchant=merchant)
+
     def mark_verified(self, kinds):
         """Called only by a supervised in-game validation, not a web endpoint."""
         if any(kind not in KINDS for kind in kinds):
             raise ValueError('未知的游戏动作')
         self.verified_kinds.update(kinds)
 
-    def _context(self):
+    def _context(self, *, allow_busy=False):
         self.reader.check_game_files()
         read = _Read(self.reader, self.profile)
         manager = read.singleton('GameManager')
@@ -173,9 +186,25 @@ class GameActions:
             raise NativeActionError('当前场景类型未核验')
         save = read.singleton('SaveSystem')
         read.read(save+32, 8)  # mode and character slot cannot change
-        if read.boolean(save+193):
-            raise NativeActionError('游戏暂时禁止物品操作，请等待在线同步完成')
+        if read.boolean(save+193) and not allow_busy:
+            raise GameBusyError('游戏暂时禁止物品操作，等待在线同步完成。')
         return read, manager, area, scene
+
+    def _online_state(self, read):
+        save = read.singleton('SaveSystem')
+        saving = read.boolean(save+193)
+        pending = 0
+        if read.integer(save+32) == 1:
+            cloud = read.singleton('CloudClient')
+            pending = read.integer(cloud+276)
+            if pending < 0: raise NativeActionError('在线请求队列状态异常，已停止操作。')
+        return {'online_saving':saving, 'online_pending_requests':pending}
+
+    def _require_travel_ready(self, read):
+        state = self._online_state(read)
+        if state['online_saving'] or state['online_pending_requests']:
+            raise GameBusyError(f"等待在线同步完成后切换场景（待处理请求 {state['online_pending_requests']}）。")
+        return state
 
     def _equip_level(self, read, manager, selected, item):
         """Re-read the same Player/config fields as ddt before any game call."""
@@ -355,6 +384,7 @@ class GameActions:
         return result
 
     def _return_town_call(self, read, manager, portal):
+        self._require_travel_ready(read)
         completion = self._completion_state(read)
         combat = read.verify(read.ptr(manager+64), 'PlayerCombatController')
         player = read.ptr(combat+32)
@@ -368,12 +398,23 @@ class GameActions:
         method = 'TownPortalSystem.frl' if any(completion.values()) or dead else 'TownPortalSystem.frk'
         return Invocation(method, portal, require_true=True)
 
+    def action_context_snapshot(self):
+        """Fresh scene/sync gates for inventory actions, without campaign data."""
+        read,_,area,scene = self._context(allow_busy=True)
+        online = self._online_state(read)
+        portal = read.singleton('TownPortalSystem')
+        value = {'available':True,'scene':{'available':True,'in_town':scene==1,'in_dungeon':scene==2,
+                 'teleporting':read.boolean(portal+76),'scene_changing':read.boolean(area+176),**online}}
+        read.finish()
+        return value
+
     def control_snapshot(self, recommendation=None):
         """Read-only: actual progression plus loaded map objects and ground loot."""
         try:
             if not self.capabilities()['compatible']:
                 raise NativeActionError(self.capabilities()['reason'])
-            read, manager, area, scene = self._context()
+            read, manager, area, scene = self._context(allow_busy=True)
+            online = self._online_state(read)
             portal = read.singleton('TownPortalSystem')
             teleporting, scene_changing = read.boolean(portal+76), read.boolean(area+176)
             combat = read.verify(read.ptr(manager+64), 'PlayerCombatController')
@@ -435,7 +476,7 @@ class GameActions:
             elif not run and self._last_terminal_run:
                 run = dict(self._last_terminal_run, retained_terminal=True)
             return {'available':True, 'compatible':True, 'scene':{0:'combat',1:'town',2:'fishing'}[scene],
-                'scene_changing':scene_changing, 'teleporting':teleporting, 'dead':dead, 'in_battle':in_battle,
+                'scene_changing':scene_changing, 'teleporting':teleporting, 'dead':dead, 'in_battle':in_battle, **online,
                 'completion_visible':completion,
                 'loot_ledger':loot_ledger,
                 'system_log':system_log,
@@ -577,16 +618,21 @@ class GameActions:
         if not self.capabilities()['compatible']:
             raise NativeActionError(self.capabilities()['reason'])
         payload = payload or {}
+        if kind in NEW_ACTIONS:
+            result = self.progression_runtime().execute(kind, payload, cancel_event=cancel_event, validate=validate)
+            result['native_verified'] = kind in self.verified_kinds
+            return result
         read, manager, area, scene = self._context()
         portal = read.singleton('TownPortalSystem')
         if read.boolean(portal+76) or read.boolean(area+176):
-            raise NativeActionError('游戏正在切换场景，等待完成')
+            raise GameBusyError('游戏正在切换场景，等待完成。')
         calls, selected = [], None
         if kind == 'return_town':
             if scene == 1:
                 return {'completed':True, 'already_in_town':True, 'native_verified':kind in self.verified_kinds}
             calls = [self._return_town_call(read, manager, portal)]
         elif kind == 'switch_difficulty':
+            self._require_travel_ready(read)
             self._require_empty_town(read,manager,scene)
             current,options = self._difficulty_state(read,manager)
             target = next((row for row in options if row['id']==payload.get('difficulty')),None)
@@ -594,6 +640,7 @@ class GameActions:
             if current==target['id']: return {'effect_confirmed':True,'already_selected':True,'difficulty':current}
             calls = [Invocation('ey.dcq',arguments=(Argument.integer(target['value']),))]
         elif kind == 'enter_map':
+            self._require_travel_ready(read)
             self._require_empty_town(read,manager,scene)
             state = self.control_snapshot()
             if not state['available']:
@@ -695,6 +742,8 @@ class GameActions:
             result['quantity'] = selected.get('_confirmed_count', selected.get('count', 1))
             if not result['effect_confirmed']:
                 raise NativeActionError('游戏方法已执行，但物品结果尚未确认；已停止重复操作', uncertain=True)
+            if '_confirmed_snapshot' in selected:
+                result['_receipt_snapshot'] = selected['_confirmed_snapshot']
         return result
 
     def _confirm_difficulty(self, target):
@@ -801,8 +850,10 @@ class GameActions:
                         rows = [row for container in snapshot['containers'].values() for row in container['slots']]
                         if selected.get('item_uid'):
                             if not any(row.get('item_uid') == selected['item_uid'] for row in rows):
+                                selected['_confirmed_snapshot'] = snapshot
                                 return True
                         elif sum(row.get('count', 0) for row in rows if row.get('internal_name') == selected['internal_name']) < selected['_before_total_count']:
+                            selected['_confirmed_snapshot'] = snapshot
                             return True
             time.sleep(.05)
         return False

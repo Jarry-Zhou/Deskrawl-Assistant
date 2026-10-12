@@ -178,8 +178,20 @@ test('repeat and push map identifiers retain zero and numeric types, double ring
   assert.equal(s.farming.dungeon_id,0);assert.deepEqual(s.farming.progression,[0,1,2]);
   assert.equal(s.auto_equip.slot_locks['6'],'LegendaryRing1');assert.equal(s.auto_equip.slot_locks['7'],'LegendaryRing2');
   assert.equal(ui.validateSettings(s),'');
-  s.farming.dungeon_id=null;assert.match(ui.validateSettings(s),/关卡/);
+  s.farming.dungeon_id=null;assert.equal(ui.validateSettings(s),''); // Push selects native highest unlock.
+  s.farming.mode='repeat';s.farming.repeat_maps=[];assert.match(ui.validateSettings(s),/关卡/);
   s.farming.enabled=false;s.farming.free_threshold=3.5;assert.match(ui.validateSettings(s),/整数/);
+});
+
+test('push automatically chooses native unlocks and repeat plans migrate without losing map zero',()=>{
+  const push=settings({farming:{enabled:true,mode:'push'}});assert.equal(ui.validateSettings(push),'');
+  const legacy=settings({farming:{enabled:true,mode:'repeat',dungeon_id:0,difficulty:'Nightmare'}});
+  assert.deepEqual(legacy.farming.repeat_maps,[{dungeon_id:0,difficulty:'Nightmare',runs:1}]);
+  const routes=[{dungeon_id:0,difficulty:'current',runs:10},{dungeon_id:9,difficulty:'Nightmare',runs:3}];
+  const s=settings({farming:{enabled:true,repeat_maps:routes}});assert.equal(s.farming.dungeon_id,0);
+  assert.equal(ui.validateSettings(s),'');assert.ok(ui.requiredCapabilities(s).includes('difficulty'));
+  s.farming.repeat_maps[0].runs=0;assert.match(ui.validateSettings(s),/局数/);assert.equal(routes[0].runs,10);
+  s.farming.repeat_maps[0].runs=1;s.farming.repeat_maps[1]={...s.farming.repeat_maps[0]};assert.match(ui.validateSettings(s),/不能相同/);
 });
 
 test('drop totals exclude transfers and correctly display the engine black mist bucket',()=>{

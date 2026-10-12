@@ -39,6 +39,20 @@ class ActivityJournal:
     def append(self, category, event, message, **details):
         return self.append_many([dict(category=category, event=event, message=message, **details)])
 
+    def merchant_item_uids(self):
+        """Recover purchase provenance from confirmed receipts after a restart."""
+        with self.guard, self._connect() as db:
+            rows=db.execute("SELECT context FROM events WHERE event='managed_action'").fetchall()
+        uids=set()
+        for (raw,) in rows:
+            try:
+                context=json.loads(raw);action=context.get('action') or {};result=context.get('result') or {}
+                if action.get('kind')!='merchant_buy' or result.get('verified') is not True:continue
+                values=result.get('received_uids') or [result.get('received_uid')]
+                if isinstance(values,list):uids.update(v for v in values if isinstance(v,str) and v)
+            except (ValueError,AttributeError,TypeError):continue
+        return uids
+
     def append_many(self, entries):
         if not entries:
             return []

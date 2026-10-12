@@ -1,0 +1,6169 @@
+{
+  "schema_version": 1,
+  "build": "Deskrawl 1.0.2a / Steam 25842017",
+  "sha256": {
+    "GameAssembly.dll": "d46f0a321e8e07646cca37c7460e58fbfecc47ade5027ea2e00fc71f0fec0565",
+    "UnityPlayer.dll": "9feedb4527a30fae4762bff45d204f8e85b90851b2c8ae8d24f436f7d474667b",
+    "Deskrawl_Data/il2cpp_data/Metadata/global-metadata.dat": "57627070d0fe8a00f82e373100768f529c4829f02d6aeb8ac3057aaab13cacfc"
+  },
+  "soul_maximum": 2000,
+  "shop": [
+    {
+      "id": "RandomWeapon",
+      "slot": 1,
+      "name": "武器",
+      "base_price": 8,
+      "icon": "/progression-icons/shop-RandomWeapon.png"
+    },
+    {
+      "id": "RandomHelm",
+      "slot": 2,
+      "name": "头盔",
+      "base_price": 3,
+      "icon": "/progression-icons/shop-RandomHelm.png"
+    },
+    {
+      "id": "RandomChest",
+      "slot": 3,
+      "name": "胸甲",
+      "base_price": 3,
+      "icon": "/progression-icons/shop-RandomChest.png"
+    },
+    {
+      "id": "RandomPants",
+      "slot": 4,
+      "name": "裤子",
+      "base_price": 2,
+      "icon": "/progression-icons/shop-RandomPants.png"
+    },
+    {
+      "id": "RandomBoots",
+      "slot": 5,
+      "name": "靴子",
+      "base_price": 2,
+      "icon": "/progression-icons/shop-RandomBoots.png"
+    },
+    {
+      "id": "RandomBelt",
+      "slot": 6,
+      "name": "腰带",
+      "base_price": 2,
+      "icon": "/progression-icons/shop-RandomBelt.png"
+    },
+    {
+      "id": "RandomRing",
+      "slot": 7,
+      "name": "戒指",
+      "base_price": 4,
+      "icon": "/progression-icons/shop-RandomRing.png"
+    },
+    {
+      "id": "RandomNecklace",
+      "slot": 8,
+      "name": "项链",
+      "base_price": 6,
+      "icon": "/progression-icons/shop-RandomNecklace.png"
+    },
+    {
+      "id": "RandomGloves",
+      "slot": 9,
+      "name": "手套",
+      "base_price": 2,
+      "icon": "/progression-icons/shop-RandomGloves.png"
+    },
+    {
+      "id": "RandomShoulder",
+      "slot": 10,
+      "name": "肩甲",
+      "base_price": 2,
+      "icon": "/progression-icons/shop-RandomShoulder.png"
+    }
+  ],
+  "shop_unlock": {
+    "key": "MysteriousMerchantArea",
+    "level": 20,
+    "gold": 2000,
+    "difficulty": 0,
+    "materials": [
+      {
+        "id": "Skull",
+        "name": "恶魔头骨",
+        "count": 3
+      }
+    ]
+  },
+  "heroes": {
+    "1": {
+      "id": "BarbarianHero",
+      "class_mask": 1,
+      "name": "战士",
+      "talents": [
+        {
+          "id": "WarriorTalent0",
+          "name": "力量",
+          "description": "+{value} 力量",
+          "max_points": 10,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 5.0,
+              "per_rank": 5.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent0.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": -234.0
+        },
+        {
+          "id": "WarriorTalent1",
+          "name": "活力",
+          "description": "+{value} 最大生命值与 +{regen} 生命恢复",
+          "max_points": 6,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 50.0,
+              "per_rank": 50.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            },
+            "regen": {
+              "base": 3.0,
+              "per_rank": 3.0,
+              "name": "regen",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent1.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": -234.0
+        },
+        {
+          "id": "WarriorTalent2",
+          "name": "护甲",
+          "description": "+{value1} 护甲，+{value2} 魔法抗性",
+          "max_points": 5,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value1": {
+              "base": 40.0,
+              "per_rank": 40.0,
+              "name": "value1",
+              "format": "0.#",
+              "suffix": ""
+            },
+            "value2": {
+              "base": 40.0,
+              "per_rank": 40.0,
+              "name": "value2",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent2.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": -234.0
+        },
+        {
+          "id": "WarriorTalent4",
+          "name": "暴击几率",
+          "description": "+{value} 暴击几率",
+          "max_points": 5,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.019999999552965164,
+              "per_rank": 0.019999999552965164,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent4.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": -234.0
+        },
+        {
+          "id": "WarriorTalent6",
+          "name": "荆棘",
+          "description": "+{value} 荆棘",
+          "max_points": 8,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 8.0,
+              "per_rank": 8.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent6.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": -234.0
+        },
+        {
+          "id": "WarriorTalent5",
+          "name": "暴击伤害",
+          "description": "+{value} 暴击伤害",
+          "max_points": 8,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.10000000149011612,
+              "per_rank": 0.10000000149011612,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent5.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": -111.08
+        },
+        {
+          "id": "WarriorTalent10",
+          "name": "劈砍狂怒",
+          "description": "释放 [普通攻击] 技能后，每层 +{value} 攻击速度，最多叠加10层。",
+          "max_points": 6,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent10.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": -111.08
+        },
+        {
+          "id": "WarriorTalent3",
+          "name": "迎击",
+          "description": "附近有至少3名存活敌人时，受到的伤害降低 {value}。",
+          "max_points": 5,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent3.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": -111.08
+        },
+        {
+          "id": "WarriorTalent43",
+          "name": "强化英勇打击：易伤几率",
+          "description": "英勇打击额外获得 {value} 几率造成 [易伤]。",
+          "max_points": 5,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent43.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": -111.08
+        },
+        {
+          "id": "WarriorTalent13",
+          "name": "荆棘强化",
+          "description": "+{value} 荆棘",
+          "max_points": 10,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.10000000149011612,
+              "per_rank": 0.10000000149011612,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent13.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": -111.08
+        },
+        {
+          "id": "WarriorTalent12",
+          "name": "重击",
+          "description": "[强力攻击]的直接伤害暴击命中敌人时，使其陷入[易伤]，持续 {duration}。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent12.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 11.84
+        },
+        {
+          "id": "WarriorTalent28",
+          "name": "凶狠荆棘",
+          "description": "荆棘可以触发暴击。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent28.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 11.84
+        },
+        {
+          "id": "WarriorTalent46",
+          "name": "专注武技",
+          "description": "[普通攻击]伤害 +{damage}，普攻获得的法力 −{manaGain}。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent46.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 11.84
+        },
+        {
+          "id": "WarriorTalent20",
+          "name": "防御姿态",
+          "description": "+{value} 护甲",
+          "max_points": 10,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.10000000149011612,
+              "per_rank": 0.05000000074505806,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent20.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 134.76
+        },
+        {
+          "id": "WarriorTalent17",
+          "name": "怒火导引",
+          "description": "激活狂怒护盾时生成 {value} 法力",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent17.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 134.76
+        },
+        {
+          "id": "WarriorTalent33",
+          "name": "怒吼强化",
+          "description": "怒吼的攻击速度加成提升 {value}，并延长 {duration}。",
+          "max_points": 5,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent33.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 134.76
+        },
+        {
+          "id": "WarriorTalent26",
+          "name": "强化英勇打击：法力获取",
+          "description": "英勇打击 +{value} 法力获取。",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent26.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 134.76
+        },
+        {
+          "id": "WarriorTalent14",
+          "name": "强化强力攻击：法力",
+          "description": "+{value} [强力攻击] 法力消耗减少。",
+          "max_points": 5,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent14.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 134.76
+        },
+        {
+          "id": "WarriorTalent29",
+          "name": "WarriorTalent29",
+          "description": "WarriorTalent29.Desc",
+          "max_points": 2,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent29.png",
+          "selectable": false,
+          "x": 90.0,
+          "y": 255.0
+        },
+        {
+          "id": "WarriorTalent16",
+          "name": "强化战吼：冷却",
+          "description": "+{value} [战吼] 技能冷却缩减。",
+          "max_points": 6,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent16.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 257.68
+        },
+        {
+          "id": "WarriorTalent23",
+          "name": "震荡打击",
+          "description": "[普通攻击] 有 {stunChance} 几率眩晕敌人。",
+          "max_points": 5,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent23.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 257.68
+        },
+        {
+          "id": "WarriorTalent25",
+          "name": "蔓延烈焰",
+          "description": "烈焰斩会对周围敌人溅射 {splash} 武器伤害作为火焰伤害。",
+          "max_points": 10,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent25.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 257.68
+        },
+        {
+          "id": "WarriorTalent9",
+          "name": "弱点掌握",
+          "description": "+{value} 对易伤目标的伤害",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.10000000149011612,
+              "per_rank": 0.10000000149011612,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/WarriorTalent9.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 257.68
+        },
+        {
+          "id": "WarriorTalent34",
+          "name": "弦月收割",
+          "description": "半月斩造成的伤害 +{damage}。 半月斩击杀敌人时恢复 {mana} 最大法力值。",
+          "max_points": 10,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent34.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 257.68
+        },
+        {
+          "id": "WarriorTalent31",
+          "name": "放血",
+          "description": "+{value} [流血] 技能伤害。",
+          "max_points": 5,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent31.png",
+          "selectable": false,
+          "x": -110.0,
+          "y": 380.0
+        },
+        {
+          "id": "WarriorTalent32",
+          "name": "WarriorTalent32",
+          "description": "WarriorTalent32.Desc",
+          "max_points": 1,
+          "point_requirement": 100,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent32.png",
+          "selectable": false,
+          "x": -23.0,
+          "y": 380.0
+        },
+        {
+          "id": "WarriorTalent35",
+          "name": "WarriorTalent35",
+          "description": "WarriorTalent35.Desc",
+          "max_points": 1,
+          "point_requirement": 100,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent35.png",
+          "selectable": false,
+          "x": 627.0,
+          "y": 380.0
+        },
+        {
+          "id": "WarriorTalent37",
+          "name": "蓄势待发",
+          "description": "普攻击中获得蓄势，达到 {stacks} 层后获得所有伤害 +{damage}，持续 {duration}。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent37.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 380.6
+        },
+        {
+          "id": "WarriorTalent11",
+          "name": "战斗激励",
+          "description": "施放[战吼]时，使另一个[特殊]技能的剩余冷却减少 {value} 秒。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent11.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 380.6
+        },
+        {
+          "id": "WarriorTalent44",
+          "name": "怒火回流",
+          "description": "每次承受敌人的直接命中时，恢复 {mana} 最大法力。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent44.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 380.6
+        },
+        {
+          "id": "WarriorTalent24",
+          "name": "乘胜追击",
+          "description": "+{value} 对眩晕目标的伤害",
+          "max_points": 8,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent24.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 503.52
+        },
+        {
+          "id": "WarriorTalent30",
+          "name": "溢血",
+          "description": "你击杀流血敌人时，将其剩余流血伤害的 {value} 作为物理血爆，伤害 {radius} 米内的其他敌人。",
+          "max_points": 10,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent30.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 503.52
+        },
+        {
+          "id": "WarriorTalent39",
+          "name": "巅峰状态",
+          "description": "生命值高于80%时，全部伤害 +{value}。",
+          "max_points": 5,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent39.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 503.52
+        },
+        {
+          "id": "WarriorTalent8",
+          "name": "挫志怒吼",
+          "description": "施放[战吼]时，使附近敌人造成的伤害降低 {value}，持续 {duration}。",
+          "max_points": 6,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent8.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 503.52
+        },
+        {
+          "id": "WarriorTalent61",
+          "name": "死神之刃",
+          "description": "旋风斩的攻击与旋转速度提升 {value}。引导旋风斩期间，移动速度提高 {movement}。",
+          "max_points": 10,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent61.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 503.52
+        },
+        {
+          "id": "WarriorTalent40",
+          "name": "WarriorTalent40",
+          "description": "WarriorTalent40.Desc",
+          "max_points": 1,
+          "point_requirement": 100,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent40.png",
+          "selectable": false,
+          "x": 356.0,
+          "y": 505.0
+        },
+        {
+          "id": "WarriorTalent41",
+          "name": "WarriorTalent41",
+          "description": "WarriorTalent41.Desc",
+          "max_points": 1,
+          "point_requirement": 100,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent41.png",
+          "selectable": false,
+          "x": 272.0,
+          "y": 626.0
+        },
+        {
+          "id": "WarriorTalent15",
+          "name": "怒火注入",
+          "description": "+{strongAttackDamage} [强力攻击] 伤害，但也 +{strongAttackManaCost} 法力消耗。",
+          "max_points": 10,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent15.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 626.44
+        },
+        {
+          "id": "WarriorTalent42",
+          "name": "深化创伤",
+          "description": "[流血]技能命中生命值低于 {threshold} 的非首领敌人时，有 {value} 几率将其斩杀。",
+          "max_points": 6,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent42.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 626.44
+        },
+        {
+          "id": "WarriorTalent45",
+          "name": "屠夫韵律",
+          "description": "裂血连击额外劈砍 {value} 次。",
+          "max_points": 3,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent45.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 626.44
+        },
+        {
+          "id": "WarriorTalent22",
+          "name": "重整旗鼓",
+          "description": "当生命值低于最大生命值的50%时回复 {value}。（冷却6秒）",
+          "max_points": 5,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent22.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 626.44
+        },
+        {
+          "id": "WarriorTalent60",
+          "name": "铁血",
+          "description": "你的最大生命值的 {value} 会加成到荆棘。",
+          "max_points": 10,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent60.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 626.44
+        },
+        {
+          "id": "WarriorTalent47",
+          "name": "内焰熔炉",
+          "description": "每秒消耗 {mana} 最大法力，获得[强力攻击]伤害 +{damage}，技能法力消耗降低 {costReduction}。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent47.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 749.36
+        },
+        {
+          "id": "WarriorTalent48",
+          "name": "嗜血",
+          "description": "当敌人在流血状态下死亡，或被 [流血] 技能击杀时，获得一层 [嗜血]，持续 {duration}，每层提升 {value} 伤害，最多叠加10层。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent48.png",
+          "selectable": true,
+          "x": -154.33,
+          "y": 749.36
+        },
+        {
+          "id": "WarriorTalent38",
+          "name": "铁壁护盾",
+          "description": "每次普攻击中获得 {shield} 最大生命的护盾，持续 {duration}。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent38.png",
+          "selectable": true,
+          "x": 72.33,
+          "y": 749.36
+        },
+        {
+          "id": "WarriorTalent49",
+          "name": "反攻风暴",
+          "description": "每承受 {hits} 次敌人直接命中，向附近敌人释放反击，造成 {damage} 武器伤害的物理伤害。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/WarriorTalent49.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 749.36
+        }
+      ],
+      "abilities": [
+        {
+          "id": "WarriorBasicAttack",
+          "name": "英勇打击",
+          "description": "对单个敌人发动迅捷近战攻击。造成{weaponDamage}武器伤害，有{chance}概率对目标施加[易伤]。",
+          "tags": [
+            0,
+            7
+          ],
+          "level_requirement": 1,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorBasicAttack.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "WarriorBasicAttack2",
+          "name": "横扫",
+          "description": "以宽阔的弧度挥动武器，打击前方所有敌人，造成{weaponDamage}武器伤害。",
+          "tags": [
+            0,
+            3,
+            7
+          ],
+          "level_requirement": 15,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorBasicAttack2.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "WarriorBasicAttack3",
+          "name": "血刃",
+          "description": "刺穿一个敌人，造成{weaponDamage}武器伤害并施加流血，在{duration}内造成250%武器伤害。",
+          "tags": [
+            0,
+            5,
+            7
+          ],
+          "level_requirement": 30,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorBasicAttack3.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "WarriorBasicAttack4",
+          "name": "稳固打击",
+          "description": "对单个敌人造成{weaponDamage}武器伤害，并为自身叠加一层[堡垒]。",
+          "tags": [
+            0,
+            7
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/WarriorBasicAttack4.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "WarriorHeavyAttack1",
+          "name": "烈焰斩",
+          "description": "将火焰灌注成毁灭性的单体打击，造成相当于{weaponDamage}武器伤害的火焰伤害。",
+          "tags": [
+            1,
+            8
+          ],
+          "level_requirement": 5,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorHeavyAttack1.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "WarriorHeavyAttack2",
+          "name": "半月斩",
+          "description": "投掷一把新月形刀刃，穿透路径上的所有敌人，对每个敌人造成{weaponDamage}武器伤害。",
+          "tags": [
+            1,
+            3,
+            7
+          ],
+          "level_requirement": 20,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorHeavyAttack2.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "WarriorHeavyAttack3",
+          "name": "旋风斩",
+          "description": "向敌人旋转突进，快速攻击周围的敌人，每次造成{weaponDamage}武器伤害。",
+          "tags": [
+            1,
+            3,
+            7
+          ],
+          "level_requirement": 35,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorHeavyAttack3.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "WarriorHeavyAttack4",
+          "name": "裂血连击",
+          "description": "向附近敌人挥出 3 道凶狠的切割，每次造成{weaponDamage}武器伤害并施加流血，在{duration}内造成250%武器伤害。",
+          "tags": [
+            1,
+            5
+          ],
+          "level_requirement": 50,
+          "demo_locked": true,
+          "icon": "/progression-icons/WarriorHeavyAttack4.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "WarriorRageShout",
+          "name": "怒吼",
+          "description": "4秒内提升{attackSpeed}攻击速度。",
+          "tags": [
+            2,
+            4
+          ],
+          "level_requirement": 10,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorRageShout.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "WarriorRageShield",
+          "name": "狂怒护盾",
+          "description": "以怒火屏障环绕自身，吸收最多相当于{shield}最大生命值的伤害，持续{duration}。",
+          "tags": [
+            2,
+            4
+          ],
+          "level_requirement": 15,
+          "demo_locked": false,
+          "icon": "/progression-icons/WarriorRageShield.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "WarriorSpecial3",
+          "name": "夺命钩爪",
+          "description": "投掷锁链钩爪，穿透路径上的所有敌人，造成{weaponDamage}武器伤害，并将其拉回身前，使其陷入易伤。",
+          "tags": [
+            2,
+            7
+          ],
+          "level_requirement": 25,
+          "demo_locked": true,
+          "icon": "/progression-icons/WarriorSpecial3.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "WarriorSpecial4",
+          "name": "裂地击",
+          "description": "以震耳欲聋的巨响砸击地面，冲击波沿地面向前撕裂，对路径上的所有敌人造成{weaponDamage}武器伤害并使其昏迷。",
+          "tags": [
+            2,
+            3,
+            7
+          ],
+          "level_requirement": 30,
+          "demo_locked": true,
+          "icon": "/progression-icons/WarriorSpecial4.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "WarriorSpecial5",
+          "name": "铁棘",
+          "description": "以铁棘护体{duration}。荆棘提升{thorns}，并每秒向周围的敌人造成相当于荆棘值{pulse}的物理伤害。",
+          "tags": [
+            2,
+            7,
+            3
+          ],
+          "level_requirement": 40,
+          "demo_locked": true,
+          "icon": "/progression-icons/WarriorSpecial5.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "WarriorSpecial6",
+          "name": "熔铸之力",
+          "description": "点燃体内熔炉：立即恢复{rage}最大法力值，并在{duration}内使[强力攻击]伤害提高{damage}，技能法力消耗降低{costReduction}。",
+          "tags": [
+            2,
+            8,
+            4
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/WarriorSpecial6.png",
+          "slots": [
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    "4": {
+      "id": "HunterHero",
+      "class_mask": 4,
+      "name": "猎人",
+      "talents": [
+        {
+          "id": "HunterTalent0",
+          "name": "敏捷",
+          "description": "+{value} 敏捷",
+          "max_points": 10,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 5.0,
+              "per_rank": 5.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent0.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": -239.0
+        },
+        {
+          "id": "HunterTalent2",
+          "name": "攻击速度",
+          "description": "+{value1} 攻击速度，+{value2} 伤害。",
+          "max_points": 10,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value1": {
+              "base": 0.02500000037252903,
+              "per_rank": 0.02500000037252903,
+              "name": "value1",
+              "format": "0%",
+              "suffix": ""
+            },
+            "value2": {
+              "base": 0.5,
+              "per_rank": 0.5,
+              "name": "value2",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent2.png",
+          "selectable": true,
+          "x": -180.0,
+          "y": -239.0
+        },
+        {
+          "id": "HunterTalent3",
+          "name": "远射",
+          "description": "+{value} 对远处敌人的伤害。",
+          "max_points": 8,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.15000000596046448,
+              "per_rank": 0.15000000596046448,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent3.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": -239.0
+        },
+        {
+          "id": "HunterTalent1",
+          "name": "闪避几率",
+          "description": "+{value} 闪避几率",
+          "max_points": 8,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.014999999664723873,
+              "per_rank": 0.014999999664723873,
+              "name": "value",
+              "format": "0.#%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent1.png",
+          "selectable": true,
+          "x": 180.0,
+          "y": -239.0
+        },
+        {
+          "id": "HunterTalent4",
+          "name": "疾行",
+          "description": "移动速度 +{value}。",
+          "max_points": 6,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.03999999910593033,
+              "per_rank": 0.03999999910593033,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent4.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": -239.0
+        },
+        {
+          "id": "HunterTalent5",
+          "name": "稳固瞄准",
+          "description": "+{value} [普通攻击]和[强力攻击] 射程。",
+          "max_points": 6,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent5.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": -116.08
+        },
+        {
+          "id": "HunterTalent6",
+          "name": "神射手",
+          "description": "+{value} 对远处敌人的暴击几率。",
+          "max_points": 6,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent6.png",
+          "selectable": true,
+          "x": -180.0,
+          "y": -116.08
+        },
+        {
+          "id": "HunterTalent13",
+          "name": "奥术知识",
+          "description": "+{value1} 奥术伤害，+{value2} 魔法抗性。",
+          "max_points": 10,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value1": {
+              "base": 0.05000000074505806,
+              "per_rank": 0.05000000074505806,
+              "name": "value1",
+              "format": "0%",
+              "suffix": ""
+            },
+            "value2": {
+              "base": 0.019999999552965164,
+              "per_rank": 0.019999999552965164,
+              "name": "value2",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent13.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": -116.08
+        },
+        {
+          "id": "HunterTalent7",
+          "name": "毒物学识",
+          "description": "+{value1} 对中毒敌人的伤害，+{value2} 毒素伤害减免。",
+          "max_points": 8,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value1": {
+              "base": 0.07999999821186066,
+              "per_rank": 0.07999999821186066,
+              "name": "value1",
+              "format": "0%",
+              "suffix": ""
+            },
+            "value2": {
+              "base": 0.019999999552965164,
+              "per_rank": 0.019999999552965164,
+              "name": "value2",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent7.png",
+          "selectable": true,
+          "x": 180.0,
+          "y": -116.08
+        },
+        {
+          "id": "HunterTalent11",
+          "name": "致命毒素",
+          "description": "+{potency} [中毒] 伤害，+{duration} 持续时间。",
+          "max_points": 8,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent11.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": -116.08
+        },
+        {
+          "id": "HunterTalent22",
+          "name": "高效强攻",
+          "description": "+{value} [强力攻击] 法力消耗减少。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent22.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": 6.84
+        },
+        {
+          "id": "HunterTalent21",
+          "name": "迅速重置",
+          "description": "施放一次 [强力攻击] 会使所有 [陷阱] 技能的冷却时间缩短 {value}。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent21.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": 6.84
+        },
+        {
+          "id": "HunterTalent40",
+          "name": "困兽反击",
+          "description": "生命值低于 {threshold} 时受到伤害会使 {radius} 内的敌人陷入[眩晕]，持续 {duration}。该效果每 {cooldown} 最多触发一次。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent40.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": 6.84
+        },
+        {
+          "id": "HunterTalent35",
+          "name": "物理残暴",
+          "description": "对[物理]技能 +{value} 暴击伤害",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent35.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": 129.76
+        },
+        {
+          "id": "HunterTalent27",
+          "name": "强化奥术炸弹",
+          "description": "奥术炸弹的爆炸半径扩大 {value}。",
+          "max_points": 6,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent27.png",
+          "selectable": true,
+          "x": -180.0,
+          "y": 129.76
+        },
+        {
+          "id": "HunterTalent16",
+          "name": "震荡冲击",
+          "description": "[冲击波] 将敌人额外击退 {distance}。",
+          "max_points": 5,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent16.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": 129.76
+        },
+        {
+          "id": "HunterTalent24",
+          "name": "致命陷阱",
+          "description": "[陷阱] 伤害提高 {value}。",
+          "max_points": 6,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent24.png",
+          "selectable": true,
+          "x": 180.0,
+          "y": 129.76
+        },
+        {
+          "id": "HunterTalent23",
+          "name": "喘息之机",
+          "description": "脱离战斗时，获得 +{value} 法力恢复。",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent23.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": 129.76
+        },
+        {
+          "id": "HunterTalent33",
+          "name": "强化稳固射击",
+          "description": "[稳固射击]的投射物每穿透一名敌人，后续伤害提高 {value}。",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent33.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": 252.68
+        },
+        {
+          "id": "HunterTalent10",
+          "name": "强力齐射",
+          "description": "[多重射击] 命中有 {chance} 几率将敌人击退 {distance}。",
+          "max_points": 6,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent10.png",
+          "selectable": true,
+          "x": -180.0,
+          "y": 252.68
+        },
+        {
+          "id": "HunterTalent26",
+          "name": "强化毒箭",
+          "description": "毒箭施加[中毒]的几率提高 {chance}。",
+          "max_points": 6,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent26.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": 252.68
+        },
+        {
+          "id": "HunterTalent12",
+          "name": "快速陷阱",
+          "description": "+{value} [陷阱] 技能冷却缩减。",
+          "max_points": 6,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent12.png",
+          "selectable": true,
+          "x": 180.0,
+          "y": 252.68
+        },
+        {
+          "id": "HunterTalent9",
+          "name": "求生本能",
+          "description": "被至少3名敌人包围时，+{value} 闪避几率。",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent9.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": 252.68
+        },
+        {
+          "id": "HunterTalent18",
+          "name": "双重射击",
+          "description": "[普通攻击] 有 {chance} 几率攻击两次。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent18.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": 375.6
+        },
+        {
+          "id": "HunterTalent43",
+          "name": "奥术充能",
+          "description": "施放[奥术]技能获得[奥术充能]，持续 {duration}，每层提高 {value} 奥术伤害（最多 50 层）。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent43.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": 375.6
+        },
+        {
+          "id": "HunterTalent36",
+          "name": "毒液汲取",
+          "description": "[中毒]每次生效有 {chance} 几率触发命中恢复生命。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent36.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": 375.6
+        },
+        {
+          "id": "HunterTalent37",
+          "name": "持续火力",
+          "description": "[急速射击]的引导持续时间延长 {value}。",
+          "max_points": 8,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent37.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": 498.52
+        },
+        {
+          "id": "HunterTalent30",
+          "name": "致命飞刀连击",
+          "description": "[飞刀连击]获得 +{value} 暴击几率。",
+          "max_points": 6,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent30.png",
+          "selectable": true,
+          "x": -180.0,
+          "y": 498.52
+        },
+        {
+          "id": "HunterTalent8",
+          "name": "硬化兽皮",
+          "description": "+{value} 暴击伤害减免。",
+          "max_points": 8,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.05999999865889549,
+              "per_rank": 0.05999999865889549,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/HunterTalent8.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": 498.52
+        },
+        {
+          "id": "HunterTalent42",
+          "name": "急速照明弹",
+          "description": "+{value} [照明弹]冷却时间缩减。",
+          "max_points": 5,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent42.png",
+          "selectable": true,
+          "x": 180.0,
+          "y": 498.52
+        },
+        {
+          "id": "HunterTalent28",
+          "name": "死亡标记",
+          "description": "你施加的[易伤]持续时间延长 {duration}。",
+          "max_points": 6,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent28.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": 498.52
+        },
+        {
+          "id": "HunterTalent31",
+          "name": "飞刀风暴",
+          "description": "[飞刀连击]额外攻击 {value} 个敌人。",
+          "max_points": 3,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent31.png",
+          "selectable": true,
+          "x": -360.0,
+          "y": 621.44
+        },
+        {
+          "id": "HunterTalent32",
+          "name": "强化二连矢",
+          "description": "命中敌人后每支[二连矢]投射物会随机弹射至另一名敌人。[二连矢]伤害提高 {damage}。",
+          "max_points": 6,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent32.png",
+          "selectable": true,
+          "x": -180.0,
+          "y": 621.44
+        },
+        {
+          "id": "HunterTalent29",
+          "name": "致命陷阱",
+          "description": "对[陷阱]技能 +{value} 暴击几率",
+          "max_points": 8,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent29.png",
+          "selectable": true,
+          "x": 0.0,
+          "y": 621.44
+        },
+        {
+          "id": "HunterTalent41",
+          "name": "炫光回能",
+          "description": "施放[致盲射击]技能时恢复 {mana} 法力。",
+          "max_points": 8,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent41.png",
+          "selectable": true,
+          "x": 180.0,
+          "y": 621.44
+        },
+        {
+          "id": "HunterTalent34",
+          "name": "强化幻影形态",
+          "description": "[幻影形态]的闪避几率和攻击速度加成提高 {value}。",
+          "max_points": 8,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent34.png",
+          "selectable": true,
+          "x": 360.0,
+          "y": 621.44
+        },
+        {
+          "id": "HunterTalent20",
+          "name": "独行猎手",
+          "description": "周围没有敌人时，获得 {attackSpeed} 攻击速度、{damage} 全伤害加成，以及 {strongAttack} [强力攻击]伤害。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent20.png",
+          "selectable": true,
+          "x": -270.0,
+          "y": 744.36
+        },
+        {
+          "id": "HunterTalent39",
+          "name": "奥术侵蚀",
+          "description": "[奥术箭雨]命中时有 {chance} 几率施加[奥术侵蚀]。[奥术炸弹]或[多重射击]命中时会消耗所有层数，并在 1 层时造成相当于 {damage1} 武器伤害的奥术伤害，2 层时造成 {damage2}。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent39.png",
+          "selectable": true,
+          "x": -90.0,
+          "y": 744.36
+        },
+        {
+          "id": "HunterTalent38",
+          "name": "暴击注毒",
+          "description": "[毒素]技能暴击时有 {chance} 几率额外施加 3 层[中毒]。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent38.png",
+          "selectable": true,
+          "x": 90.0,
+          "y": 744.36
+        },
+        {
+          "id": "HunterTalent17",
+          "name": "破绽陷阱",
+          "description": "[陷阱] 命中有 {chance} 几率使目标陷入 [易伤] {duration}。[陷阱]技能 +{critdmg} 暴击伤害。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/HunterTalent17.png",
+          "selectable": true,
+          "x": 270.0,
+          "y": 744.36
+        }
+      ],
+      "abilities": [
+        {
+          "id": "HunterBasicAttack1",
+          "name": "毒箭",
+          "description": "射出一支毒箭，造成相当于{weaponDamage}武器伤害的毒素伤害，并有{chance}概率使目标陷入[中毒]。",
+          "tags": [
+            0,
+            11
+          ],
+          "level_requirement": 1,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterBasicAttack1.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "HunterBasicAttack2",
+          "name": "奥术炸弹",
+          "description": "发射一枚追踪的奥术弹，命中时引爆，对爆炸范围内的所有敌人造成相当于{weaponDamage}武器伤害的奥术伤害。",
+          "tags": [
+            0,
+            13
+          ],
+          "level_requirement": 15,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterBasicAttack2.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "HunterBasicAttack3",
+          "name": "飞刀连击",
+          "description": "快速掷出一连串飞刀，至多攻击附近三名敌人，每把飞刀造成相当于{weaponDamage}武器伤害的物理伤害。",
+          "tags": [
+            0,
+            7
+          ],
+          "level_requirement": 30,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterBasicAttack3.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "HunterBasicAttack4",
+          "name": "二连矢",
+          "description": "快速射出两支箭矢，至多攻击附近两名敌人，每支箭矢造成相当于{weaponDamage}武器伤害的物理伤害。若只有一名敌人，两支箭矢都会命中该敌人。",
+          "tags": [
+            0,
+            7
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/HunterBasicAttack4.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "HunterHeavyAttack1",
+          "name": "稳固射击",
+          "description": "射出一支强力的箭矢，穿透路径上的所有敌人，造成相当于{value}武器伤害的物理伤害。",
+          "tags": [
+            1,
+            7
+          ],
+          "level_requirement": 5,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterHeavyAttack1.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "HunterHeavyAttack2",
+          "name": "多重射击",
+          "description": "在扇形范围内射出漫天箭雨，对范围内的所有敌人造成相当于{weaponDamage}武器伤害的奥术伤害。",
+          "tags": [
+            1,
+            13
+          ],
+          "level_requirement": 20,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterHeavyAttack2.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "HunterHeavyAttack3",
+          "name": "急速射击",
+          "description": "驻足原地，持续2秒向目标倾泻箭雨，每支箭造成相当于{weaponDamage}武器伤害的物理伤害。",
+          "tags": [
+            1,
+            7
+          ],
+          "level_requirement": 35,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterHeavyAttack3.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "HunterHeavyAttack4",
+          "name": "剧毒弹",
+          "description": "射出一枚强力毒素弹，命中时爆裂，对附近所有敌人造成相当于{weaponDamage}武器伤害的毒素伤害，并有{chance}概率施加2层[中毒]。",
+          "tags": [
+            1,
+            11
+          ],
+          "level_requirement": 50,
+          "demo_locked": true,
+          "icon": "/progression-icons/HunterHeavyAttack4.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "HunterSpecial1",
+          "name": "毒陷阱",
+          "description": "布置一个陷阱，当敌人踏上时引爆，对周围所有敌人造成相当于{damage}武器伤害的毒素伤害，并有{chance}概率施加3层[中毒]。",
+          "tags": [
+            2,
+            14,
+            11
+          ],
+          "level_requirement": 10,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterSpecial1.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "HunterSpecial2",
+          "name": "冲击波",
+          "description": "射出一发震荡箭矢，爆发出冲击波，对身前所有敌人造成相当于{weaponDamage}武器伤害的物理伤害，将其击退，并有{chance}概率使其陷入[短暂眩晕]。",
+          "tags": [
+            2,
+            16
+          ],
+          "level_requirement": 15,
+          "demo_locked": true,
+          "icon": "/progression-icons/HunterSpecial2.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "HunterSpecial6",
+          "name": "照明弹",
+          "description": "发射一枚命中时爆裂的照明弹，使附近所有敌人陷入[易伤]和[头晕]，持续{duration}。",
+          "tags": [
+            2,
+            16
+          ],
+          "level_requirement": 25,
+          "demo_locked": false,
+          "icon": "/progression-icons/HunterSpecial6.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "HunterSpecial4",
+          "name": "奥术箭雨",
+          "description": "召唤一阵奥术箭雨，对笼罩其中的敌人反复造成相当于{weaponDamage}武器伤害的奥术伤害。",
+          "tags": [
+            2,
+            13
+          ],
+          "level_requirement": 30,
+          "demo_locked": true,
+          "icon": "/progression-icons/HunterSpecial4.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "HunterSpecial5",
+          "name": "幻影形态",
+          "description": "进入幻影形态，持续{duration}，获得{dodge}闪避几率和{attackSpeed}攻击速度。",
+          "tags": [
+            2
+          ],
+          "level_requirement": 40,
+          "demo_locked": true,
+          "icon": "/progression-icons/HunterSpecial5.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "HunterSpecial3",
+          "name": "奥术陷阱",
+          "description": "布置一个陷阱，当敌人踏上时引爆，对周围所有敌人造成相当于{weaponDamage}武器伤害的奥术伤害，并有{chance}概率使其陷入[奥术禁锢]。同时使所有命中的敌人陷入[头晕]。",
+          "tags": [
+            2,
+            14,
+            13
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/HunterSpecial3.png",
+          "slots": [
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    "2": {
+      "id": "MageHero",
+      "class_mask": 2,
+      "name": "法师",
+      "talents": [
+        {
+          "id": "SorcererTalent0",
+          "name": "奥术洞察",
+          "description": "+{value} 智力",
+          "max_points": 10,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 5.0,
+              "per_rank": 5.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent0.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": -239.0
+        },
+        {
+          "id": "SorcererTalent4",
+          "name": "灼热之刃",
+          "description": "+{value} [普通攻击] 暴击几率。",
+          "max_points": 6,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent4.png",
+          "selectable": true,
+          "x": -238.0,
+          "y": -239.0
+        },
+        {
+          "id": "SorcererTalent2",
+          "name": "冰霜护甲",
+          "description": "获得 {value} 点护甲，并使总护甲提高 {armor}。",
+          "max_points": 8,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 35.0,
+              "per_rank": 35.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            },
+            "armor": {
+              "base": 0.029999999329447746,
+              "per_rank": 0.029999999329447746,
+              "name": "armor",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent2.png",
+          "selectable": true,
+          "x": -31.0,
+          "y": -239.0
+        },
+        {
+          "id": "SorcererTalent3",
+          "name": "奥术延伸",
+          "description": "+{value} [普通攻击] 射程。",
+          "max_points": 6,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent3.png",
+          "selectable": true,
+          "x": 176.0,
+          "y": -239.0
+        },
+        {
+          "id": "SorcererTalent1",
+          "name": "法力涌流",
+          "description": "+{value} 最大法力值",
+          "max_points": 8,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 4.0,
+              "per_rank": 4.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent1.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": -239.0
+        },
+        {
+          "id": "SorcererTalent21",
+          "name": "烈焰守护",
+          "description": "+{fire} 火焰伤害。+{magicResist} 魔法抗性。",
+          "max_points": 8,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "magicResist": {
+              "base": 0.03999999910593033,
+              "per_rank": 0.03999999910593033,
+              "name": "magicResist",
+              "format": "0%",
+              "suffix": ""
+            },
+            "fire": {
+              "base": 0.05000000074505806,
+              "per_rank": 0.05000000074505806,
+              "name": "fire",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent21.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": -116.08
+        },
+        {
+          "id": "SorcererTalent18",
+          "name": "法力导流",
+          "description": "[普通攻击] 额外生成 +{value} 法力。",
+          "max_points": 6,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent18.png",
+          "selectable": true,
+          "x": -238.0,
+          "y": -116.08
+        },
+        {
+          "id": "SorcererTalent9",
+          "name": "寒霜精通",
+          "description": "+{value} 冰霜伤害",
+          "max_points": 10,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.07000000029802322,
+              "per_rank": 0.07000000029802322,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent9.png",
+          "selectable": true,
+          "x": -31.0,
+          "y": -116.08
+        },
+        {
+          "id": "SorcererTalent20",
+          "name": "风暴处决者",
+          "description": "+{lightning} 闪电伤害。+{elite} 对精英敌人的伤害。",
+          "max_points": 10,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "elite": {
+              "base": 0.029999999329447746,
+              "per_rank": 0.029999999329447746,
+              "name": "elite",
+              "format": "0%",
+              "suffix": ""
+            },
+            "lightning": {
+              "base": 0.03999999910593033,
+              "per_rank": 0.03999999910593033,
+              "name": "lightning",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent20.png",
+          "selectable": true,
+          "x": 176.0,
+          "y": -116.08
+        },
+        {
+          "id": "SorcererTalent11",
+          "name": "法力恢复",
+          "description": "+{value} 法力恢复",
+          "max_points": 6,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 1.0,
+              "per_rank": 1.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent11.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": -116.08
+        },
+        {
+          "id": "SorcererTalent40",
+          "name": "奥术动能",
+          "description": "施放[特殊]技能会使[普通攻击]伤害提高 {value}，持续 {duration}。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent40.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": 6.84
+        },
+        {
+          "id": "SorcererTalent8",
+          "name": "焚烧",
+          "description": "火球有 {chance} 几率使目标陷入 [灼烧]。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent8.png",
+          "selectable": true,
+          "x": -169.0,
+          "y": 6.84
+        },
+        {
+          "id": "SorcererTalent6",
+          "name": "冰寒惩戒",
+          "description": "获得 {armor} 护甲加成。近战攻击者有 {value} 几率陷入 [冰寒]，持续 {duration}。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {
+            "armor": {
+              "base": 0.10000000149011612,
+              "per_rank": 0.0,
+              "name": "armor",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent6.png",
+          "selectable": true,
+          "x": 107.0,
+          "y": 6.84
+        },
+        {
+          "id": "SorcererTalent17",
+          "name": "雷霆震慑",
+          "description": "闪电风暴击中的敌人有 {stunChance} 几率陷入 [短暂眩晕]，持续 {duration}。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent17.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": 6.84
+        },
+        {
+          "id": "SorcererTalent25",
+          "name": "强化烈焰吐息：暴击伤害",
+          "description": "+{value} [烈焰吐息] 暴击伤害。",
+          "max_points": 6,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent25.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": 129.76
+        },
+        {
+          "id": "SorcererTalent32",
+          "name": "元素狂怒",
+          "description": "[火元素]的攻击速度提高 {value}。",
+          "max_points": 6,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent32.png",
+          "selectable": true,
+          "x": -238.0,
+          "y": 129.76
+        },
+        {
+          "id": "SorcererTalent28",
+          "name": "寒霜迅捷",
+          "description": "冰霜技能的冷却时间减少 {value}。",
+          "max_points": 6,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent28.png",
+          "selectable": true,
+          "x": -31.0,
+          "y": 129.76
+        },
+        {
+          "id": "SorcererTalent16",
+          "name": "严寒",
+          "description": "你的 [冰寒] 强度提升 {potency}，减速更强且持续更久。",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent16.png",
+          "selectable": true,
+          "x": 176.0,
+          "y": 129.76
+        },
+        {
+          "id": "SorcererTalent19",
+          "name": "电能护盾",
+          "description": "+{armor} 护甲。近战攻击者有 {chance} 几率使你获得 {mana} 法力。",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "armor": {
+              "base": 0.019999999552965164,
+              "per_rank": 0.019999999552965164,
+              "name": "armor",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent19.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": 129.76
+        },
+        {
+          "id": "SorcererTalent39",
+          "name": "奥术储能",
+          "description": "你的最大法力值的 {value} 会加成到智力。",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent39.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": 252.68
+        },
+        {
+          "id": "SorcererTalent10",
+          "name": "燎原之火",
+          "description": "+{value} 对灼烧目标的伤害",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent10.png",
+          "selectable": true,
+          "x": -238.0,
+          "y": 252.68
+        },
+        {
+          "id": "SorcererTalent24",
+          "name": "强化冰陨石：法力消耗",
+          "description": "+{value} [冰陨石] 法力消耗减少。",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent24.png",
+          "selectable": true,
+          "x": -31.0,
+          "y": 252.68
+        },
+        {
+          "id": "SorcererTalent22",
+          "name": "强化冰碎片：伤害",
+          "description": "+{value} [冰碎片] 伤害。",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent22.png",
+          "selectable": true,
+          "x": 176.0,
+          "y": 252.68
+        },
+        {
+          "id": "SorcererTalent42",
+          "name": "风暴精通",
+          "description": "[闪电]技能获得 +{critDamage} 暴击伤害，并获得 +{resistance} 闪电伤害减免。",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {
+            "resistance": {
+              "base": 0.029999999329447746,
+              "per_rank": 0.029999999329447746,
+              "name": "resistance",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent42.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": 252.68
+        },
+        {
+          "id": "SorcererTalent5",
+          "name": "点燃",
+          "description": "暴击有 {value} 几率使受害者陷入 [灼烧]。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent5.png",
+          "selectable": true,
+          "x": -169.0,
+          "y": 375.6
+        },
+        {
+          "id": "SorcererTalent12",
+          "name": "速冻",
+          "description": "使敌人陷入 [冰寒] 时有 {value} 几率同时施加 [冰冻]。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent12.png",
+          "selectable": true,
+          "x": 107.0,
+          "y": 375.6
+        },
+        {
+          "id": "SorcererTalent27",
+          "name": "静电充能",
+          "description": "闪电技能击中敌人时有 {stunChance} 几率施加 [静电]。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent27.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": 375.6
+        },
+        {
+          "id": "SorcererTalent34",
+          "name": "天灾",
+          "description": "[火陨石]造成 +{damage} 伤害，但冷却时间延长 {cooldown}。",
+          "max_points": 8,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent34.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": 498.52
+        },
+        {
+          "id": "SorcererTalent31",
+          "name": "冰霜蓄能",
+          "description": "施放[冰霜新星]时有 {chance} 几率恢复 {value} 点法力值。",
+          "max_points": 8,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent31.png",
+          "selectable": true,
+          "x": -238.0,
+          "y": 498.52
+        },
+        {
+          "id": "SorcererTalent37",
+          "name": "永冻",
+          "description": "你施加的[冰冻]持续时间延长 {duration}。",
+          "max_points": 6,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent37.png",
+          "selectable": true,
+          "x": -31.0,
+          "y": 498.52
+        },
+        {
+          "id": "SorcererTalent33",
+          "name": "寒冰复苏",
+          "description": "[寒冰屏障]期间，每秒恢复最大生命值的 {value}。",
+          "max_points": 5,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent33.png",
+          "selectable": true,
+          "x": 176.0,
+          "y": 498.52
+        },
+        {
+          "id": "SorcererTalent23",
+          "name": "强化电击：法力获取",
+          "description": "[电击] +{value} 法力获取。",
+          "max_points": 6,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent23.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": 498.52
+        },
+        {
+          "id": "SorcererTalent29",
+          "name": "等离子传导",
+          "description": "[烈焰雷电]对受[灼烧]影响的敌人造成的伤害提高 +{burningDamage}，敌人身上每层[静电]使造成的伤害提高 +{electrostaticDamage}。敌人同时拥有两种效果时两个加成均生效。",
+          "max_points": 8,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent29.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": 621.44
+        },
+        {
+          "id": "SorcererTalent35",
+          "name": "烈焰守护",
+          "description": "[烈焰光环]激活期间，护甲和魔法抗性提高 {value}。",
+          "max_points": 8,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent35.png",
+          "selectable": true,
+          "x": -238.0,
+          "y": 621.44
+        },
+        {
+          "id": "SorcererTalent30",
+          "name": "冰霜光束扩展",
+          "description": "[冰霜光束]的长度和宽度提高 {value}。",
+          "max_points": 5,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent30.png",
+          "selectable": true,
+          "x": -31.0,
+          "y": 621.44
+        },
+        {
+          "id": "SorcererTalent41",
+          "name": "电流传导",
+          "description": "受[静电]影响的敌人死亡时，有 {chance} 几率对 {radius} 范围内的敌人施加[静电]。",
+          "max_points": 5,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent41.png",
+          "selectable": true,
+          "x": 176.0,
+          "y": 621.44
+        },
+        {
+          "id": "SorcererTalent36",
+          "name": "持久雷云",
+          "description": "[雷云]的地面效果持续时间延长 {value}。",
+          "max_points": 8,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent36.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": 621.44
+        },
+        {
+          "id": "SorcererTalent38",
+          "name": "奥术暴露",
+          "description": "每施放 {casts} 次[强力攻击]，就会对命中的目标施加[易伤]。 对[易伤]敌人的伤害 +{damage}。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {
+            "damage": {
+              "base": 1.5,
+              "per_rank": 0.0,
+              "name": "damage",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/SorcererTalent38.png",
+          "selectable": true,
+          "x": -445.0,
+          "y": 744.36
+        },
+        {
+          "id": "SorcererTalent15",
+          "name": "爆燃",
+          "description": "击杀处于[灼烧]状态的敌人时，有 {chance} 几率引发烈焰爆炸，对附近敌人造成 {damage} 武器伤害。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent15.png",
+          "selectable": true,
+          "x": -169.0,
+          "y": 744.36
+        },
+        {
+          "id": "SorcererTalent7",
+          "name": "碎冰",
+          "description": "对 [冰冻] 敌人 +{value} 暴击几率和 +{critDamage} 暴击伤害。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent7.png",
+          "selectable": true,
+          "x": 107.0,
+          "y": 744.36
+        },
+        {
+          "id": "SorcererTalent26",
+          "name": "风暴导体",
+          "description": "[电击] 有 {chance} 几率同时施放 [闪电风暴]。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/SorcererTalent26.png",
+          "selectable": true,
+          "x": 383.0,
+          "y": 744.36
+        }
+      ],
+      "abilities": [
+        {
+          "id": "SorcererBasicAttack1",
+          "name": "火球",
+          "description": "召唤一枚追踪火球，命中后爆炸，对小范围内所有敌人造成{weaponDamage}武器伤害。",
+          "tags": [
+            0,
+            8
+          ],
+          "level_requirement": 1,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererBasicAttack1.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "SorcererBasicAttack2",
+          "name": "冰碎片",
+          "description": "投掷一枚冰霜碎片，击中单个敌人，造成{weaponDamage}武器伤害。",
+          "tags": [
+            0,
+            9
+          ],
+          "level_requirement": 15,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererBasicAttack2.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "SorcererBasicAttack3",
+          "name": "电击",
+          "description": "释放一道噼啪作响的扇形闪电，击中前方所有敌人，造成{weaponDamage}武器伤害。",
+          "tags": [
+            0,
+            10
+          ],
+          "level_requirement": 30,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererBasicAttack3.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "SorcererBasicAttack4",
+          "name": "烈焰雷电",
+          "description": "向随机一名敌人降下烈焰雷电，造成相当于{fireDamage}武器伤害的火焰伤害与{lightningDamage}武器伤害的闪电伤害。",
+          "tags": [
+            0,
+            8,
+            10
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/SorcererBasicAttack4.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "SorcererStrongAttack1",
+          "name": "烈焰吐息",
+          "description": "喷吐一道直线烈焰，对路径上的敌人造成{weaponDamage}武器伤害并使其灼烧。",
+          "tags": [
+            1,
+            8
+          ],
+          "level_requirement": 5,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererStrongAttack1.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "SorcererStrongAttack2",
+          "name": "冰陨石",
+          "description": "召唤一颗冰冻陨石，留下持续3秒的冰寒领域，每次跳动造成{weaponDamage}武器伤害并使范围内的敌人陷入冰寒。",
+          "tags": [
+            1,
+            9
+          ],
+          "level_requirement": 20,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererStrongAttack2.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "SorcererStrongAttack3",
+          "name": "闪电风暴",
+          "description": "召唤一场闪电风暴，随机击中3个敌人，对每个敌人造成{weaponDamage}武器伤害。",
+          "tags": [
+            1,
+            10
+          ],
+          "level_requirement": 35,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererStrongAttack3.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "SorcererStrongAttack4",
+          "name": "冰霜光束",
+          "description": "引导一道冰霜光束持续3秒，每次跳动对路径上的所有敌人造成{weaponDamage}武器伤害。",
+          "tags": [
+            1,
+            9
+          ],
+          "level_requirement": 50,
+          "demo_locked": true,
+          "icon": "/progression-icons/SorcererStrongAttack4.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "SorcererSpecial1",
+          "name": "冰霜新星",
+          "description": "在身周释放一圈冰霜新星，对附近的敌人造成{weaponDamage}武器伤害并将其冰冻。",
+          "tags": [
+            2,
+            9
+          ],
+          "level_requirement": 10,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererSpecial1.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "SorcererSpecial2",
+          "name": "火元素",
+          "description": "召唤一个火元素，向敌人发射火球，造成{weaponDamage}武器伤害。",
+          "tags": [
+            2,
+            15
+          ],
+          "level_requirement": 15,
+          "demo_locked": false,
+          "icon": "/progression-icons/SorcererSpecial2.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "SorcererSpecial3",
+          "name": "寒冰屏障",
+          "description": "将自身封入寒冰之中，持续{duration}，期间无法行动但免疫所有伤害。冰块随后碎裂，对附近所有敌人造成冰霜伤害。",
+          "tags": [
+            2,
+            9
+          ],
+          "level_requirement": 25,
+          "demo_locked": true,
+          "icon": "/progression-icons/SorcererSpecial3.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "SorcererSpecial4",
+          "name": "火陨石",
+          "description": "召唤一颗烈焰陨石，落地时爆裂，对爆炸范围内的所有敌人造成{weaponDamage}武器伤害并使其灼烧。",
+          "tags": [
+            2,
+            8
+          ],
+          "level_requirement": 30,
+          "demo_locked": true,
+          "icon": "/progression-icons/SorcererSpecial4.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "SorcererSpecial5",
+          "name": "烈焰光环",
+          "description": "以烈焰环绕自身，持续{duration}，获得{critChance}暴击几率与{critDamage}暴击伤害。",
+          "tags": [
+            2
+          ],
+          "level_requirement": 40,
+          "demo_locked": true,
+          "icon": "/progression-icons/SorcererSpecial5.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "SorcererSpecial6",
+          "name": "雷云",
+          "description": "在目标上方召唤一片雷云，在4秒内降下8道闪电，每道对附近的敌人造成{weaponDamage}武器伤害，并有{chance}概率使其陷入[短暂眩晕]。",
+          "tags": [
+            2,
+            10
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/SorcererSpecial6.png",
+          "slots": [
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    "8": {
+      "id": "MonkHero",
+      "class_mask": 8,
+      "name": "武僧",
+      "talents": [
+        {
+          "id": "MonkTalent1",
+          "name": "闪避几率",
+          "description": "+{value} 闪避几率",
+          "max_points": 8,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.014999999664723873,
+              "per_rank": 0.014999999664723873,
+              "name": "value",
+              "format": "0.#%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent1.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": -234.0
+        },
+        {
+          "id": "MonkTalent3",
+          "name": "活力",
+          "description": "+{value} 最大生命值",
+          "max_points": 8,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 75.0,
+              "per_rank": 75.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent3.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": -234.0
+        },
+        {
+          "id": "MonkTalent0",
+          "name": "敏捷",
+          "description": "+{value} 敏捷",
+          "max_points": 10,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 5.0,
+              "per_rank": 5.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent0.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": -234.0
+        },
+        {
+          "id": "MonkTalent6",
+          "name": "物理伤害",
+          "description": "+{value} 物理伤害",
+          "max_points": 10,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.07999999821186066,
+              "per_rank": 0.07999999821186066,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent6.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": -234.0
+        },
+        {
+          "id": "MonkTalent4",
+          "name": "最大法力值",
+          "description": "+{value} 最大法力值",
+          "max_points": 5,
+          "point_requirement": 0,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 6.0,
+              "per_rank": 6.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent4.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": -234.0
+        },
+        {
+          "id": "MonkTalent2",
+          "name": "移动速度",
+          "description": "+{value} 移动速度",
+          "max_points": 5,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.05000000074505806,
+              "per_rank": 0.05000000074505806,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent2.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": -111.08
+        },
+        {
+          "id": "MonkTalent7",
+          "name": "治疗与魔法抗性",
+          "description": "+{value} 受到治疗，+{resistance} 魔法抗性",
+          "max_points": 8,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.05000000074505806,
+              "per_rank": 0.05000000074505806,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            },
+            "resistance": {
+              "base": 40.0,
+              "per_rank": 40.0,
+              "name": "resistance",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent7.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": -111.08
+        },
+        {
+          "id": "MonkTalent5",
+          "name": "攻击速度",
+          "description": "+{value} 攻击速度",
+          "max_points": 6,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.03999999910593033,
+              "per_rank": 0.03999999910593033,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent5.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": -111.08
+        },
+        {
+          "id": "MonkTalent8",
+          "name": "击杀恢复法力",
+          "description": "+{value} 击杀恢复法力",
+          "max_points": 5,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 2.0,
+              "per_rank": 2.0,
+              "name": "value",
+              "format": "0.#",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent8.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": -111.08
+        },
+        {
+          "id": "MonkTalent11",
+          "name": "闪电伤害",
+          "description": "+{value} 闪电伤害",
+          "max_points": 10,
+          "point_requirement": 5,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {
+            "value": {
+              "base": 0.07999999821186066,
+              "per_rank": 0.07999999821186066,
+              "name": "value",
+              "format": "0%",
+              "suffix": ""
+            }
+          },
+          "icon": "/progression-icons/MonkTalent11.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": -111.08
+        },
+        {
+          "id": "MonkTalent43",
+          "name": "镜影步",
+          "description": "闪避成功后获得 +{value} 物理伤害，持续 {duration}",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent43.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 11.84
+        },
+        {
+          "id": "MonkTalent12",
+          "name": "连环劲",
+          "description": "每施放 {casts} 次普通攻击，该次攻击的直接伤害提高 {value}。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent12.png",
+          "selectable": true,
+          "x": -154.33,
+          "y": 11.84
+        },
+        {
+          "id": "MonkTalent47",
+          "name": "破绽连击",
+          "description": "每施放 {casts} 次普通攻击，使命中的敌人陷入[易伤]。",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent47.png",
+          "selectable": true,
+          "x": 72.33,
+          "y": 11.84
+        },
+        {
+          "id": "MonkTalent16",
+          "name": "启明",
+          "description": "[闪电]技能的暴击有 {chance} 几率触发你的击杀恢复法力",
+          "max_points": 1,
+          "point_requirement": 10,
+          "prerequisite": null,
+          "exclusive_group": "Capstone10",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent16.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 11.84
+        },
+        {
+          "id": "MonkTalent21",
+          "name": "微风之流",
+          "description": "每次闪避将产生 {value} 法力",
+          "max_points": 5,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent21.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 134.76
+        },
+        {
+          "id": "MonkTalent32",
+          "name": "强劲",
+          "description": "对[物理]技能 +{value} 暴击几率",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent32.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 134.76
+        },
+        {
+          "id": "MonkTalent17",
+          "name": "雷鸣",
+          "description": "圣裁之击的冲击波有 {chance} 几率使命中的敌人眩晕",
+          "max_points": 5,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent17.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 134.76
+        },
+        {
+          "id": "MonkTalent26",
+          "name": "强化神圣法球：速度",
+          "description": "神圣法球 +{value} 旋转速度",
+          "max_points": 10,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent26.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 134.76
+        },
+        {
+          "id": "MonkTalent10",
+          "name": "强化闪电技能：暴击几率",
+          "description": "对[闪电]技能 +{value} 暴击几率",
+          "max_points": 8,
+          "point_requirement": 15,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent10.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 134.76
+        },
+        {
+          "id": "MonkTalent23",
+          "name": "护持之息",
+          "description": "施放灵气涌流后，受到伤害降低 {value}，持续 {duration}。",
+          "max_points": 5,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent23.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 257.68
+        },
+        {
+          "id": "MonkTalent20",
+          "name": "强化三重击：暴击伤害",
+          "description": "对三重击 +{value} 暴击伤害",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent20.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 257.68
+        },
+        {
+          "id": "MonkTalent29",
+          "name": "沉重之手",
+          "description": "对[强力攻击]技能 +{value} 暴击伤害",
+          "max_points": 5,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent29.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 257.68
+        },
+        {
+          "id": "MonkTalent25",
+          "name": "强化穿刺突进：伤害",
+          "description": "对穿刺突进 +{value} 伤害",
+          "max_points": 8,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent25.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 257.68
+        },
+        {
+          "id": "MonkTalent33",
+          "name": "基本功",
+          "description": "对[普通攻击]技能 +{value} 伤害",
+          "max_points": 10,
+          "point_requirement": 20,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent33.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 257.68
+        },
+        {
+          "id": "MonkTalent28",
+          "name": "贯劲",
+          "description": "每施放 {casts} 次普通攻击积攒一次贯劲，次数可累积。每次强力攻击消耗一次，使该次伤害独立提高 {value}。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent28.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 380.6
+        },
+        {
+          "id": "MonkTalent39",
+          "name": "气脉相同",
+          "description": "施放与上一次不同的[气术]技能时，恢复 {value} 最大法力。首次施放不回蓝。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent39.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 380.6
+        },
+        {
+          "id": "MonkTalent45",
+          "name": "护体真气",
+          "description": "每实际消耗 1 点法力，恢复 {value} 点生命。",
+          "max_points": 1,
+          "point_requirement": 30,
+          "prerequisite": null,
+          "exclusive_group": "Capstone30",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent45.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 380.6
+        },
+        {
+          "id": "MonkTalent30",
+          "name": "疾风尾流",
+          "description": "冲锋提供 +{value} 闪避几率，持续 {duration}",
+          "max_points": 6,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent30.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 503.52
+        },
+        {
+          "id": "MonkTalent31",
+          "name": "强化灵体分身：持续时间",
+          "description": "灵体分身的持续时间延长 {value}",
+          "max_points": 6,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent31.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 503.52
+        },
+        {
+          "id": "MonkTalent13",
+          "name": "余震",
+          "description": "震地击的第三次打击有 {chance} 几率施加[恍惚]状态",
+          "max_points": 8,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent13.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 503.52
+        },
+        {
+          "id": "MonkTalent9",
+          "name": "横扫修行",
+          "description": "对[范围]技能 +{value} 伤害",
+          "max_points": 10,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent9.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 503.52
+        },
+        {
+          "id": "MonkTalent41",
+          "name": "蓄电法球",
+          "description": "神圣法球命中时有 {chance} 几率施加 {stacks} 层[静电]。",
+          "max_points": 8,
+          "point_requirement": 40,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent41.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 503.52
+        },
+        {
+          "id": "MonkTalent37",
+          "name": "强化气弹：治疗",
+          "description": "气弹的第三发额外回复你 {value} 最大生命值",
+          "max_points": 6,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent37.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 626.44
+        },
+        {
+          "id": "MonkTalent34",
+          "name": "强化双金掌：伤害与法力消耗",
+          "description": "双金掌的法力消耗降低 {mana}，并造成 +{damage} 伤害",
+          "max_points": 8,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent34.png",
+          "selectable": true,
+          "x": -211.0,
+          "y": 626.44
+        },
+        {
+          "id": "MonkTalent18",
+          "name": "旋风震退",
+          "description": "旋风棍式命中时将敌人击退 {value} 码。",
+          "max_points": 5,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent18.png",
+          "selectable": true,
+          "x": -41.0,
+          "y": 626.44
+        },
+        {
+          "id": "MonkTalent38",
+          "name": "强化神圣雷霆：伤害",
+          "description": "对神圣雷霆 +{value} 伤害",
+          "max_points": 5,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent38.png",
+          "selectable": true,
+          "x": 129.0,
+          "y": 626.44
+        },
+        {
+          "id": "MonkTalent22",
+          "name": "乘隙而击",
+          "description": "对[恍惚]敌人的伤害提高 {value}。",
+          "max_points": 10,
+          "point_requirement": 50,
+          "prerequisite": null,
+          "exclusive_group": "",
+          "demo_locked": false,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent22.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 626.44
+        },
+        {
+          "id": "MonkTalent42",
+          "name": "雷霆降临",
+          "description": "[闪电]技能命中拥有 5 层[静电]的敌人时，消耗这些层数并召唤一道落雷，造成 {damage} 武器伤害的闪电伤害",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent42.png",
+          "selectable": true,
+          "x": -381.0,
+          "y": 749.36
+        },
+        {
+          "id": "MonkTalent36",
+          "name": "无相",
+          "description": "获得相当于你 {value} 闪避几率的额外暴击伤害。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent36.png",
+          "selectable": true,
+          "x": -154.33,
+          "y": 749.36
+        },
+        {
+          "id": "MonkTalent44",
+          "name": "铁血体魄",
+          "description": "受到致命伤时恢复满血，使受到的伤害降低 {reduction}，持续 {duration}，并重置所有技能冷却。冷却：{cooldown}。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent44.png",
+          "selectable": true,
+          "x": 72.33,
+          "y": 749.36
+        },
+        {
+          "id": "MonkTalent46",
+          "name": "倾气",
+          "description": "施放强力攻击后，消耗全部剩余法力。每额外消耗 1 点法力，该次攻击的直接伤害提高 {damagePerMana}。",
+          "max_points": 1,
+          "point_requirement": 60,
+          "prerequisite": null,
+          "exclusive_group": "Capstone60",
+          "demo_locked": true,
+          "description_tokens": {},
+          "icon": "/progression-icons/MonkTalent46.png",
+          "selectable": true,
+          "x": 299.0,
+          "y": 749.36
+        }
+      ],
+      "abilities": [
+        {
+          "id": "MonkBasicAttack1",
+          "name": "三重击",
+          "description": "打击单个敌人，造成{damage}武器伤害。每第三次攻击变为强化终结技，对目标造成{damage2}武器伤害。",
+          "tags": [
+            0,
+            7
+          ],
+          "level_requirement": 1,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkBasicAttack1.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "MonkBasicAttack2",
+          "name": "怒拳",
+          "description": "向单个敌人挥出怒拳，造成{damage}武器伤害并积蓄气势——每次命中获得+{attackSpeed}攻击速度（最多叠加20层），持续{duration}秒。",
+          "tags": [
+            0,
+            7
+          ],
+          "level_requirement": 15,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkBasicAttack2.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "MonkBasicAttack3",
+          "name": "震地击",
+          "description": "打击单个敌人，造成{damage}武器伤害。每第三次攻击变为冲击波，对目标及其附近敌人造成{damage2}武器伤害。",
+          "tags": [
+            0,
+            3,
+            7
+          ],
+          "level_requirement": 30,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkBasicAttack3.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "MonkBasicAttack4",
+          "name": "气弹",
+          "description": "向单个敌人投出凝聚的气劲，造成{damage}武器伤害。每第三发气弹命中时，还会为你恢复{heal}的最大生命值。",
+          "tags": [
+            0,
+            7,
+            12
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/MonkBasicAttack4.png",
+          "slots": [
+            0
+          ]
+        },
+        {
+          "id": "MonkHeavyAttack1",
+          "name": "圣裁之击",
+          "description": "旋身挥出一记迸发圣光雷电的武器重击，对目标造成相当于{damage}武器伤害的雷电伤害，并对附近的敌人造成相当于{damage2}武器伤害的雷电伤害。",
+          "tags": [
+            1,
+            10
+          ],
+          "level_requirement": 5,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkHeavyAttack1.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "MonkHeavyAttack2",
+          "name": "穿刺突进",
+          "description": "向前突进刺出致命一击，贯穿突进路径上的所有敌人，造成{damage}武器伤害。",
+          "tags": [
+            1,
+            3,
+            7
+          ],
+          "level_requirement": 20,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkHeavyAttack2.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "MonkHeavyAttack3",
+          "name": "旋风棍式",
+          "description": "在身前掀起两道龙卷风，向敌人游走，对进入其中的敌人造成{damage}武器伤害。",
+          "tags": [
+            1,
+            7
+          ],
+          "level_requirement": 35,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkHeavyAttack3.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "MonkHeavyAttack4",
+          "name": "双金掌",
+          "description": "双掌向前推出，凝出两只金色巨手贯穿沿途敌人，造成{damage}武器伤害并将其击退。",
+          "tags": [
+            1,
+            3,
+            7,
+            12
+          ],
+          "level_requirement": 50,
+          "demo_locked": true,
+          "icon": "/progression-icons/MonkHeavyAttack4.png",
+          "slots": [
+            1
+          ]
+        },
+        {
+          "id": "MonkSpecial1",
+          "name": "神圣法球",
+          "description": "召唤一颗环绕自身旋转的神圣法球，对经过的每个敌人造成相当于{damage}武器伤害的闪电伤害。",
+          "tags": [
+            2,
+            10
+          ],
+          "level_requirement": 10,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkSpecial1.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "MonkSpecial2",
+          "name": "灵气涌流",
+          "description": "引导灵气涌流贯通全身，每秒回复{value}最大生命值，持续{duration}秒。",
+          "tags": [
+            2,
+            12
+          ],
+          "level_requirement": 15,
+          "demo_locked": false,
+          "icon": "/progression-icons/MonkSpecial2.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "MonkSpecial3",
+          "name": "冲锋",
+          "description": "冲锋撞向目标，随后重击周围所有敌人，造成{weaponDamage}武器伤害并晕眩{duration}。",
+          "tags": [
+            2,
+            7
+          ],
+          "level_requirement": 25,
+          "demo_locked": true,
+          "icon": "/progression-icons/MonkSpecial3.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "MonkSpecial4",
+          "name": "灵体分身",
+          "description": "在身旁召唤一具灵体分身，持续{duration}。它会复现你的普通攻击与强力攻击，攻击你所攻击的敌人。",
+          "tags": [
+            2,
+            15,
+            12
+          ],
+          "level_requirement": 30,
+          "demo_locked": true,
+          "icon": "/progression-icons/MonkSpecial4.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "MonkSpecial5",
+          "name": "踏风步",
+          "description": "踏风而行，持续{duration}，获得{dodge}闪避几率。",
+          "tags": [
+            2,
+            12
+          ],
+          "level_requirement": 40,
+          "demo_locked": true,
+          "icon": "/progression-icons/MonkSpecial5.png",
+          "slots": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "MonkSpecial6",
+          "name": "神圣雷霆",
+          "description": "屹立不动，引落神圣雷霆，每次脉冲对周围敌人造成{damage}武器伤害，并使其恍惚{duration}。",
+          "tags": [
+            2,
+            3,
+            10
+          ],
+          "level_requirement": 45,
+          "demo_locked": true,
+          "icon": "/progression-icons/MonkSpecial6.png",
+          "slots": [
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  },
+  "life_skills": [
+    {
+      "id": "LifeSkill 1",
+      "name": "金币发现 I",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150
+      ],
+      "prerequisite": "LifeSkill",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseGoldFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 1.png",
+      "x": -109.0,
+      "y": -124.0
+    },
+    {
+      "id": "LifeSkill 10",
+      "name": "金币发现 I",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        5000
+      ],
+      "prerequisite": "LifeSkill 1",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseGoldFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 10.png",
+      "x": -79.0,
+      "y": -320.0
+    },
+    {
+      "id": "LifeSkill 11",
+      "name": "自动补充",
+      "description": "返回城镇或从死亡中复活后自动补充药水使用次数。",
+      "max_points": 1,
+      "gold_costs": [
+        500
+      ],
+      "prerequisite": "LifeSkill 3",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "EnableAutoRefill"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 11.png",
+      "x": 309.0,
+      "y": 117.0
+    },
+    {
+      "id": "LifeSkill 12",
+      "name": "战斗药水自动使用槽",
+      "description": "解锁一个战斗药水槽，每当其增益效果未生效时，在战斗中自动使用所分配的药水。",
+      "max_points": 1,
+      "gold_costs": [
+        2500
+      ],
+      "prerequisite": "LifeSkill 3",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "UnlockCombatPotionSlot"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 12.png",
+      "x": 117.0,
+      "y": 309.0
+    },
+    {
+      "id": "LifeSkill 13",
+      "name": "储物页",
+      "description": "解锁一个额外的储物页。",
+      "max_points": 1,
+      "gold_costs": [
+        20000
+      ],
+      "prerequisite": "LifeSkill 6",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "UnlockStoragePage"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 13.png",
+      "x": -230.0,
+      "y": 438.0
+    },
+    {
+      "id": "LifeSkill 14",
+      "name": "材料发现 I",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 5",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMaterialFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.1599999964237213,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 14.png",
+      "x": -463.0,
+      "y": 176.0
+    },
+    {
+      "id": "LifeSkill 15",
+      "name": "物品发现 I",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 5",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMagicFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 15.png",
+      "x": -491.0,
+      "y": 60.0
+    },
+    {
+      "id": "LifeSkill 16",
+      "name": "金币发现 I",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 5",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseGoldFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 16.png",
+      "x": -407.0,
+      "y": 281.0
+    },
+    {
+      "id": "LifeSkill 17",
+      "name": "药水发现 II",
+      "description": "药水发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        30000
+      ],
+      "prerequisite": "LifeSkill 13",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "PotionFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 17.png",
+      "x": -438.0,
+      "y": 494.0
+    },
+    {
+      "id": "LifeSkill 18",
+      "name": "药水发现 I",
+      "description": "药水发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        20000
+      ],
+      "prerequisite": "LifeSkill 13",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreasePotionFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.029999999329447746,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 18.png",
+      "x": -307.0,
+      "y": 584.0
+    },
+    {
+      "id": "LifeSkill 19",
+      "name": "物品发现 I",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        20000
+      ],
+      "prerequisite": "LifeSkill 13",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMagicFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 19.png",
+      "x": -158.0,
+      "y": 641.0
+    },
+    {
+      "id": "LifeSkill 2",
+      "name": "物品发现 I",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150
+      ],
+      "prerequisite": "LifeSkill",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMagicFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 2.png",
+      "x": 124.0,
+      "y": -109.0
+    },
+    {
+      "id": "LifeSkill 20",
+      "name": "金币发现 I",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 12",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseGoldFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 20.png",
+      "x": 118.0,
+      "y": 481.0
+    },
+    {
+      "id": "LifeSkill 21",
+      "name": "材料发现 I",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 12",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMaterialFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.1599999964237213,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 21.png",
+      "x": 328.0,
+      "y": 371.0
+    },
+    {
+      "id": "LifeSkill 22",
+      "name": "载重 I",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 12",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseCapacity1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 22.png",
+      "x": 230.0,
+      "y": 438.0
+    },
+    {
+      "id": "LifeSkill 23",
+      "name": "药水发现 I",
+      "description": "药水发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 11",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreasePotionFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.029999999329447746,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 23.png",
+      "x": 407.0,
+      "y": 281.0
+    },
+    {
+      "id": "LifeSkill 24",
+      "name": "物品发现 I",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 11",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMagicFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 24.png",
+      "x": 463.0,
+      "y": 176.0
+    },
+    {
+      "id": "LifeSkill 25",
+      "name": "复活冷却缩减 I",
+      "description": "自动复活冷却时间缩短 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 11",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "DecreaseReviveCooldown"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": "s"
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 25.png",
+      "x": 491.0,
+      "y": 60.0
+    },
+    {
+      "id": "LifeSkill 26",
+      "name": "物品发现 II",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        20000
+      ],
+      "prerequisite": "LifeSkill 7",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "MagicFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.20000000298023224,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 26.png",
+      "x": 407.0,
+      "y": -281.0
+    },
+    {
+      "id": "LifeSkill 27",
+      "name": "金币发现 I",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 7",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseGoldFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 27.png",
+      "x": 463.0,
+      "y": -176.0
+    },
+    {
+      "id": "LifeSkill 28",
+      "name": "经验获取 I",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 7",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseXPGain1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 28.png",
+      "x": 491.0,
+      "y": -60.0
+    },
+    {
+      "id": "LifeSkill 29",
+      "name": "垂钓直觉 I",
+      "description": "钓鱼成功率提升 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        5000
+      ],
+      "prerequisite": "LifeSkill 8",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseFishingSuccess1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.25,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 29.png",
+      "x": 328.0,
+      "y": -371.0
+    },
+    {
+      "id": "LifeSkill 3",
+      "name": "复活冷却缩减 I",
+      "description": "自动复活冷却时间缩短 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        150
+      ],
+      "prerequisite": "LifeSkill",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "DecreaseReviveCooldown"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": "s"
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 3.png",
+      "x": 109.0,
+      "y": 124.0
+    },
+    {
+      "id": "LifeSkill 30",
+      "name": "迅捷抛竿 I",
+      "description": "每次垂钓所需时间缩短 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        5000
+      ],
+      "prerequisite": "LifeSkill 8",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "DecreaseFishingTime1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 30.png",
+      "x": 230.0,
+      "y": -438.0
+    },
+    {
+      "id": "LifeSkill 31",
+      "name": "灵魂圣匣 II",
+      "description": "灵魂碎片携带上限提升 200。",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 8",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseSoulCap2"
+      ],
+      "soul_capacity_per_rank": 200,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 31.png",
+      "x": 118.0,
+      "y": -481.0
+    },
+    {
+      "id": "LifeSkill 32",
+      "name": "材料发现 I",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 10",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMaterialFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.1599999964237213,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 32.png",
+      "x": 0.0,
+      "y": -495.0
+    },
+    {
+      "id": "LifeSkill 33",
+      "name": "远征补给 I",
+      "description": "离线奖励时长上限提升 {value} 小时。",
+      "max_points": 1,
+      "gold_costs": [
+        20000
+      ],
+      "prerequisite": "LifeSkill 10",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseOfflineCap1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 2.0,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 33.png",
+      "x": -118.0,
+      "y": -481.0
+    },
+    {
+      "id": "LifeSkill 34",
+      "name": "经验获取 I",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 10",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseXPGain1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 34.png",
+      "x": -230.0,
+      "y": -438.0
+    },
+    {
+      "id": "LifeSkill 35",
+      "name": "自动填充背包",
+      "description": "马车已满时，新收集的战利品会在背包有空间时送入背包。",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 9",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "EnableCarriageAutoFillInventory"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 35.png",
+      "x": -328.0,
+      "y": -371.0
+    },
+    {
+      "id": "LifeSkill 36",
+      "name": "物品发现 I",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 9",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMagicFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 36.png",
+      "x": -407.0,
+      "y": -281.0
+    },
+    {
+      "id": "LifeSkill 37",
+      "name": "载重 I",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        6000
+      ],
+      "prerequisite": "LifeSkill 9",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseCapacity1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 37.png",
+      "x": -463.0,
+      "y": -176.0
+    },
+    {
+      "id": "LifeSkill 38",
+      "name": "载重 I",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 37",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseCapacity1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 38.png",
+      "x": -617.0,
+      "y": -234.0
+    },
+    {
+      "id": "LifeSkill 39",
+      "name": "药水发现 II",
+      "description": "药水发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 36",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "PotionFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 39.png",
+      "x": -543.0,
+      "y": -375.0
+    },
+    {
+      "id": "LifeSkill 4",
+      "name": "经验获取 I",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150
+      ],
+      "prerequisite": "LifeSkill",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseXPGain1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 4.png",
+      "x": -124.0,
+      "y": 109.0
+    },
+    {
+      "id": "LifeSkill 40",
+      "name": "金币发现 I",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 35",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseGoldFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 40.png",
+      "x": -438.0,
+      "y": -494.0
+    },
+    {
+      "id": "LifeSkill 41",
+      "name": "经验获取 I",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 34",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseXPGain1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 41.png",
+      "x": -307.0,
+      "y": -584.0
+    },
+    {
+      "id": "LifeSkill 42",
+      "name": "远征补给 I",
+      "description": "离线奖励时长上限提升 {value} 小时。",
+      "max_points": 1,
+      "gold_costs": [
+        35000
+      ],
+      "prerequisite": "LifeSkill 33",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseOfflineCap1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 2.0,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 42.png",
+      "x": -158.0,
+      "y": -641.0
+    },
+    {
+      "id": "LifeSkill 43",
+      "name": "材料发现 II",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 32",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "MaterialFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.30000001192092896,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 43.png",
+      "x": 0.0,
+      "y": -660.0
+    },
+    {
+      "id": "LifeSkill 44",
+      "name": "灵魂圣匣 III",
+      "description": "灵魂碎片携带上限提升 300。",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 31",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseSoulCap3"
+      ],
+      "soul_capacity_per_rank": 300,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 44.png",
+      "x": 158.0,
+      "y": -641.0
+    },
+    {
+      "id": "LifeSkill 45",
+      "name": "迅捷抛竿 II",
+      "description": "每次垂钓所需时间缩短 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 30",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "DecreaseFishingTime2"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 45.png",
+      "x": 307.0,
+      "y": -584.0
+    },
+    {
+      "id": "LifeSkill 46",
+      "name": "垂钓直觉 II",
+      "description": "钓鱼成功率提升 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 29",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "IncreaseFishingSuccess2"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.3499999940395355,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 46.png",
+      "x": 438.0,
+      "y": -494.0
+    },
+    {
+      "id": "LifeSkill 47",
+      "name": "载重 I",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        20000
+      ],
+      "prerequisite": "LifeSkill 26",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseCapacity1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 47.png",
+      "x": 543.0,
+      "y": -375.0
+    },
+    {
+      "id": "LifeSkill 48",
+      "name": "金币发现 II",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 27",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "GoldFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 48.png",
+      "x": 617.0,
+      "y": -234.0
+    },
+    {
+      "id": "LifeSkill 49",
+      "name": "经验获取 I",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 28",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseXPGain1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 49.png",
+      "x": 655.0,
+      "y": -80.0
+    },
+    {
+      "id": "LifeSkill 5",
+      "name": "远征营地",
+      "description": "你不在时，你的角色会继续狩猎。金币与经验将根据你已解锁的最高区域持续累积，并在你下次进入城镇时领取。",
+      "max_points": 1,
+      "gold_costs": [
+        750
+      ],
+      "prerequisite": "LifeSkill 4",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "EnableOfflineRewards"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 5.png",
+      "x": -309.0,
+      "y": 117.0
+    },
+    {
+      "id": "LifeSkill 50",
+      "name": "复活冷却缩减 II",
+      "description": "自动复活冷却时间缩短 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 25",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "ReviveNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 3.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": "s"
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 50.png",
+      "x": 655.0,
+      "y": 80.0
+    },
+    {
+      "id": "LifeSkill 51",
+      "name": "经验获取 I",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 24",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseXPGain1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 51.png",
+      "x": 617.0,
+      "y": 234.0
+    },
+    {
+      "id": "LifeSkill 52",
+      "name": "药水发现 I",
+      "description": "药水发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 23",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreasePotionFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.029999999329447746,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 52.png",
+      "x": 543.0,
+      "y": 375.0
+    },
+    {
+      "id": "LifeSkill 53",
+      "name": "材料发现 II",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 21",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "MaterialFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.30000001192092896,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 53.png",
+      "x": 438.0,
+      "y": 494.0
+    },
+    {
+      "id": "LifeSkill 54",
+      "name": "载重 II",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 22",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "CapacityNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 2.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 54.png",
+      "x": 307.0,
+      "y": 584.0
+    },
+    {
+      "id": "LifeSkill 55",
+      "name": "材料发现 I",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 20",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMaterialFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.1599999964237213,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 55.png",
+      "x": 158.0,
+      "y": 641.0
+    },
+    {
+      "id": "LifeSkill 56",
+      "name": "复活冷却缩减 I",
+      "description": "自动复活冷却时间缩短 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        25000
+      ],
+      "prerequisite": "LifeSkill 19",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "DecreaseReviveCooldown"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": "s"
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 56.png",
+      "x": -197.0,
+      "y": 801.0
+    },
+    {
+      "id": "LifeSkill 57",
+      "name": "药水发现 I",
+      "description": "药水发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        25000
+      ],
+      "prerequisite": "LifeSkill 18",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreasePotionFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.029999999329447746,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 57.png",
+      "x": -383.0,
+      "y": 731.0
+    },
+    {
+      "id": "LifeSkill 58",
+      "name": "装备自动分解",
+      "description": "在战斗中，马车拾取所选稀有度的装备时会立即自动将其分解为制作材料。已分解的装备不会占用马车空间。",
+      "max_points": 1,
+      "gold_costs": [
+        35000
+      ],
+      "prerequisite": "LifeSkill 38",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "EnableCarriageAutoSalvage"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 58.png",
+      "x": -771.0,
+      "y": -293.0
+    },
+    {
+      "id": "LifeSkill 59",
+      "name": "金币发现 II",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 16",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "GoldFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 59.png",
+      "x": -543.0,
+      "y": 375.0
+    },
+    {
+      "id": "LifeSkill 6",
+      "name": "载重 I",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        500
+      ],
+      "prerequisite": "LifeSkill 4",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseCapacity1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 6.png",
+      "x": -153.0,
+      "y": 292.0
+    },
+    {
+      "id": "LifeSkill 60",
+      "name": "材料发现 I",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 14",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMaterialFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.1599999964237213,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 60.png",
+      "x": -617.0,
+      "y": 234.0
+    },
+    {
+      "id": "LifeSkill 61",
+      "name": "物品发现 I",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        8000
+      ],
+      "prerequisite": "LifeSkill 15",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseMagicFind1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 61.png",
+      "x": -655.0,
+      "y": 80.0
+    },
+    {
+      "id": "LifeSkill 62",
+      "name": "材料发现 II",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 17",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "MaterialFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.30000001192092896,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 62.png",
+      "x": -547.0,
+      "y": 618.0
+    },
+    {
+      "id": "LifeSkill 63",
+      "name": "金币发现 II",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 40",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "GoldFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 63.png",
+      "x": -547.0,
+      "y": -618.0
+    },
+    {
+      "id": "LifeSkill 64",
+      "name": "经验获取 II",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 41",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "XPGainNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 64.png",
+      "x": -383.0,
+      "y": -731.0
+    },
+    {
+      "id": "LifeSkill 65",
+      "name": "远征补给 II",
+      "description": "离线奖励时长上限提升 {value} 小时。",
+      "max_points": 1,
+      "gold_costs": [
+        50000
+      ],
+      "prerequisite": "LifeSkill 42",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "OfflineCapNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 4.0,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 65.png",
+      "x": -197.0,
+      "y": -801.0
+    },
+    {
+      "id": "LifeSkill 66",
+      "name": "灵魂圣匣 IV",
+      "description": "灵魂碎片携带上限提升 400。",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 44",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "IncreaseSoulCap4"
+      ],
+      "soul_capacity_per_rank": 400,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 66.png",
+      "x": 197.0,
+      "y": -801.0
+    },
+    {
+      "id": "LifeSkill 67",
+      "name": "迅捷抛竿 III",
+      "description": "每次垂钓所需时间缩短 {value}。",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 45",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "DecreaseFishingTime3"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.25,
+          "per_rank": 0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 67.png",
+      "x": 383.0,
+      "y": -731.0
+    },
+    {
+      "id": "LifeSkill 68",
+      "name": "载重 II",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        25000
+      ],
+      "prerequisite": "LifeSkill 47",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "CapacityNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 2.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 68.png",
+      "x": 679.0,
+      "y": -469.0
+    },
+    {
+      "id": "LifeSkill 69",
+      "name": "经验获取 II",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 49",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "XPGainNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 69.png",
+      "x": 819.0,
+      "y": -99.0
+    },
+    {
+      "id": "LifeSkill 7",
+      "name": "载重 I",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        500
+      ],
+      "prerequisite": "LifeSkill 2",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseCapacity1"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 1.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0.#",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 7.png",
+      "x": 309.0,
+      "y": -117.0
+    },
+    {
+      "id": "LifeSkill 70",
+      "name": "经验获取 II",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 51",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "XPGainNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 70.png",
+      "x": 771.0,
+      "y": 293.0
+    },
+    {
+      "id": "LifeSkill 71",
+      "name": "药水发现 II",
+      "description": "药水发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 53",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "PotionFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.10000000149011612,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 71.png",
+      "x": 468.01,
+      "y": 679.4
+    },
+    {
+      "id": "LifeSkill 72",
+      "name": "金币发现 II",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 55",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "GoldFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 72.png",
+      "x": 197.0,
+      "y": 801.0
+    },
+    {
+      "id": "LifeSkill 73",
+      "name": "储物页",
+      "description": "解锁一个额外的储物页。",
+      "max_points": 1,
+      "gold_costs": [
+        100000
+      ],
+      "prerequisite": "LifeSkill 56",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "UnlockStoragePage"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 73.png",
+      "x": -237.0,
+      "y": 961.0
+    },
+    {
+      "id": "LifeSkill 74",
+      "name": "材料发现 II",
+      "description": "从资源点采集到的材料提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 60",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "MaterialFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.30000001192092896,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 74.png",
+      "x": -771.0,
+      "y": 293.0
+    },
+    {
+      "id": "LifeSkill 75",
+      "name": "物品发现 II",
+      "description": "物品发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        15000
+      ],
+      "prerequisite": "LifeSkill 61",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "MagicFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.20000000298023224,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 75.png",
+      "x": -819.0,
+      "y": 99.0
+    },
+    {
+      "id": "LifeSkill 76",
+      "name": "储物页",
+      "description": "解锁一个额外的储物页。",
+      "max_points": 1,
+      "gold_costs": [
+        54000
+      ],
+      "prerequisite": "LifeSkill 46",
+      "demo_locked": true,
+      "notable": true,
+      "effect_ids": [
+        "UnlockStoragePage"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 76.png",
+      "x": 547.32,
+      "y": -617.3
+    },
+    {
+      "id": "LifeSkill 77",
+      "name": "经验获取 II",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        100000
+      ],
+      "prerequisite": "LifeSkill 57",
+      "demo_locked": false,
+      "notable": true,
+      "effect_ids": [
+        "XPGainNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 77.png",
+      "x": -460.0,
+      "y": 877.0
+    },
+    {
+      "id": "LifeSkill 78",
+      "name": "辅助药水自动使用槽",
+      "description": "解锁一个辅助药水槽，每当其增益效果未生效时，在战斗中自动使用所分配的药水。",
+      "max_points": 1,
+      "gold_costs": [
+        25000
+      ],
+      "prerequisite": "LifeSkill 52",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "UnlockUtilityPotionSlot"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 78.png",
+      "x": 679.0,
+      "y": 469.0
+    },
+    {
+      "id": "LifeSkill 79",
+      "name": "食物自动使用槽",
+      "description": "解锁一个食物槽，每当其增益效果未生效时，在战斗中自动使用所分配的食物。",
+      "max_points": 1,
+      "gold_costs": [
+        100000
+      ],
+      "prerequisite": "LifeSkill 78",
+      "demo_locked": false,
+      "notable": true,
+      "effect_ids": [
+        "UnlockFoodSlot"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 79.png",
+      "x": 814.57,
+      "y": 562.64
+    },
+    {
+      "id": "LifeSkill 8",
+      "name": "灵魂圣匣 I",
+      "description": "灵魂碎片携带上限提升 100。",
+      "max_points": 1,
+      "gold_costs": [
+        1000
+      ],
+      "prerequisite": "LifeSkill 2",
+      "demo_locked": true,
+      "notable": false,
+      "effect_ids": [
+        "IncreaseSoulCap1"
+      ],
+      "soul_capacity_per_rank": 100,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 8.png",
+      "x": 153.0,
+      "y": -292.0
+    },
+    {
+      "id": "LifeSkill 80",
+      "name": "经验获取 II",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150000
+      ],
+      "prerequisite": "LifeSkill 79",
+      "demo_locked": false,
+      "notable": true,
+      "effect_ids": [
+        "XPGainNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 80.png",
+      "x": 836.42,
+      "y": 796.51
+    },
+    {
+      "id": "LifeSkill 81",
+      "name": "金币发现 II",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150000
+      ],
+      "prerequisite": "LifeSkill 79",
+      "demo_locked": false,
+      "notable": true,
+      "effect_ids": [
+        "GoldFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 81.png",
+      "x": 950.72,
+      "y": 655.86
+    },
+    {
+      "id": "LifeSkill 82",
+      "name": "载重 II",
+      "description": "载重提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150000
+      ],
+      "prerequisite": "LifeSkill 79",
+      "demo_locked": false,
+      "notable": true,
+      "effect_ids": [
+        "CapacityNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 2.0,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 82.png",
+      "x": 1041.62,
+      "y": 499.06
+    },
+    {
+      "id": "LifeSkill 83",
+      "name": "经验获取 II",
+      "description": "经验获取提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150000
+      ],
+      "prerequisite": "LifeSkill 73",
+      "demo_locked": false,
+      "notable": true,
+      "effect_ids": [
+        "XPGainNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 83.png",
+      "x": -277.46,
+      "y": 1121.18
+    },
+    {
+      "id": "LifeSkill 84",
+      "name": "金币发现 II",
+      "description": "金币发现提升 {value}",
+      "max_points": 1,
+      "gold_costs": [
+        150000
+      ],
+      "prerequisite": "LifeSkill 77",
+      "demo_locked": false,
+      "notable": true,
+      "effect_ids": [
+        "GoldFindNotable"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {
+        "value": {
+          "base": 0.15000000596046448,
+          "per_rank": 0.0,
+          "name": "value",
+          "format": "0%",
+          "suffix": ""
+        }
+      },
+      "icon": "/progression-icons/LifeSkill 84.png",
+      "x": -536.89,
+      "y": 1022.63
+    },
+    {
+      "id": "LifeSkill 9",
+      "name": "装备自动出售",
+      "description": "在战斗中，马车拾取所选稀有度的装备时会立即自动出售。已出售的装备不会占用马车空间。",
+      "max_points": 1,
+      "gold_costs": [
+        1500
+      ],
+      "prerequisite": "LifeSkill 1",
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "EnableCarriageAutoSell"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill 9.png",
+      "x": -292.0,
+      "y": -153.0
+    },
+    {
+      "id": "LifeSkill",
+      "name": "自动恢复",
+      "description": "返回城镇时自动恢复满血。",
+      "max_points": 1,
+      "gold_costs": [
+        50
+      ],
+      "prerequisite": null,
+      "demo_locked": false,
+      "notable": false,
+      "effect_ids": [
+        "EnableAutoRecover"
+      ],
+      "soul_capacity_per_rank": 0,
+      "description_tokens": {},
+      "icon": "/progression-icons/LifeSkill.png",
+      "x": 0.0,
+      "y": -0.0
+    }
+  ],
+  "ui_assets": {
+    "skill-book": "/progression-icons/ui-skill-book.png",
+    "skill-banner": "/progression-icons/ui-skill-banner.png",
+    "separator": "/progression-icons/ui-separator.png",
+    "talent-background": "/progression-icons/ui-talent-background.png",
+    "life-background": "/progression-icons/ui-life-background.png",
+    "life-summary": "/progression-icons/ui-life-summary.png",
+    "round-frame": "/progression-icons/ui-round-frame.png",
+    "square-frame": "/progression-icons/ui-square-frame.png",
+    "small-round-frame": "/progression-icons/ui-small-round-frame.png",
+    "talent-rail-frame": "/progression-icons/ui-talent-rail-frame.png",
+    "talent-rail-track": "/progression-icons/ui-talent-rail-track.png",
+    "talent-rail-fluid": "/progression-icons/ui-talent-rail-fluid.png",
+    "talent-milestone": "/progression-icons/ui-talent-milestone.png",
+    "soul-shard": "/progression-icons/ui-soul-shard.png"
+  }
+}

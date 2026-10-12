@@ -115,6 +115,20 @@ class WebServiceTests(unittest.TestCase):
             self.assertTrue(row['icon']);self.assertTrue(row['effect_groups']);self.assertFalse(row['matches'])
             self.assertTrue((BASE/'deskrawl_assistant/web'/row['icon'].lstrip('/')).exists())
 
+    def test_inventory_quality_keeps_generated_gear_and_actual_base_item_values(self):
+        gear = item(1)
+        gear.update(base_rarity=3,rarity=4)
+        self.client.items = [gear]
+        for index,rarity in enumerate((0,1,2,3,4,5,None,True)):
+            self.client.items.append(dict(container='storage',slot_index=index,count=1,
+                is_equipment=False,internal_name='TestRune'+str(index),item_class='RuneData',
+                base_rarity=rarity,rarity=0,locked=False,modifiers=[],transfer_key='rune-'+str(index)))
+        self.service._publish(self.client.snapshot())
+        listed = self.service.state()['items']
+        self.assertEqual(listed[0]['rarity'],4)
+        self.assertTrue(listed[0]['is_divine'])
+        self.assertEqual([r['rarity'] for r in listed[1:]],[0,1,2,3,4,5,None,None])
+
     def test_selected_tokens_are_resolved_server_side_and_preserve_locked_gear(self):
         self.publish_physical_items()
         def move(expected,target,validate):

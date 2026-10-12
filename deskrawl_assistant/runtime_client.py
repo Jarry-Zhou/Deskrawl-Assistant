@@ -119,6 +119,10 @@ class RuntimeClient:
             value['profile'] = value['character'] + ' · 等级 ' + str(value['level']) + (' · 模式 ' + parts[0] if len(parts)==3 else '')
             return value
 
+    def managed_snapshot(self):
+        """Fresh inventory data without writing a debug JSON on every step."""
+        return self.snapshot(save=False)
+
     def recommendation_snapshot(self):
         from .recommendation_reader import read_recommendation
         with self._guard:
@@ -207,9 +211,20 @@ class RuntimeClient:
     def control_snapshot(self):
         with self._guard: return self._game_actions().control_snapshot()
 
+    def action_context_snapshot(self):
+        with self._guard: return self._game_actions().action_context_snapshot()
+
+    def progression_snapshot(self, *, merchant=False):
+        with self._guard: return self._game_actions().progression_snapshot(merchant=merchant)
+
     def execute_game_action(self, kind, payload, cancel_event=None, *, validate=lambda:True):
         with self._guard:
-            return self._game_actions().execute(kind,payload,cancel_event=cancel_event,validate=validate)
+            result = self._game_actions().execute(kind,payload,cancel_event=cancel_event,validate=validate)
+            receipt = result.get('_receipt_snapshot')
+            if isinstance(receipt,dict):
+                receipt['captured_at'] = datetime.now(timezone.utc).isoformat()
+                receipt['process_id'] = self.pid
+            return result
 
     def close(self):
         with self._guard:
