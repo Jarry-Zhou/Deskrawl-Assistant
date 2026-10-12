@@ -6564,6 +6564,10 @@
     "CombatMapCompletionUI": 60941360,
     "MythicCompletionUI": 60941352
   },
+  "uninitialized_type_tokens": {
+    "CombatMapCompletionUI": 536909193,
+    "MythicCompletionUI": 536922625
+  },
   "panel_log": {
     "class_rva": 60931200,
     "capacity": 1000,
