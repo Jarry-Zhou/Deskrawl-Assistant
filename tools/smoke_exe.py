@@ -65,6 +65,7 @@ def main():
         'return_town','enter_map','switch_difficulty','equip','sell','salvage','open_chest','collect_ground',
         'allocate_talent','merchant_open','merchant_buy','merchant_close','merchant_refresh'}
     growth = json.loads(archive.extract(normalized['data/progression-catalog.json']))
+    assert set(actions_profile['enabled_kinds']) == {'learn_life_skill', 'set_skill'}
     assert set(growth['heroes']) == {'1','2','4','8'}
     growth_icons = {n for n in normalized if n.startswith('deskrawl_assistant/web/progression-icons/')}
     assert len(growth_icons) == 333
@@ -161,7 +162,7 @@ def main():
         assert request('/automation-tools.js') and request('/managed-mode.js')
         assert '托管模式' in request('/').decode('utf-8')
         report['checks'].append('托管页面与动作配置内置；新用户装备1/2/3、符文4、宝石5；断线不误报解锁，托管默认停止')
-        report['checks'].append('原八种托管动作及商人、天赋已验证入口正常开放；生活技能与技能切换保留显式测试入口，未连接时不执行动作')
+        report['checks'].append('全部托管、商人、天赋、生活技能与技能切换入口正常开放；实机验证状态单独记录，未连接时不执行动作')
         assert managed['settings']['merchant']['trigger_percent'] == 85
         assert managed['settings']['merchant']['spend_to_percent'] == 0
         assert not any(managed['settings']['merchant']['weights'].values())

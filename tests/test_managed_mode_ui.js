@@ -153,6 +153,16 @@ test('explicit local test capability can start while incompatible actions remain
   assert.equal(ui.controlState(packet,s,true).canStart,false);
 });
 
+test('released growth capabilities work in ordinary mode and still reject incompatible builds',()=>{
+  const s=settings(),packet={phase:'idle',capabilities:capabilities({available:true,native_verified:true})};
+  s.life_skills.enabled=true;s.progression.skills_enabled=true;
+  for(const key of ['life_skills','skills'])packet.capabilities[key]={available:true,native_verified:false,release_enabled:true,test_enabled:false};
+  assert.equal(ui.controlState(packet,s,true).canStart,true);
+  assert.equal(ui.capabilityAvailable({available:true,native_verified:false,release_enabled:'true'}),false);
+  packet.capabilities.life_skills.available=false;
+  assert.equal(ui.controlState(packet,s,true).canStart,false);
+});
+
 test('unreadable campaign disables farming even when native capabilities are test available',()=>{
   const s=settings(),packet={capabilities:capabilities(true),control_available:false,control_error:'关卡记录尚未加载'};
   assert.equal(ui.controlState(packet,s,true).canStart,false);

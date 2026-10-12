@@ -125,6 +125,7 @@ class GameActions:
         self.dispatcher = dispatcher or MainThreadDispatcher(reader, profile=self.profile)
         self.allow_unverified = allow_unverified
         self.verified_kinds = set(self.profile.get('verified_kinds',[])) & set(KINDS)
+        self.enabled_kinds = self.verified_kinds | (set(self.profile.get('enabled_kinds', [])) & set(KINDS))
         self._compatible = None
         self._last_terminal_run = None
         self._last_character = None
@@ -147,16 +148,20 @@ class GameActions:
         fully_verified = len(self.verified_kinds) == len(KINDS)
         if compatible and fully_verified:
             reason = ''
+        elif compatible and len(self.enabled_kinds) == len(KINDS):
+            reason = '全部动作已开放，部分新增动作尚未实机验收。'
         result = {'compatible': compatible, 'native_verified': fully_verified,
             'build': self.profile['build'], 'reason': reason, 'installed': self.dispatcher.installed,
             'test_mode': self.allow_unverified is True}
         for key, kinds in CAPABILITIES.items():
             verified = all(kind in self.verified_kinds for kind in kinds)
-            test_enabled = compatible and not verified and self.allow_unverified is True
-            result[key] = {'available': compatible and (verified or test_enabled), 'implemented': True,
+            released = all(kind in self.enabled_kinds for kind in kinds)
+            test_enabled = compatible and not released and self.allow_unverified is True
+            result[key] = {'available': compatible and (released or test_enabled), 'implemented': True,
+                'release_enabled': compatible and released,
                 'native_verified': verified, 'test_enabled': test_enabled,
                 'reason': ('本地托管测试模式，尚未完成实机验收' if test_enabled
-                           else '' if compatible and verified else reason)}
+                           else '' if compatible and verified else '已开放，尚未实机验收' if compatible and released else reason)}
         return result
 
     def progression_runtime(self):
@@ -611,7 +616,7 @@ class GameActions:
         kind = {'chest':'open_chest'}.get(kind, kind)
         if kind not in KINDS:
             raise NativeActionError('未知的原生托管动作')
-        if not self.allow_unverified and kind not in self.verified_kinds:
+        if not self.allow_unverified and kind not in self.enabled_kinds:
             raise NativeActionError('后台动作尚未实机验收，当前不会自动调用游戏方法')
         if cancel_event is not None and cancel_event.is_set() or not validate():
             raise NativeActionError('托管操作已停止或配置已经改变')

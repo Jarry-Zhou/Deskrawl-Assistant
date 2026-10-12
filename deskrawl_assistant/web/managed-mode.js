@@ -53,7 +53,7 @@
     if(!Number.isInteger(l.gold_reserve)||l.gold_reserve<0||l.gold_reserve>2147483647)return '生活技能保留金币数量无效。';
     return '';
   }
-  function capabilityAvailable(value){return value===true||!!(value&&typeof value==='object'&&(value.native_verified!==false||value.test_enabled===true)&&(value.available===true||(value.available===undefined&&value.supported===true)));}
+  function capabilityAvailable(value){return value===true||!!(value&&typeof value==='object'&&(value.native_verified!==false||value.test_enabled===true||value.release_enabled===true)&&(value.available===true||(value.available===undefined&&value.supported===true)));}
   function requiredCapabilities(settings){
     const c=settings.cleanup,keys=[];
     if(settings.farming.enabled)keys.push('transfer','lock','chests','ground_pickup');

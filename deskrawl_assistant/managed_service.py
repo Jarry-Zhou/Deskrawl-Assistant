@@ -37,7 +37,8 @@ def required_capabilities(settings):
 
 def available_capability(value):
     return value is True or (isinstance(value,dict) and value.get('available') is True
-                            and (value.get('native_verified') is not False or value.get('test_enabled') is True))
+                            and (value.get('native_verified') is not False or value.get('test_enabled') is True
+                                 or value.get('release_enabled') is True))
 
 
 def progression_from_catalog(maps, start):

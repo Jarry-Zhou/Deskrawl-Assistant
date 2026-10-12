@@ -509,6 +509,17 @@ class ManagedServiceTests(unittest.TestCase):
         self.assertFalse(state['capabilities']['equip']['native_verified'])
         self.assertEqual(self.client.actions,[])
 
+    def test_release_enabled_capability_can_start_without_test_mode_or_claiming_verified(self):
+        self.client.capabilities['equip'] = {'available':True,'native_verified':False,
+            'release_enabled':True,'test_enabled':False}
+        self.service._managed_refresh_control()
+        self.ready(auto_equip=True)
+        state = self.service.managed_page()
+        self.assertTrue(state['running'])
+        self.assertFalse(state['capabilities']['equip']['native_verified'])
+        self.assertFalse(state['capabilities']['equip']['test_enabled'])
+        self.assertEqual(self.client.actions,[])
+
     def test_cancel_during_start_clears_pending_stop_before_new_start(self):
         self.service.save_managed(self.settings(auto_equip=True))
         original = self.service._managed_observation

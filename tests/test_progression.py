@@ -2,13 +2,13 @@
 from copy import deepcopy
 from pathlib import Path
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from deskrawl_assistant.progression import catalog, growth_action, next_purchase, NEW_ACTIONS, validate_growth, merchant_prices
 from deskrawl_assistant.managed_mode import DEFAULT_SETTINGS, ManagedMode, validate_settings
 from deskrawl_assistant.managed_service import required_capabilities
 from deskrawl_assistant.game_actions import GameActions
-from deskrawl_assistant.native_dispatcher import NativeActionError
+from deskrawl_assistant.native_dispatcher import NativeActionError, load_profile
 from deskrawl_assistant.models import ValidationError
 from test_managed_mode import observation, equipment, settings as managed_settings, verified
 
@@ -403,7 +403,10 @@ class MerchantPolicyTests(unittest.TestCase):
         self.assertIn('容量',engine.status)
 
     def test_unverified_growth_actions_are_blocked_before_process_reads_without_opt_in(self):
-        reader,dispatcher=Mock(),Mock();engine=GameActions(reader,dispatcher=dispatcher)
+        reader,dispatcher=Mock(),Mock()
+        profile=load_profile();profile.pop('enabled_kinds',None)
+        with patch('deskrawl_assistant.game_actions.load_profile',return_value=profile):
+            engine=GameActions(reader,dispatcher=dispatcher)
         for kind in ('learn_life_skill', 'set_skill'):
             with self.assertRaises(NativeActionError):engine.execute(kind,{})
         reader.check_game_files.assert_not_called();dispatcher.invoke.assert_not_called()

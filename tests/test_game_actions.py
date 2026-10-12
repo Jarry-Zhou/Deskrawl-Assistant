@@ -76,9 +76,10 @@ class ActionBoundaryTests(unittest.TestCase):
     def unverified_profile(self):
         profile = load_profile()
         profile['verified_kinds'] = []
+        profile.pop('enabled_kinds', None)
         return patch('deskrawl_assistant.game_actions.load_profile', return_value=profile)
 
-    def test_release_profile_exposes_only_recorded_actions_without_installing(self):
+    def test_release_profile_exposes_all_actions_without_overstating_recorded_validation(self):
         reader, dispatcher = Mock(), Mock()
         dispatcher.installed = False
         actions = GameActions(reader, dispatcher=dispatcher)
@@ -95,27 +96,25 @@ class ActionBoundaryTests(unittest.TestCase):
             self.assertFalse(state[key]['test_enabled'])
             self.assertEqual(state[key]['reason'], '')
         for key in ('life_skills', 'skills'):
-            self.assertFalse(state[key]['available'])
+            self.assertTrue(state[key]['available'])
+            self.assertTrue(state[key]['release_enabled'])
+            self.assertFalse(state[key]['test_enabled'])
             self.assertFalse(state[key]['native_verified'])
         dispatcher.install.assert_not_called()
         dispatcher.invoke.assert_not_called()
 
-    def test_verified_growth_dispatch_works_without_test_mode_and_other_growth_stays_blocked(self):
+    def test_all_released_growth_dispatch_works_without_test_mode_and_preserves_validation_status(self):
         reader, dispatcher, growth = Mock(), Mock(), Mock()
         actions = GameActions(reader, dispatcher=dispatcher)
         with patch.object(actions, 'progression_runtime', return_value=growth):
-            for kind in ('allocate_talent','merchant_open','merchant_buy','merchant_close','merchant_refresh'):
+            for kind in ('allocate_talent','merchant_open','merchant_buy','merchant_close','merchant_refresh','learn_life_skill','set_skill'):
                 with self.subTest(kind=kind):
                     growth.execute.return_value = {'effect_confirmed': True, 'native_verified': False}
                     result = actions.execute(kind, {'class_mask': 4})
                     self.assertTrue(result['effect_confirmed'])
-                    self.assertTrue(result['native_verified'])
+                    self.assertEqual(result['native_verified'], kind in actions.verified_kinds)
                     growth.execute.assert_called_with(kind, {'class_mask': 4}, cancel_event=None, validate=unittest.mock.ANY)
-            count = growth.execute.call_count
-            for kind in ('learn_life_skill', 'set_skill'):
-                with self.assertRaisesRegex(NativeActionError, '尚未实机验收'):
-                    actions.execute(kind, {'class_mask': 4})
-            self.assertEqual(growth.execute.call_count, count)
+            self.assertEqual(growth.execute.call_count, 7)
         dispatcher.install.assert_not_called()
         dispatcher.invoke.assert_not_called()
 
