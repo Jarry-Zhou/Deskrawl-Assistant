@@ -19,7 +19,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.6'
+NAME = 'Deskrawl装备助手-v1.2.7'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -125,7 +125,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.6'
+                assert request('/api/state')['app_version'] == '1.2.7'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -145,6 +145,23 @@ def main():
         request('/api/shutdown', {})
         assert process.wait(15) == 0
         process = None
+
+    def check_reporting_disabled():
+        for path, payload in (
+            ('/api/recommendations', None),
+            ('/api/recommendations/settings', {'minutes': 30}),
+            ('/api/experience', None),
+            ('/api/experience/sample', {'stage': '隔离验证', 'xp': 100, 'seconds': 20}),
+        ):
+            try:
+                request(path, payload)
+            except urllib.error.HTTPError as exc:
+                result = json.load(exc)
+                assert exc.code == 410 and result['disabled'] is True, result
+            else:
+                raise AssertionError('Retired reporting endpoint accepted a request: ' + path)
+        assert not list(persistent.rglob('experience.sqlite3*'))
+        assert not list(persistent.rglob('recommendations.sqlite3*'))
 
     try:
         start()
@@ -176,13 +193,14 @@ def main():
         assert request('/style.css')
         page = request('/').decode('utf-8')
         tabs = re.findall(r'data-tab="([^"]+)"', page)
-        assert tabs == ['rules', 'inventory', 'managed', 'loot-preview', 'recommendations', 'experience', 'logs']
+        assert tabs == ['rules', 'inventory', 'managed', 'loot-preview', 'logs']
         assert 'id="managed-tab-status"' in page
         assert all(page.count('id="'+tab+'-page"') == 1 for tab in tabs)
         assert 'src="/managed-mode.js"' in page
         assert b"$('managed-page').hidden=tab!=='managed'" in request('/app.js')
         assert b"$('loot-preview-page').hidden=tab!=='loot-preview'" in request('/app.js')
-        report['checks'].append('七个页签完整且没有重复；托管页面与掉落预览的导航同时保留')
+        assert 'recommendations-page' not in page and 'experience-page' not in page
+        report['checks'].append('五个页签完整且没有重复；刷图推荐与经验收益界面已移除，托管与掉落预览导航保留')
         assert 'id="equipped-dialog"' in page and page.count('data-column="') == 7
         assert '单体 Boss 基准战力' in page
         assert 'id="loot-preview-page"' in page
@@ -191,12 +209,8 @@ def main():
         report['checks'].append('掉落预览界面、独立类型配置及只读接口内置，断连时无旧计划')
         assert b'InventoryTools' in request('/inventory-tools.js')
         report['checks'].append('角色装备独立弹窗、七个表头菜单及固定 Boss 场景说明已随 exe 内置')
-        recommendation = request('/api/recommendations')
-        assert recommendation['available'] is False and not recommendation['rows']
-        recommendation_settings = {'minutes':30,'difficulty':'current','overhead_seconds':7,'overhead_mode':'manual','include_locked':True,'sort':'completed'}
-        assert request('/api/recommendations/settings',recommendation_settings)['settings'] == recommendation_settings
-        assert request('/api/recommendations')['settings'] == recommendation_settings
-        report['checks'].append('刷图推荐资源内置，断线状态明确，推荐设置持久保存')
+        check_reporting_disabled()
+        report['checks'].append('停用的报告接口返回410，不创建经验或推荐数据库')
         catalog = request('/api/catalog')
         assert len(catalog['equipment']) == 209
         assert sum(i['legendary'] for i in catalog['equipment']) == 52
@@ -253,12 +267,6 @@ def main():
         assert logs_before >= 3
         assert request('/api/state')['rules'][0]['enabled'] is False
         report['checks'].append('同件装备的两个可命名组合成功保存，导出保留全部组合；配置操作进入持久日志')
-        xp_sample = request('/api/experience/sample', {'stage':'打包测试关卡','profile':'测试隔离条件','xp':100,'seconds':20})
-        experience = request('/api/experience?minutes=60')
-        assert experience['rows'][0]['projected_xp'] == 18000
-        assert experience['rows'][0]['completed_runs_xp'] == 18000
-        assert 'experience-page' in request('/').decode('utf-8')
-        report['checks'].append('经验收益页面及内置字段资源可读取；单文件版本的一小时收益计算正确')
         # A second launch must attach to the same service and exit, leaving
         # the first instance's session and rule data intact.
         second_command = [str(exe), '--port', str(port)]
@@ -287,34 +295,6 @@ def main():
                 assert preview['totals']['items'] == sum(len(w['items']) for w in preview['waves'])
                 assert preview['totals']['gold'] == sum(w['gold'] for w in preview['waves'])
             report['checks'].append('打包版只读取得当前在线计划或明确等待状态，物品与金币合计一致')
-            live = request('/api/experience')['live']
-            if live['available']:
-                assert live['total_xp'] >= live['current_xp'], live
-                request('/api/experience/start', {'stage':live.get('stage') or '实际游戏只读测试','profile':'测试隔离条件'})
-                time.sleep(1)
-                xp_receipt = request('/api/experience/finish', {})
-                assert xp_receipt['source'] == 'live_timer' and xp_receipt['xp'] >= 0
-                request('/api/experience/delete', {'id':xp_receipt['id']})
-                report['checks'].append('单文件 exe 只读取得实际游戏经验和关卡，自动计时经验结算成功')
-            else:
-                assert '巅峰' in live.get('reason',''), live
-                report['checks'].append('实际角色已满级：巅峰经验明确返回不可自动读取，未将零值计作实测收益')
-            report['experience_reading']={'available':live['available'],'reason':live.get('reason')}
-            recommendation = request('/api/recommendations')
-            # Connection and the periodic recommendation observer complete
-            # independently; wait for its first stable read-only snapshot.
-            deadline = time.monotonic()+20
-            while not recommendation['available'] and time.monotonic()<deadline:
-                time.sleep(.2)
-                recommendation = request('/api/recommendations')
-            assert recommendation['available'], recommendation.get('error')
-            assert recommendation['coverage']['supported'] == 71 and recommendation['coverage']['total'] == 76
-            assert len(recommendation['rows']) == 71
-            assert recommendation['best']['accessible'] is True
-            assert recommendation['best']['seconds_per_run'] > 0
-            assert recommendation['best']['effective_budget_xp'] >= 0
-            report['checks'].append('单文件 exe 实机读取当前角色，71张常规图自动推荐与准入检查正常')
-
             report['game_pid'] = state['pid']
             report['equipment_count'] = len(state['items'])
             character = state['character']
@@ -362,11 +342,8 @@ def main():
         assert restored_managed['settings'] == saved_managed and not restored_managed['running']
         report['checks'].append('战斗天赋、生活技能路径、技能组合及自定义93%/17%商人比例与购买件数，保存后重启完整保留')
         report['checks'].append('自定义托管分区、未解锁页选择与自动整理偏好重启后保留，默认方案不覆盖本地配置')
-        assert request('/api/recommendations')['settings'] == recommendation_settings
-        assert request('/api/experience')['recent'][0]['id'] == xp_sample['id']
-        request('/api/experience/delete', {'id':xp_sample['id']})
-        assert not request('/api/experience')['rows']
-        report['checks'].append('经验样本重启后保留，删除后排行正确更新')
+        check_reporting_disabled()
+        report['checks'].append('重启后报告接口仍停用，未生成报告数据库')
         assert token != old_token
         report['checks'].append('退出后重启仍保留规则；不会自动连接或开启监控')
         report['checks'].append('自动整理选择与偏好重启后保留，仍默认暂停')

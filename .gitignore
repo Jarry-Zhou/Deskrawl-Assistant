@@ -94,3 +94,4 @@ docs/*
 !tools/managed_test_settings.py
 !docs/1.2.6开发说明.md
 !docs/1.2.6验收说明.md
+!docs/1.2.7验收说明.md
