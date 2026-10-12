@@ -255,6 +255,35 @@ class GrowthPolicyTests(unittest.TestCase):
 
 
 class MerchantPolicyTests(unittest.TestCase):
+    def test_unreadable_town_skills_allow_farming_to_load_combat_controller(self):
+        cfg=settings();cfg['progression']['skills_enabled']=True
+        current=state(shards=100)
+        current['skills']={'readable':False,'equipped':None,'available':[],
+            'reason':'PlayerAbilityController 尚未加载。'}
+        current['merchant'].update(available=False,open=False)
+        world=observation([],town=True,progression=current)
+        engine=ManagedMode(cfg);engine.start(world)
+        for _ in range(10):
+            action=engine.next_action(world)
+            if action is not None:break
+        else:self.fail('Unreadable town skills prevented farming from starting')
+        self.assertEqual(action['kind'],'enter_dungeon')
+        self.assertTrue(engine.running)
+
+    def test_unreadable_skills_wait_without_fake_equipping_and_do_not_block_other_growth(self):
+        cfg=settings();cfg['progression']['skills_enabled']=True
+        current=state();current['skills']={'readable':False,'equipped':None,'available':[],
+            'reason':'PlayerAbilityController 尚未加载。'}
+        action,reason=growth_action(cfg,current)
+        self.assertIsNone(action);self.assertIn('技能读取',reason)
+        cfg['life_skills']['enabled']=True
+        action,_=growth_action(cfg,current)
+        self.assertEqual(action['kind'],'learn_life_skill')
+        cfg['life_skills']['enabled']=False;cfg['progression']['talents_enabled']=True
+        cfg['progression']['talent_targets']={'4':{'HunterTalent0':1}}
+        action,_=growth_action(cfg,current)
+        self.assertEqual(action['kind'],'allocate_talent')
+
     def test_dynamic_capacity_avoids_early_return_after_life_upgrade(self):
         cfg=settings();cfg['merchant']['enabled']=True
         for cap,expected in ((2000,'return_town'),(3000,None)):

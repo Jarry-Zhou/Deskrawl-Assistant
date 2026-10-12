@@ -10,7 +10,7 @@ from deskrawl_assistant.native_dispatcher import compile_mailbox, load_profile, 
 from deskrawl_assistant.progression import catalog
 from deskrawl_assistant.progression_runtime import ProgressionRuntime, _GrowthCopy
 from deskrawl_assistant.recommendation_reader import _Copy
-from deskrawl_assistant.native_memory import SnapshotChangedError
+from deskrawl_assistant.native_memory import SnapshotChangedError, MemoryReadError
 from test_progression import state
 
 
@@ -81,17 +81,20 @@ class PreviewReadTests(unittest.TestCase):
         self.assertEqual(runtime._merchant_npc(_Read(reader,profile)),npc)
         reader.array.assert_called_once_with(array,'ItemData',stride=8,limit=32)
 
-    def test_combat_preview_reads_cached_prices_without_opening_shop_or_exposing_purchases(self):
+    def snapshot_fixture(self, *, ability=500, scene=2):
         copy,read,reader=Mock(),Mock(),Mock();data=catalog()
         copy.copied_only.side_effect=nullcontext
         singletons={name:(index+1)*10000 for index,name in enumerate(
             ['PlayerData','PlayerTalentBook','PlayerLifeSkillBook','PlayerAbilityBook','Inventory','SaveSystem','MerchantUI'])}
-        manager,hero,combat,player,ability,soul=100,200,300,400,500,600
+        manager,hero,combat,player,soul=100,200,300,400,600
         items={'SoulShard':soul,**{row['id']:1000+index*1000 for index,row in enumerate(data['shop'])}}
         pointers={manager+56:hero,manager+64:combat,combat+32:player,combat+112:ability,
                   singletons['SaveSystem']+112:90000,singletons['Inventory']+64:90001}
         copy.ptr.side_effect=lambda address:pointers.get(address,0)
-        copy.verify.side_effect=lambda obj,name:obj
+        def verify(obj,name):
+            if not obj: raise MemoryReadError(name+' 尚未加载。')
+            return obj
+        copy.verify.side_effect=verify
         copy.dictionary.side_effect=lambda obj,*args:({index:obj for index,obj in enumerate(items.values())} if obj==90000 else {soul:100} if obj==90001 else {})
         copy.list.return_value=[];copy.array.return_value=[];copy.boolean.return_value=False
         integers={hero+48:4,soul+140:2000,singletons['SaveSystem']+32:1,
@@ -101,11 +104,15 @@ class PreviewReadTests(unittest.TestCase):
         names={hero:data['heroes']['4']['id'],**{obj:key for key,obj in items.items()}}
         reader.asset_name.side_effect=names.get
         actions=SimpleNamespace(reader=reader,profile=load_profile(),dispatcher=Mock(),
-            _context=Mock(return_value=(read,manager,0,2)),_difficulty_state=Mock(return_value=('Normal',[])))
+            _context=Mock(return_value=(read,manager,0,scene)),_difficulty_state=Mock(return_value=('Normal',[])))
         runtime=ProgressionRuntime(actions);runtime._copy=Mock(return_value=copy)
         runtime._merchant_quotes=Mock(return_value={})
         runtime._merchant_unlock=Mock(return_value={'unlock_known':True,'unlocked':True})
         runtime._singleton=Mock(side_effect=lambda copy,name:singletons[name]);runtime._ranks=Mock(return_value=({},{}))
+        return runtime,actions,copy
+
+    def test_combat_preview_reads_cached_prices_without_opening_shop_or_exposing_purchases(self):
+        runtime,actions,copy=self.snapshot_fixture()
         with patch('deskrawl_assistant.progression_runtime.decode_obscured_int',return_value=70):
             result=runtime.snapshot(merchant=True)
         self.assertTrue(result['available']);self.assertFalse(result['merchant']['available'])
@@ -114,6 +121,37 @@ class PreviewReadTests(unittest.TestCase):
         self.assertNotIn('MerchantUI',[call.args[1] for call in runtime._singleton.call_args_list])
         actions.dispatcher.invoke.assert_not_called()
 
+    def test_town_without_skill_controller_still_reads_books_shards_and_real_merchant_unlock(self):
+        runtime,actions,copy=self.snapshot_fixture(ability=0,scene=1)
+        with patch('deskrawl_assistant.progression_runtime.decode_obscured_int',return_value=70):
+            result=runtime.snapshot(merchant=True)
+        self.assertTrue(result['available'])
+        self.assertFalse(result['skills']['readable'])
+        self.assertIsNone(result['skills']['equipped'])
+        self.assertIn('PlayerAbilityController',result['skills']['reason'])
+        self.assertEqual(result['soul_shards'],{'current':100,'maximum':2000})
+        self.assertEqual(result['talents'],{'ranks':{},'unspent':0})
+        self.assertEqual(result['life_skills'],{'ranks':{}})
+        self.assertTrue(result['merchant']['unlock_known'])
+        self.assertTrue(result['merchant']['unlocked'])
+        copy.finish.assert_called_once();actions._context.return_value[0].finish.assert_called_once()
+        actions.dispatcher.invoke.assert_not_called()
+        runtime,actions,copy=self.snapshot_fixture(ability=500,scene=1)
+        with patch('deskrawl_assistant.progression_runtime.decode_obscured_int',return_value=70):
+            restored=runtime.snapshot(merchant=True)
+        self.assertTrue(restored['skills']['readable'])
+        self.assertEqual(restored['skills']['equipped'],[None]*4)
+
+    def test_optional_skills_do_not_swallow_changing_roots_or_skip_final_consistency(self):
+        runtime,actions,copy=self.snapshot_fixture(ability=0)
+        with patch.object(runtime,'_skills',side_effect=SnapshotChangedError('技能根已变化')), \
+                patch('deskrawl_assistant.progression_runtime.decode_obscured_int',return_value=70):
+            with self.assertRaises(SnapshotChangedError):runtime.snapshot(merchant=True)
+        runtime,actions,copy=self.snapshot_fixture(ability=0)
+        copy.finish.side_effect=SnapshotChangedError('读取期间根已变化')
+        with patch('deskrawl_assistant.progression_runtime.decode_obscured_int',return_value=70):
+            with self.assertRaises(SnapshotChangedError):runtime.snapshot(merchant=True)
+        actions.dispatcher.invoke.assert_not_called()
 
     def test_saved_unlock_flag_controls_access_and_corrupt_collection_is_unknown(self):
         profile=load_profile();reader=Mock();reader.module={'base':0};actions=SimpleNamespace(reader=reader,profile=profile)
@@ -224,6 +262,14 @@ class RuntimeBoundaryTests(unittest.TestCase):
             runtime.execute('allocate_talent', {'class_mask':8})
         actions.dispatcher.invoke.assert_not_called()
 
+    def test_missing_skill_snapshot_never_submits_a_skill_change(self):
+        before=state();before['skills']={'readable':False,'equipped':None,'available':[],
+            'reason':'PlayerAbilityController 尚未加载。'}
+        runtime,actions,_=self.fixture(before,deepcopy(before))
+        with self.assertRaisesRegex(NativeActionError,'技能读取未确认'):
+            runtime.execute('set_skill',{'class_mask':4,'skill_slots':[None]*4})
+        actions.dispatcher.invoke.assert_not_called()
+
     def test_locked_merchant_never_submits_native_open_or_purchase(self):
         for kind in ('merchant_open','merchant_buy'):
             before=state();before['merchant']['unlocked']=False
@@ -247,6 +293,8 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
     def test_merchant_purchase_requires_new_uid_correct_slot_and_exact_currency_drop(self):
         before = state(); quote = before['merchant']['stock'][0]
+        before['skills']={'readable':False,'equipped':None,'available':[],
+            'reason':'PlayerAbilityController 尚未加载。'}
         before['_item_map'] = {quote['id']:999}; after = deepcopy(before)
         after['soul_shards']['current'] -= quote['price']
         runtime, actions, _ = self.fixture(before, after)

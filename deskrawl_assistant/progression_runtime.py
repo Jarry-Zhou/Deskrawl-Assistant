@@ -149,6 +149,25 @@ class ProgressionRuntime:
         except MemoryReadError as exc:
             return {'unlock_known':False,'unlocked':False,'unlock_requirements':requirements,'unlock_reason':str(exc)}
 
+    def _skills(self, copy, combat, definition, level):
+        book = self._singleton(copy, 'PlayerAbilityBook')
+        controller = copy.verify(copy.ptr(combat + 112), 'PlayerAbilityController')
+        known = {s['id']: s for s in definition['abilities']}
+        available = []
+        for raw in copy.list(copy.ptr(book + 32), 8, 'AbilityData'):
+            obj = copy.verify(struct.unpack('<Q', raw)[0], 'AbilityData')
+            key = self.reader.asset_name(obj)
+            if key not in known: raise MemoryReadError('当前职业可用技能未适配。')
+            if level >= known[key]['level_requirement']: available.append(key)
+        equipped = []
+        for index in range(4):
+            obj = copy.ptr(controller + 32 + index * 8)
+            key = self.reader.asset_name(copy.verify(obj, 'AbilityData')) if obj else None
+            if key and (key not in known or index not in known[key]['slots']):
+                raise MemoryReadError('当前技能栏位未确认。')
+            equipped.append(key)
+        return {'readable': True, 'equipped': equipped, 'available': available}
+
     def snapshot(self, *, merchant=False, internal=False, after_action=False, quote_guard_slot=None):
         # Post-action rank/receipt reads are allowed while the original game
         # starts an online save. Mutation contexts still reject that busy flag.
@@ -180,20 +199,14 @@ class ProgressionRuntime:
             life_book = self._singleton(copy, 'PlayerLifeSkillBook')
             life_nodes = {n['id']: n for n in data['life_skills']}
             life, _ = self._ranks(copy, life_book, 32, life_nodes, 'LifeSkillNodeData')
-            ability_book = self._singleton(copy, 'PlayerAbilityBook')
-            ability_controller = copy.verify(copy.ptr(combat + 112), 'PlayerAbilityController')
-            known = {s['id']: s for s in definition['abilities']}
-            available = []
-            for raw in copy.list(copy.ptr(ability_book + 32), 8, 'AbilityData'):
-                obj = copy.verify(struct.unpack('<Q', raw)[0], 'AbilityData'); key = self.reader.asset_name(obj)
-                if key not in known: raise MemoryReadError('当前职业可用技能未适配。')
-                if level >= known[key]['level_requirement']: available.append(key)
-            equipped = []
-            for index in range(4):
-                obj = copy.ptr(ability_controller + 32 + index * 8)
-                key = self.reader.asset_name(copy.verify(obj, 'AbilityData')) if obj else None
-                if key and (key not in known or index not in known[key]['slots']): raise MemoryReadError('当前技能栏位未确认。')
-                equipped.append(key)
+            try:
+                skills = self._skills(copy, combat, definition, level)
+            except SnapshotChangedError:
+                raise
+            except MemoryReadError as exc:
+                # Town startup may not have a combat-only skill controller.
+                # Its absence cannot invalidate independent currency/books.
+                skills = {'readable': False, 'equipped': None, 'available': [], 'reason': str(exc)}
         inventory = self._singleton(copy, 'Inventory'); save = self._singleton(copy, 'SaveSystem')
         busy = copy.boolean(save + 193)
         items = copy.dictionary(copy.ptr(save + 112), 'pointer', 'object')
@@ -244,7 +257,7 @@ class ProgressionRuntime:
         copy.finish(); read.finish()
         result = {'available': True, 'busy': busy, 'class_mask': mask, 'level': level, 'gold': gold,
             'talents': {'ranks': talents, 'unspent': unspent}, 'life_skills': {'ranks': life},
-            'skills': {'equipped': equipped, 'available': available},
+            'skills': skills,
             'soul_shards': {'current': balance, 'maximum': capacity}, 'merchant': shop}
         if internal:
             result['_item_map'] = item_map
@@ -322,6 +335,8 @@ class ProgressionRuntime:
     def execute(self, kind, payload, *, cancel_event=None, validate=lambda: True):
         before = self.snapshot(merchant=kind.startswith('merchant'), internal=True,
                                quote_guard_slot=payload.get('shop_slot') if kind=='merchant_buy' else 0)
+        if kind == 'set_skill' and before.get('skills', {}).get('readable') is False:
+            raise NativeActionError('技能读取未确认：' + before['skills'].get('reason', '等待技能控制器加载。'))
         if payload.get('class_mask') != before['class_mask']: raise NativeActionError('职业已经改变，重新规划。')
         read, manager, area, scene = self.actions._context(); read.guards.extend(before['_guards']); copy = self._copy()
         save = self._singleton(copy, 'SaveSystem'); calls = []
@@ -433,7 +448,9 @@ class ProgressionRuntime:
                     # fmv returned true after its original gold deduction.
                     # Concurrent gold drops do not invalidate that receipt.
                     confirmed = after['life_skills']['ranks'].get(key, 0) == payload['expected_rank'] + 1
-                elif kind == 'set_skill': confirmed = after['skills']['equipped'] == payload['skill_slots']
+                elif kind == 'set_skill':
+                    confirmed = (after['skills'].get('readable') is not False
+                                 and after['skills']['equipped'] == payload['skill_slots'])
                 elif kind == 'merchant_open': confirmed = after['merchant']['open']
                 elif kind == 'merchant_close': confirmed = not after['merchant']['open']
                 elif kind == 'merchant_refresh':

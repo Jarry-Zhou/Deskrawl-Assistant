@@ -12,7 +12,7 @@ test('merchant defaults are 85 percent return and zero reserve while saved value
   assert.equal(restored.merchant.trigger_percent,94);assert.equal(restored.merchant.spend_to_percent,13);
 });
 
-test('icon selection retains numeric budgets and does not overwrite other class plans',()=>{
+function growthUI(){
   const vm=require('node:vm'),elements=new Map(),rows={};
   const checks=new Set(['managed-merchant','managed-talents','managed-skills','managed-life']);
   const numbers=new Set(['managed-shard-trigger','managed-shard-reserve','managed-life-gold']);
@@ -32,7 +32,11 @@ test('icon selection retains numeric budgets and does not overwrite other class 
   };
   const document={getElementById:node,querySelectorAll:selector=>rows[selector]||[],activeElement:null};
   const window={document};vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../deskrawl_assistant/web/managed-growth.js'),'utf8'),{window});
-  const ui=window.ManagedGrowthUI;ui.init();let saved=growth.normalize();
+  const ui=window.ManagedGrowthUI;ui.init();return {node,document,ui,rows};
+}
+
+test('icon selection retains numeric budgets and does not overwrite other class plans',()=>{
+  const {node,document,ui,rows}=growthUI();let saved=growth.normalize();
   let shopBuilds=0,shopHtml='';Object.defineProperty(node('managed-shop-weights'),'innerHTML',{
     get:()=>shopHtml,set:value=>{shopHtml=value;shopBuilds++;}});
   saved.progression.skill_stages['8']=[{level:20,slots:[null,null,null,null]}];
@@ -100,6 +104,85 @@ test('icon selection retains numeric budgets and does not overwrite other class 
   assert.ok(!node('managed-skill-stages').innerHTML.includes('data-skill-id'));
   node('managed-talent-clear').listeners.click[0]();node('growth-skills-clear').listeners.click[0]();
   assert.equal(JSON.stringify(saved),before);
+});
+
+test('unloaded skill controller preserves live growth data and editable presets without inventing current slots',()=>{
+  const {node,ui}=growthUI();
+  let saved=growth.normalize({merchant:{enabled:true,weights:{'2':1}}});
+  const reason='PlayerAbilityController 尚未加载。';
+  const current={available:true,class_mask:4,level:70,gold:12345,
+    soul_shards:{current:1800,maximum:2500},talents:{ranks:{HunterTalent0:3},unspent:7},
+    life_skills:{ranks:{LifeSkill:1}},merchant:{unlock_known:true,unlocked:true,preview:[{slot:2,price:21}]},
+    skills:{readable:false,equipped:null,available:[],reason}};
+  const changed=(value,renderNow)=>{saved=value;if(renderNow)ui.render(saved,data,current,false,changed,true);};
+  assert.doesNotThrow(()=>ui.render(saved,data,current,false,changed,true));
+  assert.equal(node('managed-growth-class').textContent,'猎人 · 当前职业');
+  assert.equal(node('managed-merchant').disabled,false);
+  assert.equal(node('managed-merchant-unlock').textContent,'神秘商人已解锁');
+  assert.match(node('managed-shard-state').textContent,/1800 \/ 2500/);
+  assert.match(node('managed-talent-total').textContent,/当前已投入 3 · 可用 7 点/);
+  assert.match(node('growth-life-summary').innerHTML,/已学习 <b>1<\/b>/);
+  assert.match(node('growth-life-summary').innerHTML,/当前金币 <b>12,345<\/b>/);
+  assert.equal(node('managed-talent-tree').querySelectorAll('[data-talent-node]').length,40);
+  assert.equal(node('managed-life-nodes').querySelectorAll('[data-life-node]').length,85);
+  assert.match(node('growth-skill-status').textContent,/猎人 · 当前 70 级 · 技能状态待读取/);
+  assert.match(node('growth-skills-note').textContent,/PlayerAbilityController 尚未加载。/);
+  assert.match(node('managed-skills').title,/技能栏读取完成后切换/);
+  const unreadSlots=()=>{
+    const html=node('managed-skill-stages').innerHTML;
+    assert.equal([...html.matchAll(/当前：未读取/g)].length,4);
+    assert.doesNotMatch(html,/当前：未装备/);
+    assert.doesNotMatch(html,/growth-skill-icon [^"]*equipped/);
+  };
+  unreadSlots();
+  const skill={dataset:{skillId:'HunterBasicAttack2'}};
+  node('managed-skill-stages').listeners.click[0]({target:{closest:selector=>selector==='[data-skill-id]'?skill:null}});
+  assert.equal(saved.progression.skill_stages['4'][0].slots[0],'HunterBasicAttack2');
+  assert.equal(node('managed-skills').disabled,false);unreadSlots();
+  // A later complete read restores the real equipped marker and slot text.
+  current.skills={readable:true,equipped:['HunterBasicAttack1',null,null,null],available:data.heroes['4'].abilities.map(s=>s.id)};
+  ui.render(saved,data,current,false,changed,true);
+  const ability=data.heroes['4'].abilities.find(s=>s.id==='HunterBasicAttack1');
+  assert.ok(node('managed-skill-stages').innerHTML.includes('当前：'+ability.name));
+  assert.equal([...node('managed-skill-stages').innerHTML.matchAll(/当前：未装备/g)].length,3);
+  assert.match(node('managed-skill-stages').innerHTML,/growth-skill-icon [^"]*equipped/);
+  assert.doesNotMatch(node('growth-skills-note').textContent,/待读取/);
+  // Legacy snapshots keep their actual skill display without the new flag.
+  delete current.skills.readable;ui.render(saved,data,current,false,changed,true);
+  assert.ok(node('managed-skill-stages').innerHTML.includes('当前：'+ability.name));
+  // An unreadable state must not display stale slots retained by an older poll.
+  current.skills.readable=false;current.skills.reason=reason;ui.render(saved,data,current,false,changed,true);unreadSlots();
+});
+
+test('unloaded skills allow enabled switching to wait while genuine server blockers still prevent start',()=>{
+  const cfg=managed.normalizeSettings({merchant:{enabled:true,weights:{'2':1}},farming:{enabled:true,dungeon_id:'Volcano7'}});
+  const packet={phase:'idle',can_start:true,control_available:true,progression_state:{available:true,
+    merchant:{unlock_known:true,unlocked:true},skills:{readable:false,equipped:null,available:[],reason:'PlayerAbilityController 尚未加载。'}}};
+  packet.capabilities=Object.fromEntries([...managed.requiredCapabilities(cfg),'skills'].map(key=>[key,{available:true,native_verified:true}]));
+  assert.equal(managed.controlState(packet,cfg,true).canStart,true);
+  assert.equal(managed.controlState(packet,cfg,true).startDisabledReason,'');
+  cfg.progression.skills_enabled=true;
+  const waiting=managed.controlState(packet,cfg,true);
+  assert.equal(waiting.canStart,true);
+  assert.equal(waiting.startDisabledReason,'');
+  const skillsOnly=managed.normalizeSettings({progression:{skills_enabled:true}});
+  assert.equal(managed.controlState(packet,skillsOnly,true).canStart,true);
+  assert.equal(managed.controlState(packet,skillsOnly,true).startDisabledReason,'');
+  packet.can_start=false;packet.blocked_reasons=['关卡读取：服务端确认关卡记录尚未加载。'];
+  assert.equal(managed.controlState(packet,cfg,true).canStart,false);
+  assert.equal(managed.controlState(packet,cfg,true).startDisabledReason,packet.blocked_reasons[0]);
+  packet.can_start=true;
+  assert.equal(managed.controlState(packet,cfg,true).canStart,false);
+  // The server can supply a more specific merchant read failure; preserve it.
+  cfg.progression.skills_enabled=false;packet.progression_state.merchant.unlock_known=false;
+  packet.blocked_reasons=['神秘商人读取：解锁集合完整性不一致。'];
+  assert.equal(managed.controlState(packet,cfg,true).canStart,false);
+  assert.equal(managed.controlState(packet,cfg,true).startDisabledReason,packet.blocked_reasons[0]);
+  packet.progression_state.merchant.unlock_known=true;packet.can_start=true;packet.blocked_reasons=[];
+  cfg.progression.skills_enabled=true;packet.progression_state.skills.readable=true;
+  assert.equal(managed.controlState(packet,cfg,true).canStart,true);
+  delete packet.progression_state.skills.readable;
+  assert.equal(managed.controlState(packet,cfg,true).canStart,true);
 });
 
 test('career discovery requires a connected complete snapshot with one supported class',()=>{

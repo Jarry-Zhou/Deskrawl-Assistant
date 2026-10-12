@@ -72,8 +72,12 @@
     const missing=requiredCapabilities(settings).filter(key=>!capabilityAvailable(packet?.capabilities?.[key]));
     const configurationError=validateSettings(settings)||(!settings.auto_equip.enabled&&!settings.farming.enabled&&!growth.merchant.enabled&&!growth.life_skills.enabled&&!growth.progression.talents_enabled&&!growth.progression.skills_enabled?'请至少启用一项托管功能。':'');
     const merchantBlocked=growth.merchant.enabled&&(packet?.progression_state?.available!==true||packet.progression_state.merchant?.unlock_known!==true||packet.progression_state.merchant?.unlocked!==true);
-    const blocked=packet?.can_start===false||missing.length>0||!!configurationError||merchantBlocked||(settings.farming.enabled&&packet?.control_available===false);
-    return {canStart:!!connected&&!running&&!busy&&!blocked,canPause:running,canStop:running||!!packet?.paused||!['idle','stopped'].includes(phase),canReset:!running&&!packet?.paused&&!busy,stopLabel:packet?.finishing?'立即停止':'回城整理后停止',missing,configurationError};
+    const serverReasons=Array.isArray(packet?.blocked_reasons)?packet.blocked_reasons.filter(reason=>typeof reason==='string'&&reason):[];
+    const startDisabledReason=packet?.start_disabled_reason||serverReasons.join('；')
+      ||(merchantBlocked?'神秘商人：尚未解锁或解锁状态未确认。':'')
+      ||(settings.farming.enabled&&packet?.control_available===false?'关卡读取：'+(packet.control_error||'等待关卡与场景完整读取。'):'');
+    const blocked=packet?.can_start===false||serverReasons.length>0||missing.length>0||!!configurationError||merchantBlocked||(settings.farming.enabled&&packet?.control_available===false);
+    return {canStart:!!connected&&!running&&!busy&&!blocked,canPause:running,canStop:running||!!packet?.paused||!['idle','stopped'].includes(phase),canReset:!running&&!packet?.paused&&!busy,stopLabel:packet?.finishing?'立即停止':'回城整理后停止',missing,configurationError,startDisabledReason};
   }
   function statistics(value={}){
     const count=row=>Math.max(0,safeNumber(row?.count)),group=rows=>Array.isArray(rows)?rows:Object.entries(rows||{}).map(([name,row])=>typeof row==='object'?{name,...row}:{name,count:row});
@@ -273,7 +277,7 @@
     $('managed-pause').hidden=!packet?.running;$('managed-pause').disabled=!controls.canPause;$('managed-stop').disabled=!controls.canStop;$('managed-reset-stats').disabled=!controls.canReset;
     if(!connected)$('managed-start').title='请先连接游戏';
     else if(controls.missing.length)$('managed-start').title='尚未通过验证：'+controls.missing.map(key=>capabilityNames[key]).join('、');
-    else $('managed-start').title=packet?.start_disabled_reason||controls.configurationError||'按保存的设置开始托管';
+    else $('managed-start').title=controls.startDisabledReason||controls.configurationError||'按保存的设置开始托管';
   }
   function renderCapabilities(){
     const requirements=requiredCapabilities(draft||normalizeSettings());
@@ -302,7 +306,8 @@
   function render(){
     $('managed-phase').textContent=packet?.finishing?'结束中 · '+phaseLabel():phaseLabel();$('managed-message').textContent=packet?.message||(!connected?'请先连接游戏，读取关卡和仓库页签。':'配置托管策略后，点击启动。');
     $('managed-status-dot').className='managed-status-dot '+(packet?.running?'running':packet?.phase==='error'||packet?.phase==='blocked'?'error':'');
-    const error=packet?.error||packet?.start_disabled_reason||(draft?.farming.enabled&&connected&&packet?.control_error);if(error){$('managed-error').textContent=String(error);$('managed-error').hidden=false;}
+    const controls=controlState(packet,draft||normalizeSettings(),connected,busy);
+    const error=packet?.error||(connected&&controls.startDisabledReason)||(draft?.farming.enabled&&connected&&packet?.control_error);if(error){$('managed-error').textContent=String(error);$('managed-error').hidden=false;}
     renderMaps();renderPages();renderSlots();renderDependencies();renderCapabilities();renderStats();renderHistory();renderTime();
   }
   function applyPacket(value){
@@ -313,7 +318,7 @@
   }
   async function refresh(){
     if(!context||polling)return;polling=true;
-    try{applyPacket(await context.api('managed'));if(!packet?.error&&!packet?.start_disabled_reason&&!(draft?.farming.enabled&&connected&&packet?.control_error))$('managed-error').hidden=true;}
+    try{applyPacket(await context.api('managed'));if(!packet?.error&&!(connected&&controlState(packet,draft||normalizeSettings(),connected,busy).startDisabledReason)&&!(draft?.farming.enabled&&connected&&packet?.control_error))$('managed-error').hidden=true;}
     catch(error){report(error);}finally{polling=false;}
   }
   async function save(){

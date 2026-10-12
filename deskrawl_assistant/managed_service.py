@@ -267,7 +267,7 @@ class ManagedServiceMixin:
                 blocked.append('关卡读取：'+control_error)
             if growth_enabled(engine['settings']) and self.managed_growth.get('available') is not True:
                 blocked.append('成长读取：'+(self.managed_growth.get('reason') or '等待成长状态完整读取。'))
-            if engine['settings']['merchant']['enabled']:
+            if engine['settings']['merchant']['enabled'] and self.managed_growth.get('available') is True:
                 shop=self.managed_growth.get('merchant',{})
                 if shop.get('unlock_known') is not True or shop.get('unlocked') is not True:
                     blocked.append('神秘商人：尚未解锁或解锁状态未确认，请关闭自动购买后再启用其他托管功能。')

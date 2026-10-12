@@ -837,7 +837,8 @@ class ManagedMode:
                        and state[group]['ranks'].get(action['node_id'], 0) == action['expected_rank'] + 1)
         elif kind == 'set_skill':
             state = observation.get('progression', {})
-            visible = state.get('available') is True and state['skills']['equipped'] == action['skill_slots']
+            visible = (state.get('available') is True and state['skills'].get('readable') is not False
+                       and state['skills']['equipped'] == action['skill_slots'])
         elif kind == 'merchant_open':
             visible = observation.get('progression', {}).get('merchant', {}).get('open') is True
         elif kind == 'merchant_close':

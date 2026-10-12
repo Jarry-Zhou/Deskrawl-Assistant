@@ -130,7 +130,10 @@ def growth_action(settings, state, data=None):
             if ranks.get(key, 0) < target and talent_allowed(nodes[key], nodes, ranks):
                 return {'kind': 'allocate_talent', 'node_id': key, 'expected_rank': ranks.get(key, 0),
                         'class_mask': state['class_mask'], 'reason': '按目标加点：' + nodes[key]['name']}, ''
-    if p['skills_enabled']:
+    skill_wait = ''
+    if p['skills_enabled'] and state.get('skills', {}).get('readable') is False:
+        skill_wait = '技能读取：' + state['skills'].get('reason', '等待技能控制器加载。')
+    elif p['skills_enabled']:
         stages = [s for s in p['skill_stages'].get(mask, []) if s['level'] <= state['level']]
         # Later stages override selected slots, while empty slots retain earlier targets.
         targets = [None] * 4
@@ -162,7 +165,7 @@ def growth_action(settings, state, data=None):
                         'gold_cost': cost, 'gold_reserve': life['gold_reserve'],
                         'class_mask': state['class_mask'], 'reason': '自动学习生活技能：' + node['name']}, ''
             return None, '生活技能等待金币：' + node['name'] + f'，需要 {cost} 金币。'
-    return None, ''
+    return None, skill_wait
 
 
 def merchant_prices(entries, quotes, level, difficulty, online):

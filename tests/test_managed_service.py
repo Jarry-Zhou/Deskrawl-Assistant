@@ -117,6 +117,41 @@ class FakeManagedClient:
 
 
 class ManagedServiceTests(unittest.TestCase):
+    def test_merchant_and_farming_start_without_unrelated_skill_controller(self):
+        from test_progression import state
+        growth=state();growth['merchant'].update(unlock_known=True,unlocked=True)
+        growth['skills']={'readable':False,'equipped':None,'available':[],
+            'reason':'PlayerAbilityController 尚未加载。'}
+        self.client.progression_snapshot=Mock(return_value=growth)
+        for key in ('merchant','skills'):
+            self.client.capabilities[key]={'available':True,'native_verified':True}
+        self.service._managed_refresh_control()
+        cfg=self.settings(farming=True);cfg['merchant']['enabled']=True
+        cfg['merchant']['weights']['2']=1
+        self.service.save_managed(cfg)
+        self.assertTrue(self.service.managed_page()['can_start'])
+        self.service.set_managed_running(True)
+        self.assertTrue(self.service.managed.running)
+        self.assertEqual(self.client.actions,[])
+        self.service.stop_managed()
+        cfg['progression']['skills_enabled']=True
+        self.service.save_managed(cfg)
+        page=self.service.managed_page()
+        self.assertTrue(page['can_start'])
+        self.assertEqual(page['blocked_reasons'],[])
+        self.service.set_managed_running(True)
+        self.assertTrue(self.service.managed.running)
+        self.assertEqual(self.client.actions,[])
+
+    def test_failed_growth_does_not_falsely_report_an_unread_merchant_as_locked(self):
+        cfg=self.settings(farming=True);cfg['merchant']['enabled']=True;cfg['merchant']['weights']['2']=1
+        self.service.managed.settings=cfg
+        self.client.capabilities['merchant']={'available':True,'native_verified':True}
+        self.service.managed_capabilities=self.client.managed_capabilities()
+        self.service.managed_growth={'available':False,'reason':'PlayerAbilityController 尚未加载。'}
+        self.assertEqual(self.service.managed_page()['blocked_reasons'],
+            ['成长读取：PlayerAbilityController 尚未加载。'])
+
     def test_disposal_reuses_receipt_and_wakes_next_step_with_fresh_inventory_and_scene(self):
         self.client.items=[equipment(0),equipment(1)]
         self.client.character_snapshot=Mock(return_value={'available':False,'equipment':[]})
