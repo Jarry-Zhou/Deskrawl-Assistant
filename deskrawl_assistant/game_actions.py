@@ -28,22 +28,24 @@ CAPABILITIES = {'travel': ('return_town', 'enter_map'), 'equip': ('equip',), 'se
 
 
 def normalise_run(run, completed, dead=False):
-    """248 is completion, 249 is transient final kill (cleared at completion).
+    """Separate a confirmed win from the later reward/return completion flag.
 
     WaveManager.esx sets 249 after the last wave and persists the map-complete
-    key. Update later sets the WORD at 248 to 1, clearing 249 while marking the
-    completed run. Thus requiring both flags would never identify completion.
+    key. With built-in repeat, the plan can restart without ever setting 248.
+    A confirmed final kill may count the run while rewards are still settling;
+    it must not force a town return before the game's completion flow finishes.
     """
     if not run:
         return None
     result = {**run, 'dungeon_id':run.get('map_id'), 'status':'running'}
     if dead or run.get('dead') or run.get('phase') == 'dead':
         result.update(status='failed', completion_evidence='verified_Player_dead_flag')
-    elif run.get('finished'):
+    elif run.get('finished') or run.get('final_kill_settled') is True:
         valid = (run.get('map_id') in completed and type(run.get('wave_count')) is int
             and run['wave_count'] > 0 and run.get('wave_index', -1) >= run['wave_count']
             and run.get('wave_active') is False and run.get('enemy_count') == 0)
-        result.update(status='success' if valid else 'settling',
+        result.update(status='success' if valid and run.get('finished') else 'settling',
+            completion_confirmed=valid,
             completion_evidence='WaveManager_completed_last_wave_and_SaveSystem_completed_map' if valid else 'incomplete_completion_evidence')
     return result
 
@@ -476,7 +478,7 @@ class GameActions:
             if progress['character_id'] != self._last_character:
                 self._last_terminal_run = None
                 self._last_character = progress['character_id']
-            if run and run['status'] in ('success', 'failed'):
+            if run and (run['status'] in ('success', 'failed') or run.get('completion_confirmed') is True):
                 self._last_terminal_run = dict(run)
             elif not run and self._last_terminal_run:
                 run = dict(self._last_terminal_run, retained_terminal=True)

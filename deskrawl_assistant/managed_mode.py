@@ -1172,6 +1172,8 @@ class ManagedMode:
     def _runs(self, observation):
         run = run_record(observation.get('scene', {}).get('run'))
         status = run.get('status')
+        if status != 'failed' and run.get('completion_confirmed') is True:
+            status = 'success'
         run_id = run.get('id')
         if status not in ('success', 'failed') or run_id is None or str(run_id) in self.handled_runs: return
         self.handled_runs.add(str(run_id))
@@ -1215,6 +1217,11 @@ class ManagedMode:
             scene = observation.get('scene', {})
             if scene.get('scene_changing') is True or scene.get('teleporting') is True:
                 self.status = '等待游戏完成场景切换，不重复请求。'; return None
+            if self.settings['farming']['enabled'] and scene.get('available') is not False:
+                # Count a verified final-wave receipt before merchant/sync waits
+                # can hide the short completion window of built-in repeat.
+                self._runs(observation)
+                if not self.running: return None
             if scene.get('online_saving') is True:
                 self.status = '等待游戏完成在线同步。'; return None
             if growth_enabled(self.settings) and observation.get('progression', {}).get('busy') is True:
@@ -1241,8 +1248,6 @@ class ManagedMode:
                 scene = observation.get('scene', {})
                 if scene.get('available') is False:
                     self.status = '等待场景状态读取。'; return None
-                self._runs(observation)
-                if not self.running: return None
                 if self._town(observation): self.phase = 'cleanup'
                 if self.phase == 'cleanup': return self._cleanup(observation, all_items)
                 if self.target_difficulty and scene.get('difficulty')!=self.target_difficulty:

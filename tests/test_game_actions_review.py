@@ -162,6 +162,24 @@ class EquipReceiptReviewTests(unittest.TestCase):
 
 
 class RunReceiptReviewTests(unittest.TestCase):
+    def test_builtin_repeat_confirms_win_before_reward_completion_flag(self):
+        run = {'id': 'round', 'map_id': 'a', 'finished': False, 'final_kill_settled': True,
+               'wave_count': 10, 'wave_index': 10, 'wave_active': False, 'enemy_count': 0}
+        value = normalise_run(run, {'a'})
+        self.assertTrue(value['completion_confirmed'])
+        self.assertEqual(value['status'], 'settling')
+        self.assertFalse(value['finished'])
+        self.assertEqual(normalise_run(run, {'a'}, dead=True)['status'], 'failed')
+
+    def test_builtin_repeat_still_requires_all_final_wave_evidence(self):
+        run = {'id': 'round', 'map_id': 'a', 'finished': False, 'final_kill_settled': True,
+               'wave_count': 10, 'wave_index': 10, 'wave_active': False, 'enemy_count': 0}
+        for change in ({'wave_count': 0}, {'wave_count': True}, {'wave_index': 9},
+                       {'wave_active': True}, {'enemy_count': 1}, {'final_kill_settled': False}):
+            with self.subTest(change=change):
+                self.assertIsNot(normalise_run({**run, **change}, {'a'}).get('completion_confirmed'), True)
+        self.assertIsNot(normalise_run(run, set()).get('completion_confirmed'), True)
+
     def test_cleared_transient_final_kill_flag_still_accepts_settled_completed_wave(self):
         run={'id':'round','map_id':'a','finished':True,'final_kill':False,
              'wave_count':10,'wave_index':10,'wave_active':False,'enemy_count':0}

@@ -362,6 +362,74 @@ class EquipTests(unittest.TestCase):
 
 
 class LifecycleTests(unittest.TestCase):
+    def _native_repeat(self, runs=2):
+        s = settings()
+        s['farming']['repeat_maps'] = [
+            {'dungeon_id': 'a', 'difficulty': 'Normal', 'runs': runs},
+            {'dungeon_id': 'b', 'difficulty': 'Normal', 'runs': runs}]
+        world = observation()
+        world['scene']['difficulty'] = 'Normal'
+        world['scene']['run'].update(dungeon_id='a', difficulty='Normal')
+        engine = ManagedMode(s)
+        engine.start(world)
+        return engine, world
+
+    def test_native_repeat_counts_confirmed_win_without_returning_every_run(self):
+        engine, world = self._native_repeat()
+        world['scene']['run'].update(status='settling', completion_confirmed=True)
+        self.assertIsNone(engine.next_action(world))
+        self.assertEqual(engine.repeat_completed, 1)
+        self.assertEqual(engine.last_success, 'a')
+        world['scene']['run'].update(id='run2', status='running', completion_confirmed=False)
+        self.assertIsNone(engine.next_action(world))
+        self.assertEqual(engine.repeat_completed, 1)
+        world['scene']['run'].update(status='settling', completion_confirmed=True)
+        action = engine.next_action(world)
+        self.assertEqual(action['kind'], 'return_town')
+        self.assertEqual((engine.repeat_index, engine.repeat_completed, engine.target_dungeon), (1, 0, 'b'))
+
+    def test_native_repeat_receipt_and_later_completion_are_counted_once(self):
+        engine, world = self._native_repeat()
+        world['scene']['run'].update(status='settling', completion_confirmed=True)
+        for _ in range(5):
+            self.assertIsNone(engine.next_action(world))
+        world['scene']['run'].update(status='success')
+        engine._runs(world)
+        world['scene'].update(in_town=True)
+        world['scene']['run']['retained_terminal'] = True
+        engine._runs(world)
+        self.assertEqual(engine.repeat_completed, 1)
+
+    def test_native_repeat_300_run_batches_cycle_both_maps(self):
+        engine, world = self._native_repeat(runs=300)
+        for batch, dungeon in enumerate(('a', 'b')):
+            for n in range(300):
+                world['scene']['run'].update(id=f'{batch}-{n}', dungeon_id=dungeon,
+                    status='settling', completion_confirmed=True)
+                engine._runs(world)
+                self.assertEqual(engine.repeat_completed, (n + 1) % 300)
+            self.assertEqual((engine.repeat_index, engine.target_dungeon), ((batch + 1) % 2, 'b' if batch == 0 else 'a'))
+
+    def test_native_repeat_does_not_count_other_maps_or_unconfirmed_settlement(self):
+        engine, world = self._native_repeat()
+        world['scene']['run'].update(status='settling')
+        self.assertIsNone(engine.next_action(world))
+        world['scene']['run'].update(id='other-map', dungeon_id='b', completion_confirmed=True)
+        engine._runs(world)
+        world['scene']['run'].update(id='other-difficulty', dungeon_id='a', difficulty='Inferno')
+        engine._runs(world)
+        self.assertEqual(engine.repeat_completed, 0)
+
+    def test_native_repeat_counts_before_online_sync_wait_and_never_twice(self):
+        engine, world = self._native_repeat()
+        world['scene'].update(online_saving=True)
+        world['scene']['run'].update(status='settling', completion_confirmed=True)
+        self.assertIsNone(engine.next_action(world))
+        self.assertEqual(engine.repeat_completed, 1)
+        world['scene']['online_saving'] = False
+        self.assertIsNone(engine.next_action(world))
+        self.assertEqual(engine.repeat_completed, 1)
+
     def test_repeat_switches_difficulty_only_after_town_cleanup(self):
         s = settings(equipment_action='salvage'); s['farming']['difficulty']='Nightmare'
         world = observation([equipment('junk')]); world['scene']['difficulty']='Normal'
