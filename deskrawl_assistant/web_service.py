@@ -24,6 +24,7 @@ from .automation import DEFAULT_SETTINGS, validate_settings, pressure_candidates
 from copy import deepcopy
 from .version import VERSION
 from .managed_service import ManagedServiceMixin
+from . import features
 
 BASE = RESOURCE_ROOT
 SLOT_LABELS = {'Weapon':'武器','Helm':'头盔','Chest':'胸甲','Pants':'裤子','Boots':'靴子','Belt':'腰带',
@@ -62,9 +63,12 @@ class AssistantService(ManagedServiceMixin):
         self.client = client or RuntimeClient()
         self.config = Path(config) if config else rules_file()
         self.journal = ActivityJournal((self.config.parent if config else runtime_dir()) / 'activity.sqlite3')
-        self.experience = ExperienceBook((self.config.parent if config else runtime_dir()) / 'experience.sqlite3')
-        self.recommendations = RecommendationBook((self.config.parent if config else runtime_dir()) / 'recommendations.sqlite3')
-        self.recommendation_live = {'available': False, 'reason': '连接游戏后可自动推荐刷图。'}
+        self.experience = None
+        self.recommendations = None
+        if features.REPORTING_ENABLED:
+            self.experience = ExperienceBook((self.config.parent if config else runtime_dir()) / 'experience.sqlite3')
+            self.recommendations = RecommendationBook((self.config.parent if config else runtime_dir()) / 'recommendations.sqlite3')
+        self.recommendation_live = features.reporting_disabled()
         self.recommendation_updated_at = None
         self.recommendation_catalog = None
         self.recommendation_guard = threading.RLock()
@@ -108,8 +112,11 @@ class AssistantService(ManagedServiceMixin):
         self._init_managed()
         self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.monitor_thread.start()
-        self.recommendation_thread = threading.Thread(target=self._recommendation_loop, daemon=True)
-        self.recommendation_thread.start()
+        self.recommendation_thread = None
+        if features.REPORTING_ENABLED:
+            self.recommendation_live = {'available': False, 'reason': '连接游戏后可自动推荐刷图。'}
+            self.recommendation_thread = threading.Thread(target=self._recommendation_loop, daemon=True)
+            self.recommendation_thread.start()
         from .loot_capture import LootCaptureMonitor
         self.loot_capture = LootCaptureMonitor((self.config.parent if config else runtime_dir()) / 'loot-captures')
         self.loot_capture_thread = threading.Thread(target=self._loot_capture_loop, daemon=True)
@@ -180,6 +187,7 @@ class AssistantService(ManagedServiceMixin):
                 self.loot_capture.failed()
 
     def experience_live(self):
+        if not features.REPORTING_ENABLED: return features.reporting_disabled()
         if not self.client.connected:
             return {'available': False, 'error': '连接游戏后可读取角色经验；也可手动录入采样。'}
         try:
@@ -188,11 +196,14 @@ class AssistantService(ManagedServiceMixin):
             return {'available': False, 'error': '经验读取暂不可用：' + str(exc)}
 
     def experience_page(self, **filters):
+        if not features.REPORTING_ENABLED:
+            return dict(features.reporting_disabled(), rows=[], recent=[], active=None)
         payload = self.experience.page(**filters)
         payload['live'] = self.experience_live()
         return payload
 
     def experience_action(self, action, data):
+        features.require_reporting()
         with self.guard:
             if self.closed.is_set():
                 raise ValueError('助手已退出。')
@@ -219,6 +230,7 @@ class AssistantService(ManagedServiceMixin):
             return result
 
     def _recommendation_data(self):
+        features.require_reporting()
         if self.recommendation_catalog is None:
             from .recommendation import load_recommendation_catalog
             self.recommendation_catalog = load_recommendation_catalog()
@@ -229,6 +241,7 @@ class AssistantService(ManagedServiceMixin):
         return list(catalog.get('difficulties', {'Normal': {}}))
 
     def _observe_recommendation(self):
+        if not features.REPORTING_ENABLED: return features.reporting_disabled()
         from datetime import datetime, timezone
         with self.recommendation_guard:
             if not self.client.connected or not hasattr(self.client, 'recommendation_snapshot'):
@@ -266,6 +279,7 @@ class AssistantService(ManagedServiceMixin):
             return value
 
     def _recommendation_loop(self):
+        if not features.REPORTING_ENABLED: return
         while not self.closed.wait(0.75):
             if self.client.connected and hasattr(self.client, 'recommendation_snapshot'):
                 self._observe_recommendation()
@@ -275,6 +289,8 @@ class AssistantService(ManagedServiceMixin):
                     self.recommendations.invalidate()
 
     def recommendation_page(self):
+        if not features.REPORTING_ENABLED:
+            return dict(features.reporting_disabled(), rows=[], best=None)
         from .recommendation import recommend_maps
         from datetime import datetime, timezone
         with self.recommendation_guard:
@@ -302,6 +318,7 @@ class AssistantService(ManagedServiceMixin):
             return payload
 
     def recommendation_settings(self, data):
+        features.require_reporting()
         with self.recommendation_guard:
             if self.closed.is_set():
                 raise ValueError('助手已退出。')
@@ -309,6 +326,7 @@ class AssistantService(ManagedServiceMixin):
             return {'settings':self.recommendations.save_settings(value, self._recommendation_difficulties())}
 
     def recommendation_reset(self):
+        features.require_reporting()
         with self.recommendation_guard:
             self.recommendations.reset((self.recommendation_live.get('profile') or {}))
             return {'ok':True}
@@ -1080,6 +1098,7 @@ class AssistantService(ManagedServiceMixin):
         self.monitor_wake.set()
         worker = self.worker
         if worker and worker is not threading.current_thread(): worker.join(10)
-        if self.recommendation_thread is not threading.current_thread(): self.recommendation_thread.join(10)
+        if self.recommendation_thread and self.recommendation_thread is not threading.current_thread():
+            self.recommendation_thread.join(10)
         if self.loot_capture_thread is not threading.current_thread(): self.loot_capture_thread.join(10)
         self.client.close()

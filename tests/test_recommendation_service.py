@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from deskrawl_assistant.web_service import AssistantService
 from deskrawl_assistant.recommendation_book import RecommendationBook
 
@@ -38,6 +39,9 @@ class RecommendationServiceTests(unittest.TestCase):
         self.assertEqual(result['stage'],'测试关卡')
 
     def setUp(self):
+        # Exercise the dormant reporting implementation only in offline tests.
+        enabled=patch('deskrawl_assistant.features.REPORTING_ENABLED',True)
+        enabled.start();self.addCleanup(enabled.stop)
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.client=Client()

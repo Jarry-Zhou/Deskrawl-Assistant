@@ -10,7 +10,7 @@ function page(){
   const html=fs.readFileSync(path.join(directory,'index.html'),'utf8');
   const ids=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],{
     hidden:false,disabled:false,textContent:'',innerHTML:'',value:'',dataset:{},
-    addEventListener(){},replaceChildren(){this.innerHTML='';},contains(){return false;},
+    events:{},addEventListener(name,handler){this.events[name]=handler;},replaceChildren(){this.innerHTML='';},contains(){return false;},
     classList:{toggle(){},add(){},remove(){}},setAttribute(){}
   }]));
   const tabs=[...html.matchAll(/data-tab="([^"]+)"/g)].map(match=>({
@@ -23,14 +23,14 @@ function page(){
     querySelectorAll(selector){return selector==='.tab'?tabs:[];},addEventListener(){}
   };
   const context=vm.createContext({document,location:{search:''},URLSearchParams,
-    window:{addEventListener(){},ManagedModeUI:{setActive:value=>managed.push(value)}},
+    window:{addEventListener(){},ManagedModeUI:{setActive:value=>managed.push(value),isDirty:()=>false}},
     setInterval:(callback,delay)=>{timers.push({callback,delay});return timers.length;},
     setTimeout(){},clearTimeout(){},clearInterval(){},console});
   const source=fs.readFileSync(path.join(directory,'app.js'),'utf8');
   assert.equal((source.match(/^boot\(\);$/gm)||[]).length,1);
   vm.runInContext(source.replace(/^boot\(\);$/m,''),context,{filename:'app.js'});
   const run=code=>vm.runInContext(code,context);
-  run('renderInventory=()=>{};loadLogs=()=>{};loadExperience=()=>{};loadRecommendations=()=>{};');
+  run('renderInventory=()=>{};loadLogs=()=>{};');
   return {context,run,ids,tabs,timers,managed};
 }
 
@@ -41,14 +41,30 @@ function plan(key='first',items=[{name:'测试装备',kind:'equipment',rarity:3,
     waves:[{number:1,state:'current',gold:300,potion_charges:2,items}],warnings:[],updated_at:'2026-10-11T12:00:00Z'};
 }
 
-test('merged navigation switches all seven pages and preserves managed activation',()=>{
+test('navigation exposes five pages and preserves managed activation',()=>{
   const p=page();p.run('loadLootPreview=()=>{};');
-  assert.deepEqual(p.tabs.map(tab=>tab.dataset.tab),['rules','inventory','managed','loot-preview','recommendations','experience','logs']);
+  assert.deepEqual(p.tabs.map(tab=>tab.dataset.tab),['rules','inventory','managed','loot-preview','logs']);
   for(const selected of p.tabs.map(tab=>tab.dataset.tab)){
     p.run('switchTab('+JSON.stringify(selected)+')');
     for(const tab of p.tabs)assert.equal(p.ids.get(tab.dataset.tab+'-page').hidden,tab.dataset.tab!==selected);
     assert.equal(p.managed.at(-1),selected==='managed');
   }
+});
+
+test('retired reports cannot be opened and register no sampling or calibration timers',()=>{
+  const p=page();p.run("switchTab('managed');switchTab('recommendations');switchTab('experience');");
+  assert.equal(p.run('activeTab'),'managed');
+  assert.equal(p.ids.has('experience-page'),false);
+  assert.equal(p.ids.has('recommendations-page'),false);
+  assert.deepEqual(p.timers.map(timer=>timer.delay),[2000]);
+  assert.equal(p.run('hasPendingDrafts()'),false);
+});
+
+test('installing an update no longer reads retired experience or recommendation APIs',async()=>{
+  const p=page();p.context.calls=[];
+  p.run("api=async path=>{calls.push(path);return path==='update'?{phase:'idle',message:'已检查'}:{};};");
+  await p.ids.get('install-update').events.click();
+  assert.deepEqual([...p.context.calls],['update/install','update']);
 });
 
 test('an available plan with no items still displays coins and potion charges',()=>{

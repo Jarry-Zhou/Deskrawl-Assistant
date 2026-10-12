@@ -16,12 +16,14 @@ from .web_service import AssistantService
 from .action_log import record
 from .version import VERSION
 from .updater import UpdateManager, launch_helper
+from . import features
 
 WEB = Path(__file__).resolve().parent / 'web'
 PORT = 18741
 
 
 def check_experience_sampling(service):
+    if not features.REPORTING_ENABLED: return
     book = getattr(service, 'experience', None)
     if book is not None and book.active_payload() is not None:
         raise ValueError('请先结束并保存或取消经验采样，再进行更新。')
@@ -50,6 +52,8 @@ def make_handler(service, token):
             if not self.valid_host(): return self.reply({'error':'仅限本机访问。'},403)
             path = unquote(urlsplit(self.path).path)
             try:
+                if path in ('/api/experience', '/api/recommendations') and not features.REPORTING_ENABLED:
+                    return self.reply(features.reporting_disabled(), 410)
                 if path=='/api/ping': return self.reply({'app':'deskrawl-local-assistant','version':3,
                     'app_version':VERSION,'pid':os.getpid(),'desktop':getattr(self.server,'desktop',None) is not None})
                 if path=='/api/update':
@@ -122,6 +126,8 @@ def make_handler(service, token):
                 data = json.loads(self.rfile.read(size) or b'{}')
                 if not isinstance(data,dict): raise ValueError('请求格式无效。')
                 path = urlsplit(self.path).path
+                if (path.startswith('/api/experience/') or path.startswith('/api/recommendations/')) and not features.REPORTING_ENABLED:
+                    return self.reply(features.reporting_disabled(), 410)
                 if getattr(service,'updating',False) is True and path not in ('/api/stop','/api/shutdown'):
                     raise ValueError('正在替换程序，请稍候。')
                 if path=='/api/action': service.start(data.get('kind'),data)

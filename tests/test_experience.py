@@ -139,6 +139,9 @@ class ExperienceTests(unittest.TestCase):
 
 class ExperienceHttpTests(HttpTests):
     def setUp(self):
+        # Retain offline coverage of archived reports without enabling the app.
+        enabled=patch('deskrawl_assistant.features.REPORTING_ENABLED',True)
+        enabled.start();self.addCleanup(enabled.stop)
         super().setUp()
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         class Client:

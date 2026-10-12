@@ -100,6 +100,8 @@ class RuntimeClient:
         return result
 
     def experience_snapshot(self):
+        from . import features
+        if not features.REPORTING_ENABLED: return features.reporting_disabled()
         from .experience_reader import read_experience
         with self._guard:
             if self._reader is None:
@@ -124,6 +126,8 @@ class RuntimeClient:
         return self.snapshot(save=False)
 
     def recommendation_snapshot(self):
+        from . import features
+        if not features.REPORTING_ENABLED: return features.reporting_disabled()
         from .recommendation_reader import read_recommendation
         with self._guard:
             if self._reader is None:
