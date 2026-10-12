@@ -342,7 +342,14 @@ class GameActions:
         """These native visibility flags guard the game's shortcut return key."""
         result = {}
         for name, offset in (('CombatMapCompletionUI', 0), ('MythicCompletionUI', 8)):
-            klass = read.klass(read.ptr(self.reader.module['base']+self.profile['statics'][name]), name)
+            value = read.ptr(self.reader.module['base']+self.profile['statics'][name])
+            # IL2CPP resolves this TypeInfo usage only when the game first uses
+            # the completion UI. These exact tokens are verified against this
+            # build's DLL and metadata; other values still need strict checks.
+            if value == self.profile['uninitialized_type_tokens'][name]:
+                result[name] = False
+                continue
+            klass = read.klass(value, name)
             static = read.ptr(klass+184)
             result[name] = read.boolean(static+offset) if static else False
         return result
