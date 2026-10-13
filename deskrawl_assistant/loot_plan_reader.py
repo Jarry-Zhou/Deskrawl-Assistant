@@ -326,6 +326,7 @@ def _snapshot(reader, raw_sink=None):
         warnings.append('难度名称未在本地词典中确认，已显示原始名称。')
     return {'available': True, 'phase': 'active', 'reason': '',
             'run': {'key': hashlib.sha256((reader.session_id + '\0' + run_id).encode()).hexdigest(),
+                    'id': hashlib.sha256(run_id.encode()).hexdigest(), 'difficulty': 'Inferno' if difficulty == 'Inferno1' else difficulty,
                     'map_id': map_id, 'map_name': labels['maps'].get(map_id, map_id),
                     'difficulty_label': DIFFICULTY_LABELS.get(difficulty, difficulty or '未确认难度'),
                     'current_wave': current_wave, 'total_waves': len(waves)},

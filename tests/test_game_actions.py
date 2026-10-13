@@ -16,6 +16,78 @@ from deskrawl_assistant.native_memory import MemoryReadError, GameBusyError
 
 
 class ActionBoundaryTests(unittest.TestCase):
+    def test_stargazing_entry_only_allows_empty_combat_with_matching_source_and_keeps_normal_town_guard(self):
+        from deskrawl_assistant.native_memory import SnapshotChangedError
+        for case in ('clean','ground','carriage','unknown_carriage','new_run','same_map','ordinary','attacking','gathering'):
+            with self.subTest(case=case):
+                reader,dispatcher,read=Mock(),Mock(),Mock()
+                read.guards=[];read.singleton.return_value=3;read.boolean.return_value=False
+                dispatcher.invoke.return_value={}
+                game=GameActions(reader,dispatcher=dispatcher,allow_unverified=True)
+                state={'available':True,'difficulty':'Normal','map_id':'a',
+                       'run':{'id':'new' if case=='new_run' else 'source','status':'running'},
+                       'maps':[{'map_id':'b','can_enter':True},{'map_id':'a','can_enter':True}]}
+                payload={'map_id':'a' if case=='same_map' else 'b','difficulty':'Normal',
+                         'source_run_id':'source','reason_code':'stargazing_skip'}
+                if case=='ordinary':payload.pop('reason_code')
+                with patch.object(game,'capabilities',return_value={'compatible':True}), \
+                        patch.object(game,'_context',return_value=(read,1,2,0)), \
+                        patch.object(game,'_require_travel_ready'), \
+                        patch.object(game,'control_snapshot',return_value=state), \
+                        patch.object(game,'_map_objects',return_value={'b':1000,'a':2000}), \
+                        patch.object(game,'_require_stargazing_run') as guard, \
+                        patch.object(game,'_combat_travel_state',return_value={
+                            'travel_blocked':case in ('attacking','gathering'), 'travel_wait_reason':'等待攻击或采集结束'}), \
+                        patch.object(game,'_ground',return_value=[{'actual':True}] if case=='ground' else []), \
+                        patch.object(game,'_carriage',return_value={'complete':case!='unknown_carriage',
+                            'items':[{'actual':True}] if case=='carriage' else []}):
+                    if case=='clean':
+                        result=game.execute('enter_map',payload)
+                        self.assertTrue(result['transition_requested'])
+                        guard.assert_called_once_with(read,1,'source')
+                        dispatcher.invoke.assert_called_once()
+                    else:
+                        with self.assertRaises((NativeActionError,SnapshotChangedError,GameBusyError)):
+                            game.execute('enter_map',payload)
+                        dispatcher.invoke.assert_not_called()
+
+    def test_combat_travel_gates_match_native_attack_exception_and_guard_state_reads(self):
+        from deskrawl_assistant.game_actions import _Read
+        for state,gathering,map_type,blocked in ((0,False,0,False),(1,False,0,True),
+                                               (1,False,2,False),(0,True,2,True)):
+            with self.subTest(state=state,gathering=gathering,map_type=map_type):
+                reader=Mock()
+                memory={1064:struct.pack('<Q',2000),1112:struct.pack('<Q',3000),
+                        2048:struct.pack('<i',state),2052:bytes([gathering]),3032:struct.pack('<i',map_type)}
+                reader.memory.read.side_effect=lambda address,size:memory[address]
+                read=_Read(reader,{})
+                read.verify=Mock(side_effect=lambda address,name:address)
+                result=GameActions(reader,dispatcher=Mock())._combat_travel_state(read,1000)
+                self.assertEqual(result['travel_blocked'],blocked)
+                self.assertEqual(result['gathering'],gathering)
+                self.assertEqual(result['player_state'],state)
+                self.assertEqual({address for address,_ in read.guards},set(memory))
+                self.assertEqual(bool(result['travel_wait_reason']),blocked)
+
+    def test_stargazing_native_guards_bind_plan_pointer_and_run_identity_before_dispatch(self):
+        import hashlib
+        from deskrawl_assistant.native_memory import SnapshotChangedError
+        reader,read,copy=Mock(),Mock(),Mock();read.guards=[]
+        reader.string.return_value='original-run'
+        copy.ptr.side_effect=lambda address:{1104:2000,1120:3000,1112:4000,2088:3000,2040:4000,3016:5000}[address]
+        copy.verify.side_effect=lambda obj,name:obj
+        copy.boolean.side_effect=lambda address:address==2096
+        copy.guards=[(1120,b'original-plan-pointer')]
+        game=GameActions(reader,dispatcher=Mock())
+        with patch('deskrawl_assistant.recommendation_reader._Copy',return_value=copy):
+            game._require_stargazing_run(read,1000,hashlib.sha256(b'original-run').hexdigest())
+            self.assertIn(copy.guards[0],read.guards)
+            with self.assertRaises(SnapshotChangedError):game._require_stargazing_run(read,1000,'new-run')
+            copy.boolean.return_value=True;copy.boolean.side_effect=None
+            with self.assertRaisesRegex(SnapshotChangedError,'关卡已结束'):
+                game._require_stargazing_run(read,1000,hashlib.sha256(b'original-run').hexdigest())
+        game.dispatcher.invoke.assert_not_called()
+
     def test_inventory_context_reads_scene_and_online_gates_without_campaign(self):
         reader,dispatcher,read=Mock(),Mock(),Mock()
         game=GameActions(reader,dispatcher=dispatcher)

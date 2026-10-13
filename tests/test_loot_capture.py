@@ -77,6 +77,38 @@ class LootCaptureTests(unittest.TestCase):
         self.assertEqual(data,original)
         self.assertFalse(list(self.path.glob('*.tmp')))
 
+    def test_moving_evidence_out_updates_count_without_restart_or_new_loot(self):
+        data = bundle('LegendaryBelt1','Divine')
+        self.monitor.feed(data)
+        self.assertEqual(self.monitor.status()['saved_runs'],1)
+        target = self.files()[0]
+        moved = Path(self.temp.name)/target.name
+        target.rename(moved)
+        self.assertEqual(self.monitor.status()['saved_runs'],0)
+        # Polling the same plan must not recreate evidence the user removed.
+        self.monitor.feed(data)
+        self.assertEqual(self.monitor.status()['saved_runs'],0)
+        self.assertTrue(moved.is_file())
+
+    def test_file_count_tracks_external_changes_even_when_monitor_disabled(self):
+        self.monitor.set_enabled(False)
+        self.path.mkdir()
+        record = self.path/'imported.json'
+        record.write_text('{}',encoding='utf-8')
+        (self.path/'unfinished.tmp').write_text('{}',encoding='utf-8')
+        (self.path/'folder.json').mkdir()
+        self.assertEqual(self.monitor.status()['saved_runs'],1)
+        record.unlink()
+        self.assertEqual(self.monitor.status()['saved_runs'],0)
+
+    def test_unreadable_directory_does_not_report_an_empty_archive(self):
+        with patch.object(Path,'glob',side_effect=PermissionError('denied')):
+            status = self.monitor.status()
+        self.assertIsNone(status['saved_runs'])
+        self.assertIn('文件数量未确认',status['error'])
+        self.assertEqual(self.monitor.status()['saved_runs'],0)
+        self.assertEqual(self.monitor.status()['error'],'')
+
     def test_initial_owned_items_and_transfers_do_not_trigger_actual_capture(self):
         data = bundle()
         data['observations'] = [observed()]

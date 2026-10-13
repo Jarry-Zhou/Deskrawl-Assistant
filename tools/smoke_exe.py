@@ -19,7 +19,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.9'
+NAME = 'Deskrawl装备助手-v1.3.0'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -60,7 +60,7 @@ def main():
     assert 'deskrawl_assistant/web/rule-tools.js' in normalized
     assert 'deskrawl_assistant/web/inventory-tools.js' in normalized
     bundled_modules = archive.open_embedded_archive(next(n for n in names if n.endswith('.pyz')))
-    assert 'deskrawl_assistant.stargazing' not in bundled_modules.toc
+    assert 'deskrawl_assistant.stargazing' in bundled_modules.toc
     managed_page = archive.extract(normalized['deskrawl_assistant/web/index.html']).decode('utf-8')
     assert managed_page.count('data-managed-fold="') == 9
     assert 'deskrawl_assistant/update_replace.ps1' in normalized
@@ -130,7 +130,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.9'
+                assert request('/api/state')['app_version'] == '1.3.0'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -175,6 +175,10 @@ def main():
         assert not request('/api/state')['automation']['running']
         managed = request('/api/managed')
         assert not managed['running'] and managed['phase'] == 'idle'
+        stargazing = managed['settings']['farming']['stargazing']
+        assert not stargazing['enabled'] and all(stargazing['rewards'].values())
+        assert 'id="managed-stargazing"' in request('/').decode('utf-8')
+        assert not any('remote-control' in n for n in names)
         cleanup = managed['settings']['cleanup']
         assert [cleanup[k+'_pages'] for k in ('equipment','rune','gem')] == [[1,2,3],[4],[5]]
         auto = request('/api/state')['automation']['settings']
@@ -232,6 +236,8 @@ def main():
         assert request('/api/state')['automation']['settings'] == settings
         assert not request('/api/state')['automation']['running']
         managed_settings = managed['settings']
+        managed_settings['farming']['stargazing']['rewards']['gem'] = False
+        managed_settings['farming']['stargazing']['rewards']['divine_equipment'] = False
         managed_settings['cleanup'].update(equipment_pages=[5],rune_pages=[2,4],gem_pages=[1])
         managed_settings['progression']['talent_targets'] = {'4': {'HunterTalent0': 10, 'HunterTalent2': 2}}
         managed_settings['progression']['skill_stages'] = {'4': [{'level': 1, 'slots': ['HunterBasicAttack1', None, None, None]}]}
@@ -241,6 +247,8 @@ def main():
         managed_settings['merchant']['weights']['7'] = 10
         saved_managed = request('/api/managed/settings', {'settings':managed_settings})['settings']
         assert saved_managed['cleanup']['rune_pages'] == [2,4]
+        assert not saved_managed['farming']['stargazing']['rewards']['gem']
+        assert saved_managed['farming']['stargazing']['rewards']['divine_equipment']
         assert not request('/api/managed')['running']
         rule = {'id':'packaging-disabled-rule','name':'打包验证（停用）', 'equipment_keys':['LegendaryBelt3'], 'enabled':False,
             'groups':{'primary':{'selected_stats':['Stats.CooldownReduction'],'operator':'>=','count':1}}, 'group_mode':'all'}

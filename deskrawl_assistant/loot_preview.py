@@ -42,6 +42,8 @@ def decorate_equipment(item, rules, adapter, catalog):
     item['matches'] = any(e.status == 'match' for e in evaluations)
     item['matched_combinations'] = [r.name for r,e in zip(item_rules,evaluations) if e.status == 'match']
     item['primary_perfect'] = bool(primary_perfect_rules(observation,item_rules,catalog))
+    item['rule_status'] = ('match' if item['matches'] else 'review' if
+        any(e.status == 'uncertain' for e in evaluations) or not known else 'miss' if item_rules else 'no_rule')
     item['rule_note'] = ('；'.join(item['matched_combinations']) if item['matches'] else
                          '词条待核验' if any(e.status=='uncertain' for e in evaluations) else
                          '未命中规则' if item_rules else '未启用筛选规则')

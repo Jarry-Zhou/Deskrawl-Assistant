@@ -7,6 +7,9 @@
   const disposalRarities=rarityNames.slice(2),dispositionNames={store:'放入仓库',sell:'出售',salvage:'分解'};
   const capabilityNames={transfer:'物品转移',lock:'装备保护',equip:'后台换装',travel:'回城 / 进入关卡',difficulty:'主城切换难度',sell:'出售',salvage:'分解',chests:'开启宝箱',ground_pickup:'地面拾取',merchant:'神秘商人消费',talents:'职业天赋加点',life_skills:'生活技能学习',skills:'技能切换'};
   const difficultyNames={Normal:'普通',Nightmare:'噩梦',Inferno:'炼狱'};
+  const stargazingRewards=['divine_equipment','black_mist_equipment','primary_perfect','rule_match','set_rune','legendary_rune','rare_rune','uncommon_rune','gem'];
+  const fixedStargazing=new Set(['divine_equipment','black_mist_equipment','set_rune','legendary_rune']);
+  function normalizeStargazing(value={}){value=value||{};return {enabled:value.enabled===true,rewards:Object.fromEntries(stargazingRewards.map(key=>[key,fixedStargazing.has(key)||value.rewards?.[key]!==false]))};}
   const disabledChoice='__disabled_slot__';
   const clone=value=>JSON.parse(JSON.stringify(value));
   const safeNumber=(value,fallback=0)=>Number.isFinite(Number(value))&&value!==null&&value!==''?Number(value):fallback;
@@ -16,7 +19,7 @@
     const eq=value.auto_equip||{},farm=value.farming||{},cleanup=value.cleanup||{},background=value.background||{};
     const mode=oneOf(farm.mode,['repeat','push'],'repeat'),repeatMaps=Array.isArray(farm.repeat_maps)&&farm.repeat_maps.length?clone(farm.repeat_maps):farm.dungeon_id!==null&&farm.dungeon_id!==undefined?[{dungeon_id:farm.dungeon_id,difficulty:farm.difficulty||'current',runs:1}]:[];
     return {...growthTools.normalize(value),background:{rule_monitoring:background.rule_monitoring!==false,inventory_automation:background.inventory_automation!==false},auto_equip:{enabled:!!eq.enabled,minimum_delta:safeNumber(eq.minimum_delta,1),slot_locks:{...(eq.slot_locks||{})},disabled_slots:Array.isArray(eq.disabled_slots)?[...eq.disabled_slots]:[]},
-      farming:{enabled:!!farm.enabled,mode,dungeon_id:mode==='repeat'&&repeatMaps.length?repeatMaps[0].dungeon_id:farm.dungeon_id??null,difficulty:mode==='repeat'&&repeatMaps.length?repeatMaps[0].difficulty:oneOf(farm.difficulty,['current','Normal','Nightmare','Inferno'],'current'),progression:Array.isArray(farm.progression)?clone(farm.progression):[],repeat_maps:repeatMaps,free_threshold:safeNumber(farm.free_threshold,4)},
+      farming:{enabled:!!farm.enabled,mode,dungeon_id:mode==='repeat'&&repeatMaps.length?repeatMaps[0].dungeon_id:farm.dungeon_id??null,difficulty:mode==='repeat'&&repeatMaps.length?repeatMaps[0].difficulty:oneOf(farm.difficulty,['current','Normal','Nightmare','Inferno'],'current'),progression:Array.isArray(farm.progression)?clone(farm.progression):[],repeat_maps:repeatMaps,free_threshold:safeNumber(farm.free_threshold,4),stargazing:normalizeStargazing(farm.stargazing)},
       cleanup:{equipment_action:oneOf(cleanup.equipment_action,['store','sell','salvage'],'store'),equipment_fallback:oneOf(cleanup.equipment_fallback,['sell','salvage'],'sell'),
         equipment_policies:Object.fromEntries(disposalRarities.map(([key])=>{const p=cleanup.equipment_policies?.[key]||{};return [key,{action:oneOf(p.action,['store','sell','salvage'],oneOf(cleanup.equipment_action,['store','sell','salvage'],'store')),fallback:oneOf(p.fallback,['sell','salvage'],oneOf(cleanup.equipment_fallback,['sell','salvage'],'sell'))}];})),equipment_pages:pageIds(cleanup.equipment_pages??storageTools.defaultPages.equipment),
         rune_action:oneOf(cleanup.rune_action,['store','sell'],'store'),rune_pages:pageIds(cleanup.rune_pages??storageTools.defaultPages.rune),gem_action:oneOf(cleanup.gem_action,['store','sell'],'store'),gem_pages:pageIds(cleanup.gem_pages??storageTools.defaultPages.gem)}};
@@ -132,7 +135,7 @@
     return {
       background:state(s.background.rule_monitoring||s.background.inventory_automation,`规则锁定${s.background.rule_monitoring?'开':'关'} · 自动整理${s.background.inventory_automation?'开':'关'}`),
       equip:state(s.auto_equip.enabled,`暗金限制 ${named} 部位 · 跳过 ${disabled} 部位`),
-      farming:state(s.farming.enabled,progress+(s.farming.mode==='push'?'自动推图 · 最高已解锁关卡':maps.length?maps.join(' → '):'重复刷图 · 未选择关卡')+` · 空格 < ${s.farming.free_threshold} 回城`),
+      farming:state(s.farming.enabled,progress+(s.farming.mode==='push'?'自动推图 · 最高已解锁关卡':maps.length?maps.join(' → '):'重复刷图 · 未选择关卡')+(s.farming.mode==='repeat'&&s.farming.stargazing.enabled?' · 观星开启':'')+` · 空格 < ${s.farming.free_threshold} 回城`),
       merchant:state(s.merchant.enabled,`${s.merchant.trigger_percent}% 回城 · 保留 ${s.merchant.spend_to_percent}% · ${buying.length} 部位 / 每轮 ${buying.reduce((a,b)=>a+b,0)} 件`),
       growth:state(growing.length>0,growing.length?growing.join(' / ')+'自动养成':'战斗天赋 / 生活技能 / 技能预设'),
       cleanup:{enabled:true,status:'固定保护',summary:`装备 ${folders('equipment')} 页 · 符文 ${folders('rune')} 页 · 宝石 ${folders('gem')} 页`},
@@ -164,7 +167,7 @@
       for(const element of elements){const key=element.dataset.managedFold;if(foldKeys.includes(key))set(element,key in preferences?preferences[key]:defaults[key]);}
     }};
   }
-  const helpers={normalizeSettings,validateSettings,pageIds,controlState,requiredCapabilities,statistics,duration,capabilityAvailable,selectedDifficulty,availableMaps,equipmentPreset,equipmentSummary,characterClass,slotEquipment,withSlotChoice,disabledChoice,foldKeys,foldStorageKey,normalizeFoldPreferences,defaultFolds,foldSummaries,createFoldState};
+  const helpers={normalizeSettings,normalizeStargazing,validateSettings,pageIds,controlState,requiredCapabilities,statistics,duration,capabilityAvailable,selectedDifficulty,availableMaps,equipmentPreset,equipmentSummary,characterClass,slotEquipment,withSlotChoice,disabledChoice,foldKeys,foldStorageKey,normalizeFoldPreferences,defaultFolds,foldSummaries,createFoldState};
   if(typeof module!=='undefined'&&module.exports)module.exports=helpers;
   if(!root.document)return;
   const $=id=>root.document.getElementById(id);
@@ -173,7 +176,7 @@
   let receivedAt=0,pageSignature='',mapSignature='',slotSignature='',statsSignature='',historySignature='',actionVersion=0;
   let currentCharacter=null,pickerSlot=null,pickerSignature='';
   let folds=null;
-  const farmFields=['managed-farm-mode','managed-difficulty','managed-map','managed-repeat-two','managed-repeat-count','managed-difficulty-two','managed-map-two','managed-repeat-count-two','managed-free-threshold'];
+  const farmFields=['managed-farm-mode','managed-difficulty','managed-map','managed-repeat-two','managed-repeat-count','managed-difficulty-two','managed-map-two','managed-repeat-count-two','managed-free-threshold','managed-stargazing'];
   const fieldIds=['managed-rule-monitoring','managed-inventory-automation','managed-auto-equip','managed-farming',...farmFields,'managed-rune-action','managed-gem-action'];
   const catalog=()=>context?.catalog||{};
   const maps=()=>availableMaps(packet,draft||normalizeSettings());
@@ -187,6 +190,7 @@
     next.auto_equip.enabled=$('managed-auto-equip').checked;next.auto_equip.slot_locks={};
     root.document.querySelectorAll('[data-managed-slot]').forEach(select=>{if(select.value)next.auto_equip.slot_locks[select.dataset.managedSlot]=select.value;});
     f.enabled=$('managed-farming').checked;f.mode=$('managed-farm-mode').value;f.free_threshold=Number($('managed-free-threshold').value);
+    f.stargazing=normalizeStargazing({enabled:$('managed-stargazing').checked,rewards:Object.fromEntries(stargazingRewards.map(key=>[key,$('managed-stargazing-'+key).checked]))});
     f.difficulty=$('managed-difficulty').value;
     const selectedMap=(id,difficulty)=>{const value=$(id).value,found=availableMaps(packet,next,difficulty).find(row=>String(mapId(row))===value);return found?mapId(found):value||null;};
     f.dungeon_id=selectedMap('managed-map',f.difficulty);
@@ -290,6 +294,9 @@
       const repeat=packet.settings.farming.mode==='repeat'&&packet.repeat_maps?.[packet.repeat_index];
       progress.textContent=`当前目标：${difficultyNames[packet.target_difficulty]||'当前难度'} · ${liveName}${repeat?` · 图 ${packet.repeat_index+1} 本轮已完成 ${packet.repeat_completed} / ${repeat.runs} 局`:''}`;
     }
+    const star=$('managed-stargazing-status'),live=packet?.stargazing;
+    star.hidden=!showProgress||!packet?.settings?.farming?.stargazing?.enabled||packet.settings.farming.mode!=='repeat';
+    star.textContent=`观星已跳过 ${safeNumber(live?.skipped)} 局 · ${live?.reason||'等待本局掉落计划'}${live?.hits?.length?' 命中：'+live.hits.map(hit=>`${hit.name}（${hit.labels.join('、')}）`).join('；'):''}`;
     const signature=JSON.stringify([packet?.maps_by_difficulty,packet?.maps,draft?.farming.repeat_maps,connected,packet?.control_error]);if(signature===mapSignature)return;mapSignature=signature;
     for(const [i,id] of [[0,'managed-map'],[1,'managed-map-two']]){
       const point=draft?.farming.repeat_maps[i],selected=point?.dungeon_id,rows=availableMaps(packet,draft,point?.difficulty||(i===0?draft.farming.difficulty:'current')),unknown=selected!==null&&selected!==undefined&&!rows.some(row=>String(mapId(row))===String(selected));
@@ -305,6 +312,8 @@
     $('managed-repeat-count').value=draft.farming.repeat_maps[0]?.runs||1;
     $('managed-difficulty-two').value=draft.farming.repeat_maps[1]?.difficulty||'current';
     $('managed-repeat-count-two').value=draft.farming.repeat_maps[1]?.runs||1;
+    $('managed-stargazing').checked=draft.farming.stargazing.enabled;
+    for(const key of stargazingRewards)$('managed-stargazing-'+key).checked=draft.farming.stargazing.rewards[key];
     for(const kind of ['rune','gem'])$('managed-'+kind+'-action').value=draft.cleanup[kind+'_action'];
     for(const [key] of disposalRarities)for(const field of ['action','fallback'])$(`managed-equipment-${key}-${field}`).value=draft.cleanup.equipment_policies[key][field];
     renderSlots();renderMaps();renderPages();renderDependencies();
@@ -322,8 +331,10 @@
     $('managed-reset-draft').disabled=running||busy||!dirty;
     const push=$('managed-farm-mode').value==='push',two=$('managed-repeat-two').checked;
     $('managed-push-preview').hidden=!push;$('managed-repeat-fields').hidden=push;$('managed-repeat-second').hidden=!two;
+    $('managed-stargazing-options').hidden=!$('managed-stargazing').checked;
+    for(const key of stargazingRewards)$('managed-stargazing-'+key).disabled=fixedStargazing.has(key)||running||busy||!$('managed-farming').checked||!$('managed-stargazing').checked;
     root.document.querySelector('.managed-repeat-count-label').hidden=!two;
-    $('managed-farm-note').textContent=push?'从最高已解锁难度的最后一张已解锁图开始；通关前进一关，失败后退一关，上一关通关后再次挑战。普通通关后进入噩梦，噩梦通关后进入炼狱。':two?'依次打满图 1、图 2 的局数后循环；胜负结算各计一局，途中回城整理不计局数。':'重复进入选定关卡；背包空格不足时先回城整理，再继续刷图。';
+    $('managed-farm-note').textContent=push?'从最高已解锁难度的最后一张已解锁图开始；通关前进一关，失败后退一关，上一关通关后再次挑战。普通通关后进入噩梦，噩梦通关后进入炼狱。':two?'依次打满图 1、图 2 的成功通关局数后循环；观星退出、失败和途中回城均不计数。':'重复进入选定关卡，仅成功通关计数；背包空格不足时先回城整理，再继续刷图。';
     root.ManagedGrowthUI?.render(draft,packet?.progression_catalog,packet?.progression_state,running||busy,(next,renderNow=true)=>{
       draft={...readForm(),...next};markDirty();if(renderNow){renderDependencies();renderCapabilities();}else renderFoldSummaries();
     },connected);

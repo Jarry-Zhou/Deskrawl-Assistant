@@ -164,3 +164,12 @@ main{max-width:1620px;margin:auto;padding:26px 36px 18px}.page-heading{display:f
 #managed-growth>.managed-fold{margin:0;border:1px solid var(--line);border-radius:12px}#managed-growth .growth-subfold{margin:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}#managed-growth .growth-subfold>.managed-fold-heading{padding:13px 15px;background:#151c22}.growth-subfold>.managed-fold-content{padding-top:0;padding-bottom:10px}.managed-fold-title .growth-class-state{display:inline-block;font-size:9px;padding:3px 6px;margin-left:8px;white-space:normal}.managed-main-save-bar{position:sticky;top:12px;z-index:20;background:#171c23f5;border:1px solid #444b50;border-radius:10px;padding:11px 14px;box-shadow:0 6px 18px #0007;backdrop-filter:blur(8px)}
 @media(max-width:650px){.managed-fold>.managed-fold-heading,#managed-growth .managed-fold>.managed-fold-heading{padding:13px 15px;gap:7px;grid-template-columns:minmax(0,1fr) auto 15px}.managed-fold-title h2{font-size:14px}.managed-fold-title p{font-size:9px}.managed-fold-status{font-size:9px;padding:4px 5px}.managed-main-save-bar{top:8px;padding:10px}.managed-module-enable{padding-left:15px;padding-right:15px}.managed-fold-title .growth-class-state{display:block;width:max-content;max-width:100%;margin:6px 0 0}}
 @media(prefers-reduced-motion:reduce){.managed-fold-caret{transition:none}}
+
+/* Repeat-mode reward selection. */
+.managed-stargazing{border-top:1px solid var(--line,#303842);padding-top:16px;margin-top:6px}
+.managed-stargazing fieldset{border:1px solid var(--line,#303842);border-radius:8px;padding:12px 14px;margin:14px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.managed-stargazing legend{color:var(--gold,#e7bd73);padding:0 6px;font-weight:600}
+.managed-stargazing fieldset label{display:flex;align-items:center;gap:7px;font-size:13px;flex-wrap:wrap}
+.managed-stargazing small{font-size:11px;color:var(--muted,#97a3b5)}
+#managed-stargazing-status{padding:10px 12px;background:#27251e;border-left:2px solid var(--gold,#e7bd73);line-height:1.7;overflow-wrap:anywhere}
+@media(max-width:720px){.managed-stargazing fieldset{grid-template-columns:1fr}}

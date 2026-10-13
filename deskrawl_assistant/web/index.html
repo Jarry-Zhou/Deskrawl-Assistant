@@ -128,11 +128,32 @@
                 <label class="managed-repeat-toggle"><input id="managed-repeat-two" type="checkbox">轮换两张图</label>
                 <div class="managed-repeat-map"><span class="managed-repeat-number">1</span><label>难度<select id="managed-difficulty"><option value="current">沿用启动时当前难度</option><option value="Normal">普通</option><option value="Nightmare">噩梦</option><option value="Inferno">炼狱</option></select></label><label>关卡<select id="managed-map"><option value="">连接后读取关卡</option></select></label><label class="managed-repeat-count-label">每轮局数<input id="managed-repeat-count" type="number" min="1" max="10000" step="1" value="1"></label></div>
                 <div id="managed-repeat-second" class="managed-repeat-map" hidden><span class="managed-repeat-number">2</span><label>难度<select id="managed-difficulty-two"><option value="current">沿用启动时当前难度</option><option value="Normal">普通</option><option value="Nightmare">噩梦</option><option value="Inferno">炼狱</option></select></label><label>关卡<select id="managed-map-two"><option value="">连接后读取关卡</option></select></label><label>每轮局数<input id="managed-repeat-count-two" type="number" min="1" max="10000" step="1" value="1"></label></div>
+                <div class="managed-stargazing">
+                  <label class="managed-toggle"><input id="managed-stargazing" type="checkbox">观星 · 只刷高价值奖励</label>
+                  <div id="managed-stargazing-options" hidden>
+                    <p class="managed-footnote">命中以下任意奖励就正常完成本局。未命中时优先切到另一张配置关卡；无法局内切图则回城整理后重进。观星跳过的局不计入复刷局数。</p>
+                    <fieldset><legend>装备</legend>
+                      <label><input id="managed-stargazing-divine_equipment" type="checkbox" checked disabled>神圣装备 <small>固定保留</small></label>
+                      <label><input id="managed-stargazing-black_mist_equipment" type="checkbox" checked disabled>黑雾传说装备 <small>固定保留</small></label>
+                      <label><input id="managed-stargazing-primary_perfect" type="checkbox" checked>传说装备 · 四词条全对 <small>包括远古</small></label>
+                      <label><input id="managed-stargazing-rule_match" type="checkbox" checked>传说装备 · 满足筛选规则 <small>包括远古</small></label>
+                    </fieldset>
+                    <fieldset><legend>符文</legend>
+                      <label><input id="managed-stargazing-set_rune" type="checkbox" checked disabled>符文套装 <small>固定保留</small></label>
+                      <label><input id="managed-stargazing-legendary_rune" type="checkbox" checked disabled>宏伟符文 <small>固定保留</small></label>
+                      <label><input id="managed-stargazing-rare_rune" type="checkbox" checked>稀有符文</label>
+                      <label><input id="managed-stargazing-uncommon_rune" type="checkbox" checked>优秀符文</label>
+                    </fieldset>
+                    <fieldset><legend>宝石</legend><label><input id="managed-stargazing-gem" type="checkbox" checked>任意宝石</label></fieldset>
+                    <p class="managed-footnote">传说装备按已保存并启用的装备筛选组合判断；基础护甲、武器速度及武器伤害不计入四词条。计划或物品待核验时暂不重开；已有地面或马车奖励时，先回城收取并整理，再进入关卡。</p>
+                  </div>
+                </div>
               </div>
               <label class="managed-threshold">回城整理<span>背包剩余空格 &lt; <input id="managed-free-threshold" type="number" min="1" max="2048" step="1" value="4" aria-label="触发回城的背包剩余格阈值"> 格</span></label>
             </div>
             <p id="managed-farm-note" class="managed-footnote">通关后重复进入选定关卡；背包空格不足时先回城整理，再继续刷图。</p>
             <p id="managed-farm-progress" class="managed-footnote" role="status" hidden></p>
+            <p id="managed-stargazing-status" class="managed-footnote" role="status" hidden></p>
             </div>
           </details>
           <div id="managed-growth">
@@ -221,8 +242,8 @@
       <div class="page-heading"><div><h1>本趟掉落预览</h1><p>进入在线关卡后自动更新，每 2 秒查看当前计划。</p></div><div class="heading-actions"><span id="loot-preview-updated" class="note"></span><button id="loot-preview-refresh" class="button ghost" type="button">重新读取</button></div></div>
       <section class="panel loot-capture-panel" aria-label="高价值掉落监控">
         <div class="loot-capture-heading"><div><h2>高价值掉落监控</h2><p>发现黑雾传说、神圣装备、宏伟符文或符文套装，自动保存本局原始掉落计划与实际观测记录。</p></div><label class="loot-capture-toggle"><input id="loot-capture-enabled" type="checkbox">开启监控</label></div>
-        <p id="loot-capture-status" role="status">监控未开启。</p><p id="loot-capture-summary" class="note">已保存 0 局</p><p class="loot-capture-path">本机留档：<span id="loot-capture-directory">等待读取</span></p>
-        <p class="note">开启后在所有页签持续运行；首次物品清单作为基线。留档可核对是否在计划中，不计入累计掉落，重启后需重新开启。</p>
+        <p id="loot-capture-status" role="status">监控未开启。</p><p id="loot-capture-summary" class="note">留档 0 份记录</p><p class="loot-capture-path">本机留档：<span id="loot-capture-directory">等待读取</span></p>
+        <p class="note">开启后在所有页签持续运行；首次物品清单作为基线。数量按留档目录中的 JSON 文件实时统计。留档可核对是否在计划中，不计入累计掉落，重启后需重新开启。</p>
       </section>
       <section class="panel loot-preview-summary" aria-label="本趟计划概要">
         <div class="loot-preview-heading"><div><span class="eyebrow">当前关卡</span><h2 id="loot-preview-map">等待读取关卡</h2><p id="loot-preview-run">连接游戏并进入在线关卡后，自动显示本趟计划。</p></div><span id="loot-preview-phase" class="loot-preview-phase" role="status" aria-live="polite">等待进图</span></div>

@@ -178,6 +178,13 @@ class RuntimeClient:
                 'observation_run':(control.get('run') or {}).get('id'),
                 'character_key':control.get('character_id')}
 
+    def managed_loot_snapshot(self):
+        """One atomic plan read, bound to this connection; no inventory scan."""
+        from .loot_plan_reader import read_loot_plan
+        with self._guard:
+            if self._reader is None: raise RuntimeConnectionError('尚未连接游戏。')
+            return {**read_loot_plan(self._reader), 'session': self._reader.session_id}
+
     def lock_equipment(self, expected, validate=lambda row: True):
         from .background_lock import lock_equipment
         with self._guard:

@@ -672,7 +672,8 @@ function renderLootCapture(value){
   $('loot-capture-status').textContent=value.error||value.message||'监控未开启。';
   $('loot-capture-status').className=value.error?'inline-error':'';
   const time=value.last_saved?new Date(value.last_saved).toLocaleTimeString('zh-CN',{hour12:false}):'';
-  $('loot-capture-summary').textContent=`已保存 ${lootPreviewNumber(value.saved_runs)} 局${time?' · 最近留档 '+time:''}`;
+  const count=value.saved_runs===null||value.saved_runs===undefined?'—':lootPreviewNumber(value.saved_runs);
+  $('loot-capture-summary').textContent=`留档 ${count} 份记录${time?' · 最近留档 '+time:''}`;
   $('loot-capture-directory').textContent=value.directory||'等待读取';
 }
 $('loot-capture-enabled').addEventListener('change',async()=>{

@@ -52,13 +52,13 @@ class FarmingCycleTests(unittest.TestCase):
         for i in range(4):self.finish(engine,'success',str(i))
         self.assertEqual((engine.target_dungeon,engine.target_difficulty),('b','Inferno'))
 
-    def test_two_maps_count_only_completed_runs_and_cycle_with_difficulty(self):
+    def test_two_maps_count_only_successful_runs_and_cycle_with_difficulty(self):
         cfg=settings();cfg['farming']['repeat_maps']=[{'dungeon_id':'a','difficulty':'current','runs':2},
                                                      {'dungeon_id':'b','difficulty':'Nightmare','runs':3}]
         engine=ManagedMode(cfg);engine.start(scene('a'))
         for n in range(20):self.assertIsNone(engine.next_action(scene('a',run_id='same-running')))
         self.assertEqual(engine.repeat_completed,0)
-        for i,expected in enumerate([('a','Normal',1),('b','Nightmare',0),('b','Nightmare',1),('b','Nightmare',2),('a','Normal',0)]):
+        for i,expected in enumerate([('a','Normal',1),('b','Nightmare',0),('b','Nightmare',1),('b','Nightmare',1),('b','Nightmare',2),('a','Normal',0)]):
             self.finish(engine,'failed' if i==3 else 'success','run-'+str(i))
             self.assertEqual((engine.target_dungeon,engine.target_difficulty,engine.repeat_completed),expected)
 

@@ -1,6 +1,16 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const ui=require('../deskrawl_assistant/web/managed-mode.js');
+test('stargazing migration is opt-in with all rewards selected and fixed categories cannot be cleared',()=>{
+  const first=ui.normalizeSettings();assert.equal(first.farming.stargazing.enabled,false);
+  assert.ok(Object.values(first.farming.stargazing.rewards).every(Boolean));
+  const rewards=Object.fromEntries(Object.keys(first.farming.stargazing.rewards).map(key=>[key,false]));
+  const saved=ui.normalizeSettings({farming:{stargazing:{enabled:true,rewards}}});
+  assert.equal(saved.farming.stargazing.enabled,true);
+  assert.deepEqual(Object.entries(saved.farming.stargazing.rewards).filter(([,v])=>v).map(([key])=>key),
+    ['divine_equipment','black_mist_equipment','set_rune','legendary_rune']);
+  assert.deepEqual(ui.normalizeSettings(saved).farming.stargazing,saved.farming.stargazing);
+});
 const settings=(extra={})=>ui.normalizeSettings({auto_equip:{enabled:false,minimum_delta:1,slot_locks:{}},
   farming:{enabled:true,mode:'repeat',dungeon_id:12,progression:[],free_threshold:4},
   cleanup:{equipment_action:'store',equipment_fallback:'sell',equipment_pages:[1],rune_action:'store',rune_pages:[3],gem_action:'store',gem_pages:[3]},...extra});

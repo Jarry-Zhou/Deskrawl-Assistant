@@ -444,6 +444,8 @@ class GameActions:
                 raise NativeActionError('当前角色实体未确认')
             dead = read.boolean(player+296)
             in_battle = read.boolean(combat+80)
+            travel_state = self._combat_travel_state(read, manager) if scene == 0 else {
+                'player_state': None, 'gathering': False, 'travel_blocked': False, 'travel_wait_reason': ''}
             completion = self._completion_state(read)
             from .recommendation_reader import read_campaign, _catalog
             recommendation = recommendation or read_campaign(self.reader)
@@ -497,7 +499,7 @@ class GameActions:
             elif not run and self._last_terminal_run:
                 run = dict(self._last_terminal_run, retained_terminal=True)
             return {'available':True, 'compatible':True, 'scene':{0:'combat',1:'town',2:'fishing'}[scene],
-                'scene_changing':scene_changing, 'teleporting':teleporting, 'dead':dead, 'in_battle':in_battle, **online,
+                'scene_changing':scene_changing, 'teleporting':teleporting, 'dead':dead, 'in_battle':in_battle, **travel_state, **online,
                 'completion_visible':completion,
                 'loot_ledger':loot_ledger,
                 'system_log':system_log,
@@ -584,6 +586,40 @@ class GameActions:
             raise NativeActionError('马车仍有物品或正在卸货，禁止进入地图或切换难度。')
         self._require_stored_inventory(read)
 
+    def _combat_travel_state(self, read, manager):
+        """Mirror the original portal gates; keep their reads in native guards."""
+        combat = read.verify(read.ptr(manager + 64), 'PlayerCombatController')
+        state = read.integer(combat + 48)
+        gathering = read.boolean(combat + 52)
+        active = read.ptr(manager + 112)
+        if active: read.verify(active, 'MapData')
+        map_type = read.integer(active + 32) if active else None
+        # TownPortalSystem.frm permits attacks only in CombatMapType 2.
+        blocked = not active or gathering or (state == 1 and map_type != 2)
+        reason = ('等待当前关卡载入后再切图。' if not active else
+                  '角色正在采集，等待结束后再切图。' if gathering else
+                  '角色正在攻击，等待可切图状态后再尝试。' if blocked else '')
+        return {'player_state': state, 'gathering': gathering,
+                'travel_blocked': blocked, 'travel_wait_reason': reason}
+
+    def _require_stargazing_run(self, read, manager, source_run_id):
+        # Keep the active map/plan pointers in the mailbox guards. A native
+        # repeat occurring after the Python preflight must cancel the action.
+        from .recommendation_reader import _Copy
+        copy = _Copy(self.reader)
+        wave = copy.verify(copy.ptr(manager + 104), 'WaveManager')
+        plan = copy.verify(copy.ptr(manager + 120), 'RunPlan')
+        active = copy.ptr(manager + 112)
+        if copy.ptr(wave + 88) != plan or copy.ptr(wave + 40) != active or not active:
+            raise SnapshotChangedError('观星关卡计划正在切换。')
+        if not copy.boolean(wave + 96) or copy.boolean(wave + 248) or copy.boolean(wave + 249):
+            raise SnapshotChangedError('关卡已结束或正在切换，重新核验通关计数后再操作。')
+        raw_id = self.reader.string(copy.ptr(plan + 16)) or ''
+        if not raw_id or hashlib.sha256(raw_id.encode()).hexdigest() != source_run_id:
+            raise SnapshotChangedError('观星源关卡已变化，禁止局内切图。')
+        copy.finish()
+        read.guards.extend(copy.guards)
+
     def _require_stored_inventory(self, read):
         # Guard empty slots too: an offload can fill an existing slot after the
         # planning snapshot without changing the inventory array itself.
@@ -651,6 +687,10 @@ class GameActions:
         if kind == 'return_town':
             if scene == 1:
                 return {'completed':True, 'already_in_town':True, 'native_verified':kind in self.verified_kinds}
+            if payload.get('reason_code') == 'stargazing_skip':
+                self._require_stargazing_run(read, manager, payload.get('source_run_id'))
+                travel_state = self._combat_travel_state(read, manager)
+                if travel_state['travel_blocked']: raise GameBusyError(travel_state['travel_wait_reason'])
             calls = [self._return_town_call(read, manager, portal)]
         elif kind == 'switch_difficulty':
             self._require_travel_ready(read)
@@ -662,10 +702,27 @@ class GameActions:
             calls = [Invocation('ey.dcq',arguments=(Argument.integer(target['value']),))]
         elif kind == 'enter_map':
             self._require_travel_ready(read)
-            self._require_empty_town(read,manager,scene)
+            stargazing_entry = payload.get('reason_code') == 'stargazing_skip'
+            if not stargazing_entry:
+                self._require_empty_town(read,manager,scene)
             state = self.control_snapshot()
             if not state['available']:
                 raise NativeActionError(state['reason'])
+            if stargazing_entry:
+                if (scene != 0 or (state.get('run') or {}).get('id') != payload.get('source_run_id')
+                        or not payload.get('source_run_id') or state.get('dead') is True
+                        or (state.get('run') or {}).get('status') not in ('running', 'settling')):
+                    raise SnapshotChangedError('观星源关卡已变化，禁止局内切图。')
+                self._require_stargazing_run(read,manager,payload['source_run_id'])
+                travel_state = self._combat_travel_state(read, manager)
+                if travel_state['travel_blocked']: raise GameBusyError(travel_state['travel_wait_reason'])
+                if self._ground(read,manager):
+                    raise SnapshotChangedError('地面已有实际奖励，禁止观星重开。')
+                carriage = self._carriage(read,in_town=False)
+                if carriage.get('complete') is not True or carriage.get('items') != []:
+                    raise SnapshotChangedError('马车已有奖励或状态待核验，禁止观星重开。')
+                if payload.get('map_id') == state.get('map_id'):
+                    raise NativeActionError('游戏不允许局内直接重进同一张图。')
             key = payload.get('map_id')
             row = next((row for row in state['maps'] if row['map_id'] == key), None)
             if not row or not row['can_enter']:

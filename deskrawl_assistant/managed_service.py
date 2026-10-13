@@ -11,6 +11,8 @@ from .rules import evaluate, DEFAULT_MIN_CONFIDENCE
 from .native_memory import SnapshotChangedError, GameBusyError
 from .native_dispatcher import NativeActionError, GUARD_FAILED, REJECTED
 from .paths import RESOURCE_ROOT
+from .stargazing import enabled as stargazing_enabled, decide as stargazing_decide, combat_rewards_clear, combat_rewards_known
+from .loot_preview import decorate_equipment
 from .item_protection import disposal_protection, mandatory_storage, town_rewards_clear
 from .action_log import record
 from .progression import catalog as growth_catalog, growth_action, next_purchase, NEW_ACTIONS, PURCHASE_BATCH_LIMIT, enabled as growth_enabled
@@ -169,7 +171,8 @@ class ManagedServiceMixin:
         scene.setdefault('available',control.get('available') is True)
         scene.setdefault('dungeon_id',control.get('map_id'))
         scene.setdefault('difficulty',control.get('difficulty'))
-        for key in ('scene_changing','teleporting','dead','completion_visible','online_saving','online_pending_requests'):
+        for key in ('scene_changing','teleporting','dead','completion_visible','online_saving','online_pending_requests',
+                    'player_state','gathering','travel_blocked','travel_wait_reason'):
             scene.setdefault(key,control.get(key))
         run = deepcopy(run_record(scene.get('run',control.get('run'))))
         if run:
@@ -248,10 +251,24 @@ class ManagedServiceMixin:
             for item in container.get('items',[]):
                 name,kind = self._describe_item(item.get('name_key') or item.get('internal_name'))
                 item.setdefault('name',name); item.setdefault('kind',kind)
-        return {'complete':payload['complete'], 'session':snap.get('bridge_session'),
+        scene = self._managed_scene()
+        loot_plan = None
+        if (not inventory_only and stargazing_enabled(self.managed.settings)
+                and scene.get('in_town') is False
+                and run_record(scene.get('run')).get('id') not in self.managed.stargazing_seen):
+            try:
+                loot_plan = self.client.managed_loot_snapshot()
+                loot_plan['rules_known'] = not bool(self.config_error)
+                rules = self._rules() if not self.config_error else []
+                for wave in loot_plan.get('waves', []):
+                    for item in wave.get('items', []):
+                        decorate_equipment(item, rules, self.adapter, self.catalog)
+            except (OSError, ValueError, RuntimeError, AttributeError, ValidationError):
+                loot_plan = {'available': False, 'reason': '本局掉落计划暂不可读，等待重新核验。'}
+        return {'complete':payload['complete'], 'session':snap.get('bridge_session'), 'loot_plan':loot_plan,
                 'merchant_uids':list(self.managed_merchant_uids),
                 'items':payload['items'],'counts':payload['counts'],'character':deepcopy(self.character),
-                'progression':deepcopy(self.managed_growth), 'scene':self._managed_scene(),'carriage':carriage,'ground':ground,
+                'progression':deepcopy(self.managed_growth), 'scene':scene,'carriage':carriage,'ground':ground,
                 'automation_settings':deepcopy(self.automation_settings),
                 'loot_ledger':deepcopy(self.managed_control.get('loot_ledger', {})),
                 'system_log':deepcopy(self.managed_control.get('system_log', {})),
@@ -489,7 +506,25 @@ class ManagedServiceMixin:
         pending = scene.get('online_pending_requests')
         if kind in ('return_town','enter_dungeon','switch_difficulty') and type(pending) is int and pending > 0:
             raise GameBusyError(f'等待在线请求处理完成后切换场景（待处理请求 {pending}）。')
-        if kind in ('enter_dungeon','switch_difficulty','merchant_buy','merchant_open','merchant_refresh') and not town_rewards_clear(observation):
+        stargazing_entry = kind == 'enter_dungeon' and action.get('reason_code') == 'stargazing_skip'
+        if action.get('reason_code') == 'stargazing_skip':
+            if scene.get('travel_blocked') is True:
+                raise GameBusyError(scene.get('travel_wait_reason') or '等待角色恢复可切图状态。')
+            current_run = run_record(scene.get('run'))
+            verdict = stargazing_decide(observation.get('loot_plan'), observation, self.managed.settings['farming']['stargazing'])
+            index = action.get('next_repeat_index')
+            target_allowed = type(index) is int and 0 <= index < len(self.managed.repeat_maps)
+            if stargazing_entry and target_allowed:
+                row = self.managed.repeat_maps[index]
+                target_allowed = str(row['dungeon_id']) == str(action.get('dungeon_id')) and row['difficulty'] == action.get('difficulty')
+            if (not stargazing_enabled(self.managed.settings) or not target_allowed
+                    or action.get('source_run_id') != current_run.get('id')
+                    or current_run.get('status') not in ('running', 'settling')
+                    or current_run.get('completion_confirmed') is True
+                    or verdict['verdict'] != 'skip'
+                    or not (combat_rewards_clear(observation) if stargazing_entry else combat_rewards_known(observation))):
+                return {'verified':False, 'retryable':True, 'reason':'观星状态或实际奖励已变化，重新核验后再切图。'}
+        if kind in ('enter_dungeon','switch_difficulty','merchant_buy','merchant_open','merchant_refresh') and not stargazing_entry and not town_rewards_clear(observation):
             return {'verified':False,'retryable':True,'reason':'主城奖励尚未收取或收纳完成，继续整理后再进入地图。'}
         if self.managed.finishing and kind in ('enter_dungeon','switch_difficulty','merchant_buy','merchant_open','merchant_refresh','allocate_talent','learn_life_skill','set_skill'):
             return {'verified':False,'retryable':True,'reason':'已请求停止，改为回城整理。'}
@@ -625,11 +660,11 @@ class ManagedServiceMixin:
         run = run_record(scene.get('run'))
         return {**{k:scene.get(k) for k in ('available','in_town','in_dungeon','dungeon_id',
                     'difficulty','scene_changing','teleporting','dead','completion_visible',
-                    'online_saving','online_pending_requests')},
+                    'online_saving','online_pending_requests','player_state','gathering','travel_blocked')},
                 'run_id':run.get('id'),'run_status':run.get('status')}
 
     def _managed_defer(self, action, reason, code, *, native_state=None):
-        """Only known pre-write gates and rejected town returns reach here."""
+        """Only known pre-write gates and explicitly refused single calls retry."""
         with self.guard:
             if not self.managed.running or self.cancelled.is_set(): return self.managed.status
             now = time.monotonic()
@@ -650,6 +685,7 @@ class ManagedServiceMixin:
                        attempts=attempts,elapsed_seconds=round(elapsed,2),reason=reason)
                 return self.managed.status
             delay = min(15,2**min(attempts,4))
+            if code == 'stargazing_entry_rejected': delay = min(3, attempts)
             self.managed_retry = {'key':key,'started':started,'attempts':attempts,
                 'next_at':now+delay,'action_kind':action.get('kind'),'reason':reason}
             self.managed.status = reason+f' {delay} 秒后重新检查，托管继续运行。'
@@ -665,6 +701,11 @@ class ManagedServiceMixin:
             retry = self.managed_retry
             if retry:
                 scene = observation['scene']
+                # Native repeat can finish and start a new plan during backoff.
+                # Record the short final-wave receipt even when no action is due.
+                if (self.managed.settings['farming']['enabled'] and scene.get('available') is True
+                        and scene.get('scene_changing') is not True and scene.get('teleporting') is not True):
+                    self.managed._runs(observation)
                 if retry['action_kind']=='return_town' and scene.get('in_town') is True:
                     self.managed_retry = None
                 elif time.monotonic() < retry['next_at']:
@@ -677,6 +718,9 @@ class ManagedServiceMixin:
                      else scene.get('in_dungeon') is True and str(scene.get('dungeon_id'))==str(action['dungeon_id'])
                      and (not action.get('difficulty') or scene.get('difficulty')==action['difficulty'])
                      and run_record(scene.get('run')).get('status') in ('running','settling'))
+                if confirmed and action['kind'] == 'enter_dungeon' and action.get('reason_code') == 'stargazing_skip':
+                    new_id = run_record(scene.get('run')).get('id')
+                    confirmed = bool(new_id and new_id != action.get('source_run_id'))
                 if confirmed:
                     self.managed_transition = None
                 else:
@@ -709,9 +753,21 @@ class ManagedServiceMixin:
         except GameBusyError as exc:
             return self._managed_defer(action,str(exc),'game_busy')
         except NativeActionError as exc:
+            if (not exc.uncertain and exc.state == REJECTED and action['kind'] == 'enter_dungeon'
+                    and action.get('reason_code') == 'stargazing_skip'):
+                with self.guard:
+                    fallback = self.managed.stargazing_rejected(action)
+                    self.managed_history.append({'time': datetime.now(timezone.utc).isoformat(),
+                        'message': self.managed.status, 'level': 'info'})
+                record('managed_stargazing_entry_rejected', source_run=action['source_run_id'], target_map=action['dungeon_id'], fallback_to_town=fallback)
+                if not fallback:
+                    return self._managed_defer(action, self.managed.status, 'stargazing_entry_rejected', native_state=exc.state)
+                self.managed_retry = None
+                return self.managed.status
             # GUARD_FAILED is emitted before the mailbox invokes any method.
             # Other rejections may follow partial batches or spend resources;
-            # only the one-call town return is safe to re-plan after rejection.
+            # The explicit single-call stargazing entry is handled above;
+            # otherwise only the one-call town return can re-plan a rejection.
             if not exc.uncertain and (exc.state==GUARD_FAILED
                     or action['kind']=='return_town' and exc.state==REJECTED):
                 code = 'native_guard' if exc.state==GUARD_FAILED else 'return_town_rejected'

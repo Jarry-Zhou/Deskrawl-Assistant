@@ -154,6 +154,19 @@ test('unknown rarity is not styled as common and monitor state survives plan cle
   p.context.monitor={enabled:true,saved_runs:2,directory:'C:\\captures',message:'正在监控'};
   p.run("renderLootCapture(monitor);clearLootPreview('已回城');");
   assert.equal(p.ids.get('loot-capture-enabled').checked,true);
-  assert.equal(p.ids.get('loot-capture-summary').textContent,'已保存 2 局');
+  assert.equal(p.ids.get('loot-capture-summary').textContent,'留档 2 份记录');
   assert.equal(p.ids.get('loot-capture-directory').textContent,'C:\\captures');
+});
+
+test('capture summary reflects reduced file counts and unreadable directories',()=>{
+  const p=page();p.context.monitor={enabled:true,saved_runs:1};
+  p.run('renderLootCapture(monitor)');
+  assert.equal(p.ids.get('loot-capture-summary').textContent,'留档 1 份记录');
+  p.context.monitor.saved_runs=0;
+  p.run('renderLootCapture(monitor)');
+  assert.equal(p.ids.get('loot-capture-summary').textContent,'留档 0 份记录');
+  p.context.monitor.saved_runs=null;p.context.monitor.error='文件数量未确认';
+  p.run('renderLootCapture(monitor)');
+  assert.equal(p.ids.get('loot-capture-summary').textContent,'留档 — 份记录');
+  assert.equal(p.ids.get('loot-capture-status').textContent,'文件数量未确认');
 });

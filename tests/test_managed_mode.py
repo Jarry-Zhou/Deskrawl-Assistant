@@ -490,11 +490,11 @@ class LifecycleTests(unittest.TestCase):
             action=engine.next_action(town)
             if action:break
         self.assertEqual(action['kind'],'enter_dungeon');self.assertEqual(action['dungeon_id'],'a')
-        self.assertEqual(engine.repeat_completed,1)
+        self.assertEqual(engine.repeat_completed,0)
         verified(engine,action)
         world['scene'].update(dead=False);world['scene']['run'].update(id='next-run',status='running')
         self.assertIsNone(engine.next_action(world));self.assertTrue(engine.running)
-        self.assertEqual(engine.repeat_completed,1)
+        self.assertEqual(engine.repeat_completed,0)
 
     def test_current_difficulty_is_fixed_at_start_not_changed_by_later_reads(self):
         world = observation(); world['scene']['difficulty']='Nightmare'

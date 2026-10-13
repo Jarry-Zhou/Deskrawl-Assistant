@@ -15,6 +15,7 @@ from .game_panel_log import DisposalLogCursor
 from .item_protection import divine_equipment, mandatory_storage, disposal_protection, is_rune, town_rewards_clear
 from .storage_preferences import DEFAULT_STORAGE_PAGES
 from .equipment_requirements import equip_eligibility
+from .stargazing import DEFAULT_STARGAZING, validate_stargazing, enabled as stargazing_enabled, decide as stargazing_decide, combat_rewards_clear, combat_rewards_known
 from .progression import (DEFAULT_PROGRESSION, DEFAULT_LIFE, DEFAULT_MERCHANT,
                           validate_growth, enabled as growth_enabled, growth_action, next_purchase, PURCHASE_BATCH_LIMIT)
 
@@ -25,7 +26,7 @@ DEFAULT_SETTINGS = {
     'background': {'rule_monitoring': True, 'inventory_automation': True},
     'auto_equip': {'enabled': False, 'minimum_delta': 1, 'slot_locks': {}, 'disabled_slots': []},
     'farming': {'enabled': False, 'mode': 'repeat', 'dungeon_id': None, 'difficulty':'current',
-                'progression': [], 'repeat_maps': [], 'free_threshold': 4},
+                'progression': [], 'repeat_maps': [], 'free_threshold': 4, 'stargazing': deepcopy(DEFAULT_STARGAZING)},
     'cleanup': {'equipment_action': 'store', 'equipment_fallback': 'sell', 'equipment_policies': {},
                 'equipment_pages': list(DEFAULT_STORAGE_PAGES['equipment']), 'rune_action': 'store', 'rune_pages': list(DEFAULT_STORAGE_PAGES['rune']),
                 'gem_action': 'store', 'gem_pages': list(DEFAULT_STORAGE_PAGES['gem'])},
@@ -58,6 +59,7 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
     if isinstance(raw.get('farming'),dict):
         raw['farming'].setdefault('difficulty','current')
         raw['farming'].setdefault('repeat_maps',[])
+        raw['farming'].setdefault('stargazing', deepcopy(DEFAULT_STARGAZING))
     if isinstance(raw.get('auto_equip'),dict):
         raw['auto_equip'].setdefault('disabled_slots',[])
     if isinstance(raw.get('cleanup'),dict):
@@ -67,6 +69,7 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
         if not isinstance(raw[group], dict) or set(raw[group]) != set(defaults):
             raise ValidationError('托管配置字段不完整：' + group)
     e, f, c = result['auto_equip'], result['farming'], result['cleanup']
+    f['stargazing'] = validate_stargazing(f['stargazing'])
     if type(e['enabled']) is not bool or type(f['enabled']) is not bool:
         raise ValidationError('托管开关必须为布尔值。')
     if any(type(v) is not bool for v in result['background'].values()):
@@ -611,6 +614,12 @@ class ManagedMode:
         self.repeat_completed = 0
         self.repeat_maps = []
         self.handled_runs = set()
+        self.stargazing_seen = set()
+        self.stargazing_skipped = set()
+        self.stargazing_state = {'verdict': 'idle', 'reason': '', 'hits': [], 'skipped': 0}
+        self.stargazing_return = None
+        self.stargazing_entry_rejections = {}
+        self.repeat_counts = {}
         self.force_dispose = set()
         self.equip_reserved = None
         self.sequence = 0
@@ -713,7 +722,8 @@ class ManagedMode:
                 'last_success_difficulty':self.last_success_difficulty,
                 'merchant_counts': deepcopy(self.merchant_counts), 'push_failed': self.push_failed,
                 'repeat_index':self.repeat_index,'repeat_completed':self.repeat_completed,
-                'repeat_maps':deepcopy(self.repeat_maps),'statistics': self.metrics.state()}
+                'repeat_maps':deepcopy(self.repeat_maps),'statistics': self.metrics.state(),
+                'stargazing': deepcopy(self.stargazing_state)}
 
     @staticmethod
     def _town(observation):
@@ -819,6 +829,20 @@ class ManagedMode:
             self.cleanup_processing = False
         elif action['kind'] == 'enter_dungeon':
             self.phase = 'farming'
+        if action.get('reason_code') == 'stargazing_skip':
+            source = action['source_run_id']
+            self.stargazing_skipped.add(source)
+            self.stargazing_seen.add(source)
+            self.stargazing_state['skipped'] = len(self.stargazing_skipped)
+            self.stargazing_return = None
+            self.stargazing_entry_rejections.pop(source, None)
+            index = action['next_repeat_index']
+            if index != self.repeat_index:
+                self.repeat_counts[self.repeat_index] = self.repeat_completed
+                self.repeat_index = index
+                self.repeat_completed = self.repeat_counts.get(index, 0)
+                target = self.repeat_maps[index]
+                self.target_dungeon, self.target_difficulty = target['dungeon_id'], target['difficulty']
         elif action['kind'] == 'switch_difficulty':
             self.phase = 'cleanup'
         if action['kind'] in ('return_town', 'collect_ground', 'collect_carriage', 'open_chest', 'merchant_buy'):
@@ -869,6 +893,9 @@ class ManagedMode:
             visible = (not self._town(observation) and str(scene.get('dungeon_id')) == str(action['dungeon_id'])
                        and (not action.get('difficulty') or scene.get('difficulty')==action['difficulty'])
                        and run_record(scene.get('run')).get('status') in ('running', 'settling'))
+            if action.get('reason_code') == 'stargazing_skip':
+                new_id = run_record(scene.get('run')).get('id')
+                visible = visible and bool(new_id and new_id != action.get('source_run_id'))
         elif kind == 'switch_difficulty':
             visible = self._town(observation) and observation.get('scene',{}).get('difficulty')==action['difficulty']
         else: visible = False
@@ -1185,6 +1212,7 @@ class ManagedMode:
         if status != 'failed' and run.get('completion_confirmed') is True:
             status = 'success'
         run_id = run.get('id')
+        if run_id in self.stargazing_skipped: return
         if status not in ('success', 'failed') or run_id is None or str(run_id) in self.handled_runs: return
         self.handled_runs.add(str(run_id))
         dungeon = run.get('dungeon_id', observation.get('scene', {}).get('dungeon_id'))
@@ -1195,10 +1223,13 @@ class ManagedMode:
             self.last_success = dungeon
             self.last_success_difficulty = difficulty
         if self.settings['farming']['mode']=='repeat':
+            if status != 'success': return
             self.repeat_completed += 1
             if self.repeat_completed>=self.repeat_maps[self.repeat_index]['runs']:
                 self.repeat_completed = 0
+                self.repeat_counts[self.repeat_index] = 0
                 self.repeat_index = (self.repeat_index+1)%len(self.repeat_maps)
+                self.repeat_completed = self.repeat_counts.get(self.repeat_index, 0)
                 target = self.repeat_maps[self.repeat_index]
                 self.target_dungeon,self.target_difficulty = target['dungeon_id'],target['difficulty']
             return
@@ -1211,6 +1242,60 @@ class ManagedMode:
             return
         index = min(pos+1,len(points)-1) if status=='success' else max(0,pos-1)
         self.target_dungeon,self.target_difficulty = points[index]['dungeon_id'],points[index]['difficulty']
+
+    def _stargazing(self, observation):
+        """Called only for a live target run, after return/cleanup safety gates."""
+        if not stargazing_enabled(self.settings): return None
+        scene = observation['scene']
+        run = run_record(scene.get('run'))
+        run_id = run.get('id')
+        if not run_id or run_id in self.stargazing_seen: return None
+        if run.get('status') not in ('running', 'settling') or run.get('completion_confirmed') is True: return None
+        verdict = stargazing_decide(observation.get('loot_plan'), observation, self.settings['farming']['stargazing'])
+        self.stargazing_state.update(verdict)
+        if verdict['verdict'] == 'unknown': return None
+        if verdict['verdict'] == 'keep':
+            self.stargazing_seen.add(run_id)
+            return None
+        # Never abandon generated rewards. Known drops travel back to town and
+        # are collected before re-entry; incomplete reads cannot authorize travel.
+        if not combat_rewards_known(observation):
+            self.stargazing_state.update(verdict='unknown', reason='地面／马车状态待核验，暂不重开。')
+            return None
+        if scene.get('travel_blocked') is True:
+            self.stargazing_state['reason'] = scene.get('travel_wait_reason') or '等待角色恢复可切图状态。'
+            return None
+        self.phase = 'stargazing'
+        alternate = (self.repeat_index + 1) % len(self.repeat_maps)
+        target = self.repeat_maps[alternate]
+        # The native entry rejects the active map. A different configured map
+        # can be tried in combat; difficulty changes always go through town.
+        different = str(target['dungeon_id']) != str(scene.get('dungeon_id'))
+        if different and target['difficulty'] == scene.get('difficulty') and combat_rewards_clear(observation):
+            return self._action('enter_dungeon', dungeon_id=target['dungeon_id'], difficulty=target['difficulty'],
+                source_run_id=run_id, next_repeat_index=alternate, reason_code='stargazing_skip',
+                reason='观星未命中高价值奖励，切换到另一张配置关卡重新观星。')
+        return self._action('return_town', source_run_id=run_id, next_repeat_index=alternate, reason_code='stargazing_skip',
+                            reason='观星未命中高价值奖励，回城整理后重新进入配置关卡。')
+
+    def stargazing_rejected(self, action):
+        """A portal refusal during screen fade/attacks is temporary, not failure."""
+        if (not self.pending or self.pending.get('action_id') != action.get('action_id')
+                or action.get('reason_code') != 'stargazing_skip' or action['kind'] != 'enter_dungeon'):
+            raise ValidationError('观星切图请求状态已变化。')
+        self.pending = None
+        source = action['source_run_id']
+        attempts = self.stargazing_entry_rejections.get(source, 0) + 1
+        self.stargazing_entry_rejections[source] = attempts
+        if attempts < 8:
+            self.phase = 'stargazing'
+            self.status = '游戏暂未接受局内切图，等待过场或攻击结束后重新核验。'
+            return False
+        self.phase = 'returning'
+        # Mark only after the return receipt, not on native rejection.
+        self.stargazing_return = deepcopy(action)
+        self.status = '局内切图连续被拒绝，改为回城整理后重进。'
+        return True
 
     def next_action(self, observation):
         if not self.running or self.pending is not None: return None
@@ -1266,6 +1351,31 @@ class ManagedMode:
                     self.status = '等待场景状态读取。'; return None
                 if self._town(observation): self.phase = 'cleanup'
                 if self.phase == 'cleanup': return self._cleanup(observation, all_items)
+                if self.stargazing_return:
+                    run = run_record(scene.get('run'))
+                    if (self.stargazing_return['source_run_id'] != run.get('id')
+                            or run.get('status') not in ('running', 'settling')
+                            or run.get('completion_confirmed') is True):
+                        # A win during the wait is already counted above. It
+                        # must not be marked as a skipped run by a late return.
+                        self.stargazing_return = None
+                    else:
+                        verdict = stargazing_decide(observation.get('loot_plan'), observation, self.settings['farming']['stargazing'])
+                        self.stargazing_state.update(verdict)
+                        if verdict['verdict'] == 'keep':
+                            self.stargazing_return = None
+                            self.stargazing_seen.add(run['id'])
+                        elif verdict['verdict'] == 'unknown' or not combat_rewards_known(observation):
+                            self.status = '重新核验本局计划与实际奖励，暂不重开。'
+                            return None
+                        elif scene.get('travel_blocked') is True:
+                            self.status = scene.get('travel_wait_reason') or '等待角色恢复可切图状态。'
+                            return None
+                        else:
+                            self.phase = 'returning'
+                            return self._action('return_town', source_run_id=self.stargazing_return['source_run_id'],
+                                next_repeat_index=self.stargazing_return['next_repeat_index'],
+                                reason_code='stargazing_skip', reason='局内切图连续被拒绝，回城收取并整理奖励后重新进入配置关卡。')
                 if self.target_difficulty and scene.get('difficulty')!=self.target_difficulty:
                     self.phase = 'returning'
                     return self._action('return_town',reason='切换目标难度前，先回到主城整理。')
@@ -1281,6 +1391,8 @@ class ManagedMode:
                 if scene.get('dungeon_id') is not None and str(scene['dungeon_id']) != str(self.target_dungeon):
                     self.phase = 'returning'
                     return self._action('return_town', reason='当前关卡与托管目标不同，回城整理后切换关卡。')
+                action = self._stargazing(observation)
+                if action: return action
             if self._town(observation) and any(r.get('container')=='inventory'
                     and r.get('item_uid') in self.merchant_received_uids for r in all_items):
                 self.phase='cleanup';return self._cleanup(observation,all_items)
@@ -1292,7 +1404,8 @@ class ManagedMode:
             if action: return action
             action = self._background_organize(observation, all_items)
             if action: return action
-            self.status = self.growth_wait or ('正在刷图，等待奖励或更好的装备。' if self.settings['farming']['enabled'] else '正在监控装备与成长目标。')
+            self.status = self.growth_wait or (self.stargazing_state['reason'] if stargazing_enabled(self.settings)
+                and self.stargazing_state['reason'] else '正在刷图，等待奖励或更好的装备。' if self.settings['farming']['enabled'] else '正在监控装备与成长目标。')
             return None
         except (ValidationError, KeyError, TypeError, ValueError) as exc:
             return self._pause('托管读取未确认，已暂停：' + str(exc))

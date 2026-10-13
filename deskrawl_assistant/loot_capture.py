@@ -50,7 +50,6 @@ class LootCaptureMonitor:
         self.enabled = False
         self.message = '监控未开启。'
         self.error = ''
-        self.saved_runs = len(list(self.directory.glob('*.json'))) if self.directory.exists() else 0
         self.last_saved = None
         self.runs = OrderedDict()
         self.session = None
@@ -64,8 +63,16 @@ class LootCaptureMonitor:
 
     def status(self):
         with self.guard:
-            return {'enabled':self.enabled, 'message':self.message, 'error':self.error,
-                'saved_runs':self.saved_runs, 'last_saved':self.last_saved,
+            # Files can be moved or removed while the assistant is running.
+            # Count evidence files on each refresh, excluding temporary writes.
+            try:
+                saved_runs = sum(path.is_file() for path in self.directory.glob('*.json'))
+                error = self.error
+            except OSError:
+                saved_runs = None
+                error = self.error or '留档目录暂时无法读取，文件数量未确认。'
+            return {'enabled':self.enabled, 'message':self.message, 'error':error,
+                'saved_runs':saved_runs, 'last_saved':self.last_saved,
                 'directory':str(self.directory.resolve()), 'polls':self.polls}
 
     def set_enabled(self, enabled):
@@ -141,9 +148,7 @@ class LootCaptureMonitor:
             temporary.replace(target)
         finally:
             temporary.unlink(missing_ok=True)
-        if not entry.get('saved'):
-            self.saved_runs += 1
-            entry['saved'] = True
+        entry['saved'] = True
         self.last_saved = document['saved_at']
         self.pending.discard(key)
 
