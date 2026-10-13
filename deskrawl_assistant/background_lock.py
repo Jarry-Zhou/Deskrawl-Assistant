@@ -79,9 +79,10 @@ def _set_equipment_locked(reader, expected, locked, validate, writer_factory):
     latest = reader.generated(address)
     if latest.get('instance_id') != required[1] or latest.get('locked') is not (not locked):
         raise MemoryReadError("装备实例或锁状态已经改变，未写入")
-    # The copied modifiers must still describe the same rule observation.
-    if latest.get('modifiers') != actual.get('modifiers') or (locked and latest.get('is_black_mist')):
-        raise MemoryReadError("装备词条已变化或未揭示，未写入")
+    # Retention locks also apply to unrevealed black-mist gear. Locking changes
+    # only the lock bit, without revealing or evaluating its hidden affixes.
+    if latest.get('modifiers') != actual.get('modifiers'):
+        raise MemoryReadError("装备词条已变化，未写入")
     p = reader.memory
     save = reader.singleton('SaveSystem')
     bindings = getattr(reader, 'compatibility_bindings', {})

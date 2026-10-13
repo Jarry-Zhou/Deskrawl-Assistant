@@ -136,9 +136,19 @@ class BackgroundLockTests(unittest.TestCase):
         self.assertFalse(self.writes)
         self.assertTrue(self.closed)
 
-    def test_black_mist_is_not_written(self):
+    def test_hidden_black_mist_locks_without_revealing_or_changing_affixes(self):
         self.reader.row['is_black_mist']=True
-        with self.assertRaises(MemoryReadError): self.lock()
+        self.reader.row['modifiers']=[]
+        before=copy.deepcopy(self.reader.row)
+        self.assertEqual(self.lock()['status'],'locked')
+        self.assertEqual(self.writes,[OBJECT+73,SAVE+92])
+        self.assertEqual(self.reader.row,before)
+
+    def test_black_mist_changed_modifiers_still_prevent_lock_writes(self):
+        self.reader.row.update(is_black_mist=True,modifiers=[])
+        original=self.reader.generated
+        self.reader.generated=lambda address:{**original(address),'modifiers':[{'stat':9,'value':141}]}
+        with self.assertRaisesRegex(MemoryReadError,'词条已变化'):self.lock()
         self.assertFalse(self.writes)
 
     def test_unlock_changes_only_lock_to_false_and_save_to_true(self):

@@ -874,6 +874,46 @@ class ManagedServiceTests(unittest.TestCase):
         self.assertFalse(result.get('verified'))
         self.assertEqual(self.client.actions,[])
 
+    def test_hidden_black_mist_is_locked_and_stored_without_affix_verification(self):
+        hidden=equipment(0,is_black_mist=True,modifiers=[])
+        hidden['read_evidence']['native_affixes_verified']=False
+        self.client.items=[hidden,equipment(1)]
+        config=self.settings(farming=True)
+        config['cleanup']['equipment_action']='salvage'
+        self.service.save_managed(config);self.service.set_managed_running(True)
+        world=self.service._managed_observation()
+        self.assertTrue(world['items'][0]['review'])
+        self.service._managed_once()
+        self.assertEqual([a[0] for a in self.client.actions],['lock'])
+        self.service._managed_once()
+        self.assertEqual([a[0] for a in self.client.actions],['lock','transfer'])
+        self.assertTrue(self.client.items[0]['locked'])
+        self.assertEqual(self.client.items[0]['container'],'storage')
+        self.assertEqual(self.client.items[0]['modifiers'],[])
+        self.service._managed_once()
+        self.assertEqual([a[0] for a in self.client.actions],['lock','transfer','salvage'])
+
+    def test_locked_hidden_black_mist_does_not_block_safe_capacity_disposal(self):
+        hidden=equipment(0,is_black_mist=True,locked=True,modifiers=[])
+        hidden['read_evidence']['native_affixes_verified']=False
+        self.client.items=[hidden,equipment(1)]
+        config=self.settings(farming=True)
+        config['cleanup']['equipment_action']='sell'
+        self.service.save_managed(config);self.service.set_managed_running(True)
+        world=self.service._managed_observation()
+        result=self.service._managed_execute({'kind':'sell','item':world['items'][1]},world)
+        self.assertTrue(result['verified'])
+        self.assertEqual(self.client.actions[0][0],'sell')
+
+    def test_mandatory_hidden_gear_with_unverified_identity_never_locks_or_disposes(self):
+        hidden=equipment(0,is_black_mist=True,modifiers=[])
+        hidden['read_evidence'].update(native_affixes_verified=False,identity_verified=False)
+        self.client.items=[hidden,equipment(1)]
+        self.ready(farming=True,auto_equip=False)
+        self.service._managed_once()
+        self.assertEqual(self.client.actions,[])
+        self.assertEqual(self.service.managed.phase,'paused')
+
     def test_native_capability_revoked_before_action_never_submits_sale(self):
         self.ready(farming=True,auto_equip=False)
         observation = self.service._managed_observation()

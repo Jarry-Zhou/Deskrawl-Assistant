@@ -624,6 +624,35 @@ class LifecycleTests(unittest.TestCase):
 
 
 class CleanupTests(unittest.TestCase):
+    def test_hidden_black_mist_locks_and_stores_before_disposing_junk(self):
+        keep=equipment('hidden',is_black_mist=True,review=True,rule_status='review',matches=None)
+        junk=equipment('junk',1)
+        engine=ManagedMode(settings(equipment_action='salvage'))
+        engine.start(observation([keep,junk],town=True))
+        action=engine.next_action(observation([keep,junk],town=True))
+        self.assertEqual((action['kind'],action['item']['item_uid']),('lock','hidden'))
+        verified(engine,action)
+        self.assertIsNone(engine.next_action(observation([keep,junk],town=True)))
+        keep['locked']=True
+        action=engine.next_action(observation([keep,junk],town=True))
+        self.assertEqual((action['kind'],action['target'],action['item']['item_uid']),('transfer','storage','hidden'))
+        verified(engine,action);keep.update(container='storage',slot_index=0)
+        action=engine.next_action(observation([keep,junk],town=True))
+        self.assertEqual((action['kind'],action['item']['item_uid']),('salvage','junk'))
+
+    def test_hidden_black_mist_does_not_bypass_other_rewards_or_identity_checks(self):
+        for extra in ({'locked':None},{'issues':['身份待核验']},{'movable':False}):
+            keep=equipment('hidden',is_black_mist=True,review=True,**extra)
+            engine=ManagedMode(settings());world=observation([keep],town=True);engine.start(world)
+            self.assertIsNone(engine.next_action(world));self.assertEqual(engine.phase,'paused')
+        keep=equipment('hidden',is_black_mist=True,review=True)
+        uncertain=equipment('ordinary',1,review=True)
+        engine=ManagedMode(settings());world=observation([keep,uncertain],town=True);engine.start(world)
+        for _ in range(5):self.assertIsNone(engine.next_action(world))
+        self.assertEqual(engine.phase,'paused')
+        engine.resume(world);self.assertEqual(engine.barrier_reads,0)
+        self.assertIsNone(engine.next_action(world));self.assertTrue(engine.running)
+
     def test_stale_after_sale_neither_requeues_nor_recounts_gems(self):
         engine = ManagedMode(settings(gem_action='sell')); empty = observation([], town=True); engine.start(empty)
         gem = loot('newgem', 'gem', 'Gem1', count=3); world = observation([gem], town=True)

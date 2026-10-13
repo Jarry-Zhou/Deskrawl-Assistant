@@ -695,6 +695,7 @@ class ManagedMode:
         self.pending = None; self.await_effect = None; self.await_count = 0
         self.phase = 'cleanup' if (self.settings['farming']['enabled'] or self.finishing) and self._town(observation) else 'farming'
         self.reward_barrier = self.phase == 'cleanup'
+        self.barrier_reads = 0
         self.metrics.observe(observation)
         self.cleanup_processing = False
         self.status = '继续本次托管，累计掉落统计已保留。'
@@ -745,6 +746,17 @@ class ManagedMode:
     def _quality_known(row):
         return (type(row.get('rarity')) is int and row['rarity'] in range(5)
                 and type(row.get('is_black_mist')) is bool and type(row.get('is_ancient')) is bool)
+
+    @classmethod
+    def _reward_pending(cls, row):
+        if item_kind(row) != 'equipment': return False
+        if not cls._safe(row): return True
+        # Hidden affixes are expected on black-mist gear. Its verified identity
+        # and positive retention evidence suffice to lock/store it; never turn
+        # a missing affix read into a disposal decision or a batch-wide wait.
+        if mandatory_storage(row) or row.get('locked') is True: return False
+        return (cls._review(row) or not cls._quality_known(row)
+                or type(row.get('matches')) is not bool)
 
     @classmethod
     def _protected(cls, row):
@@ -1059,9 +1071,7 @@ class ManagedMode:
         if any(mandatory_storage(r) and not self._safe(r) for r in bag):
             return self._pause('必须收纳的物品读取或搬运状态未确认，保留物品并暂停托管。')
         if self.reward_barrier:
-            uncertain = [r for r in bag if item_kind(r) == 'equipment' and r.get('locked') is not True
-                         and (not self._safe(r) or self._review(r) or not self._quality_known(r)
-                              or type(r.get('matches')) is not bool)]
+            uncertain = [r for r in bag if self._reward_pending(r)]
             if uncertain:
                 self.barrier_reads += 1
                 self.status = '等待新奖励身份、词条和筛选结论完整读取，暂不出售或分解。'

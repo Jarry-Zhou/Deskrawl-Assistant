@@ -182,6 +182,12 @@ class AssistantService(ManagedServiceMixin):
             try:
                 bundle = self.client.loot_capture_snapshot()
                 if self.closed.is_set() or self.updating or not self.client.connected: continue
+                with self.guard:
+                    bundle['merchant_uids'] = list(self.managed_merchant_uids)
+                    # Wait for the confirmed purchase UID receipt before
+                    # associating newly observed bag items with a dungeon.
+                    if (self.managed.pending or {}).get('kind') == 'merchant_buy':
+                        bundle['observations_complete'] = False
                 self.loot_capture.feed(bundle)
             except Exception:
                 self.loot_capture.failed()

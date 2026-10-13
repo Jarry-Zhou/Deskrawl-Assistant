@@ -130,7 +130,7 @@ class LootCaptureMonitor:
             'raw_plan':entry['first_plan'], 'latest_raw_plan':entry['latest_plan'] if entry['first_plan'] != entry['latest_plan'] else None,
             'planned_high_value':entry['planned_hits'], 'observed_high_value':entry['observed_hits'],
             'association':entry['association'],
-            'note':'计划不等于实际结算；实际观测仅在完整清单基线后记录新增UID。无精确dropId匹配时不能证明物品在开局计划中。'}
+            'note':'计划不等于实际结算；实际观测仅在完整清单基线后记录新增UID。无精确dropId匹配时不能证明物品在开局计划中。商人购买单独留档，不关联刷图计划。'}
         self.directory.mkdir(parents=True, exist_ok=True)
         target = self.directory/(key+'.json')
         temporary = self.directory/(key+'.'+uuid.uuid4().hex+'.tmp')
@@ -190,6 +190,7 @@ class LootCaptureMonitor:
                 self.runs.move_to_end(key)
             if bundle.get('observations_complete') is True:
                 observations = bundle.get('observations',[])
+                merchant_uids = set(bundle.get('merchant_uids',[]))
                 ids = {r['item_uid'] for r in observations if isinstance(r.get('item_uid'),str) and r['item_uid']}
                 if not self.baseline_ready:
                     self.seen.update(ids)
@@ -208,14 +209,17 @@ class LootCaptureMonitor:
                         if uid not in self.new_ids or uid in self.captured_ids: continue
                         reason = mandatory_storage(row)
                         if not reason: continue
-                        entry_pair = next(((k,e) for k,e in reversed(self.runs.items())
+                        merchant_purchase = uid in merchant_uids
+                        entry_pair = None if merchant_purchase else next(((k,e) for k,e in reversed(self.runs.items())
                             if e['plan_hash'] and e['plan_hash']==self.new_ids[uid]['run']), None)
                         if entry_pair is None:
                             # Keep the evidence without attaching it to a
-                            # different/reused map's cached plan.
-                            key = hashlib.sha256((session+'\0unattributed\0'+uid).encode()).hexdigest()
+                            # different/reused map's cached plan. A confirmed
+                            # merchant receipt overrides a retained run ID.
+                            association = 'merchant_purchase' if merchant_purchase else 'unattributed'
+                            key = hashlib.sha256((session+'\0'+association+'\0'+uid).encode()).hexdigest()
                             entry = {'first_read_at':now(), 'first_read_wave':None, 'first_plan':None,
-                                'latest_plan':None, 'plan_hash':None, 'association':'unattributed',
+                                'latest_plan':None, 'plan_hash':None, 'association':association,
                                 'planned_hits':[], 'observed_hits':[], 'observed_ids':set()}
                             entry = self._restore(key,entry)
                             self.runs[key] = entry
@@ -229,6 +233,7 @@ class LootCaptureMonitor:
                         template = [w for w,i in plan_items if i['baseItemId']==row.get('internal_name')]
                         entry['observed_hits'].append({'observed_at':now(), 'item_uid':uid,
                             'item_key':row.get('internal_name'), 'category':reason, 'source':row.get('capture_source'),
+                            'acquisition_source':'merchant' if merchant_purchase else 'unconfirmed',
                             'name':_labels()['items'].get(row.get('internal_name'),{}).get('name',row.get('internal_name')),
                             'first_observed_at':self.new_ids[uid]['time'], 'first_source':self.new_ids[uid]['source'],
                             'rarity':row.get('rarity',row.get('base_rarity')), 'black_mist':row.get('is_black_mist') is True,

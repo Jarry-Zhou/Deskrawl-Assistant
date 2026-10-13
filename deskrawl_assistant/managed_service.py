@@ -223,9 +223,13 @@ class ManagedServiceMixin:
             item['rules_known'] = not bool(self.config_error)
             obs = observations.get((item['container'],item['slot_index']))
             if item['is_equipment']:
-                known = bool(obs and obs.name_confidence >= DEFAULT_MIN_CONFIDENCE
-                             and obs.lock_confidence >= DEFAULT_MIN_CONFIDENCE
-                             and all(obs.groups_complete.get(g) is True for g in ('primary','secondary')))
+                identity_known = bool(obs and obs.name_confidence >= DEFAULT_MIN_CONFIDENCE
+                                      and obs.lock_confidence >= DEFAULT_MIN_CONFIDENCE)
+                if not identity_known:
+                    item['issues'].append('装备身份或锁状态读取尚未核验。')
+                if source.get('modifiers_complete') is not True:
+                    item['issues'].append('装备实例读取不完整。')
+                known = identity_known and all(obs.groups_complete.get(g) is True for g in ('primary','secondary'))
                 active_rules = [r for r in self._rules() if r.enabled and item['name_key'] in r.equipment_keys]
                 if not known or not item['rules_known']:
                     item['review'] = True; item['rule_status'] = 'review'
@@ -535,8 +539,7 @@ class ManagedServiceMixin:
             # when a game-side pickup arrived after the plan was generated.
             for candidate in observation['items']:
                 if candidate.get('container')!='inventory' or candidate.get('kind')!='equipment': continue
-                if (candidate.get('review') is True or candidate.get('issues')
-                        or not self.managed._quality_known(candidate)
+                if (self.managed._reward_pending(candidate)
                         or ((mandatory_storage(candidate)
                              or candidate.get('matches') is True) and candidate.get('locked') is not True)):
                     return {'verified':False,'retryable':True,'reason':'先完成新装备筛选与锁定。'}
