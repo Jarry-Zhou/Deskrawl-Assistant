@@ -75,7 +75,7 @@ class PreviewDetailsTests(unittest.TestCase):
     def test_complete_shipped_catalogue_has_local_icons_and_effects_or_explicit_note(self):
         assets=json.loads((RESOURCE_ROOT/'data/loot-item-ui.json').read_text(encoding='utf-8'))
         items=assets['items']
-        self.assertEqual(len(items),573)
+        self.assertEqual(len(items),574)
         self.assertEqual(sum(r['kind']=='gem' for r in items.values()),36)
         self.assertEqual(sum(r['kind']=='rune' for r in items.values()),199)
         for key,row in items.items():
@@ -87,6 +87,18 @@ class PreviewDetailsTests(unittest.TestCase):
                 self.assertEqual(raw[:8],b'\x89PNG\r\n\x1a\n')
                 self.assertTrue(all(v>0 for v in struct.unpack('>II',raw[16:24])))
         self.assertEqual(assets['rarity_colors']['rune_set'],'#33ff4c')
+
+    def test_werewolf_material_is_resolved_with_shipped_description_and_icon(self):
+        fixture = Fixture()
+        fixture.set_waves([[fixture.item('WerewolfMat', rarity='Common')]])
+        row = read_loot_plan(fixture.reader)['waves'][0]['items'][0]
+        self.assertEqual(row['name'], '狼人毛皮')
+        self.assertEqual(row['kind'], 'material')
+        self.assertEqual(row['rarity'], 2)
+        texts = [text for group in row['effect_groups'] for text in group['texts']]
+        self.assertIn('取自血月狼人的厚实毛皮。', texts)
+        image = RESOURCE_ROOT/'deskrawl_assistant/web'/row['icon'].lstrip('/')
+        self.assertTrue(image.is_file())
 
     def test_rune_quality_uses_base_asset_even_if_protocol_says_common(self):
         for rarity,label in ((1,'优秀符文'),(2,'稀有符文'),(3,'宏伟符文'),(5,'符文套装')):

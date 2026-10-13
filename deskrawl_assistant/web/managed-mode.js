@@ -106,7 +106,65 @@
     else{disabled.delete(index);if(key)next.auto_equip.slot_locks[index]=key;else delete next.auto_equip.slot_locks[index];}
     next.auto_equip.disabled_slots=[...disabled].sort((a,b)=>a-b);return next;
   }
-  const helpers={normalizeSettings,validateSettings,pageIds,controlState,requiredCapabilities,statistics,duration,capabilityAvailable,selectedDifficulty,availableMaps,equipmentPreset,equipmentSummary,characterClass,slotEquipment,withSlotChoice,disabledChoice};
+  const foldKeys=['background','equip','farming','merchant','growth','cleanup','talents','life','skills'];
+  const foldStorageKey='deskrawl-managed-folds-v1';
+  function normalizeFoldPreferences(value){
+    if(!value||typeof value!=='object'||Array.isArray(value))return {};
+    return Object.fromEntries(foldKeys.filter(key=>typeof value[key]==='boolean').map(key=>[key,value[key]]));
+  }
+  function defaultFolds(value){
+    const s=normalizeSettings(value),growth=s.progression.talents_enabled||s.life_skills.enabled||s.progression.skills_enabled;
+    return {background:s.background.rule_monitoring||s.background.inventory_automation,equip:s.auto_equip.enabled,
+      farming:s.farming.enabled,merchant:s.merchant.enabled,growth,cleanup:s.farming.enabled||s.merchant.enabled,
+      talents:s.progression.talents_enabled,life:s.life_skills.enabled,skills:s.progression.skills_enabled};
+  }
+  function foldSummaries(value,packet){
+    const s=normalizeSettings(value),mask=packet?.progression_state?.class_mask,
+      targets=s.progression.talent_targets[String(mask)]||{},stages=s.progression.skill_stages[String(mask)]||[],
+      currentClass=[1,2,4,8].includes(mask),points=Object.values(targets).reduce((sum,n)=>sum+n,0),
+      disabled=s.auto_equip.disabled_slots.length,named=Object.keys(s.auto_equip.slot_locks).filter(key=>!s.auto_equip.disabled_slots.includes(Number(key))).length,
+      buying=Object.values(s.merchant.weights).filter(n=>n>0),growing=[s.progression.talents_enabled?'天赋':'',s.life_skills.enabled?'生活技能':'',s.progression.skills_enabled?'技能':''].filter(Boolean),
+      maps=s.farming.repeat_maps.map(row=>{const name=availableMaps(packet,s,row.difficulty).find(map=>String(mapIdValue(map))===String(row.dungeon_id))?.name||row.dungeon_id;return `${name} · ${row.runs} 局`;}),
+      liveRepeat=(packet?.running||packet?.paused)&&packet?.settings?.farming?.enabled&&packet.settings.farming.mode==='repeat'&&packet.repeat_maps?.[packet.repeat_index],
+      progress=liveRepeat?`图 ${packet.repeat_index+1} · 本轮 ${packet.repeat_completed??0} / ${liveRepeat.runs} 局；`:'',
+      folders=kind=>s.cleanup[kind+'_pages'].join(' / ')||'未选择';
+    const state=(enabled,summary)=>({enabled,status:enabled?'已启用':'未启用',summary});
+    return {
+      background:state(s.background.rule_monitoring||s.background.inventory_automation,`规则锁定${s.background.rule_monitoring?'开':'关'} · 自动整理${s.background.inventory_automation?'开':'关'}`),
+      equip:state(s.auto_equip.enabled,`暗金限制 ${named} 部位 · 跳过 ${disabled} 部位`),
+      farming:state(s.farming.enabled,progress+(s.farming.mode==='push'?'自动推图 · 最高已解锁关卡':maps.length?maps.join(' → '):'重复刷图 · 未选择关卡')+` · 空格 < ${s.farming.free_threshold} 回城`),
+      merchant:state(s.merchant.enabled,`${s.merchant.trigger_percent}% 回城 · 保留 ${s.merchant.spend_to_percent}% · ${buying.length} 部位 / 每轮 ${buying.reduce((a,b)=>a+b,0)} 件`),
+      growth:state(growing.length>0,growing.length?growing.join(' / ')+'自动养成':'战斗天赋 / 生活技能 / 技能预设'),
+      cleanup:{enabled:true,status:'固定保护',summary:`装备 ${folders('equipment')} 页 · 符文 ${folders('rune')} 页 · 宝石 ${folders('gem')} 页`},
+      talents:state(s.progression.talents_enabled,currentClass?`当前职业目标 ${points} / ${growthTools.talentPointLimit} 点`:'按职业保存 · 连接后显示当前预设'),
+      life:state(s.life_skills.enabled,`最终点满 · ${s.life_skills.priorities.length} 个优先节点 · 保留 ${s.life_skills.gold_reserve.toLocaleString('zh-CN')} 金币`),
+      skills:state(s.progression.skills_enabled,currentClass?`${growthTools.skillTargets(stages).filter(Boolean).length} 个预设技能 · 达到等级后切换`:'按职业保存 · 达到等级后切换')
+    };
+  }
+  const mapIdValue=row=>row.id??row.dungeon_id;
+  function createFoldState(elements,storage,onReveal=()=>{}){
+    let preferences={};try{preferences=normalizeFoldPreferences(JSON.parse(storage?.getItem(foldStorageKey)||'{}'));}catch(_){/* UI preferences must never block the assistant. */}
+    const expected={};let settingsApplied=false;
+    const set=(element,open)=>{expected[element.dataset.managedFold]=open;element.open=open;};
+    for(const element of elements){
+      const key=element.dataset.managedFold;if(!foldKeys.includes(key))continue;
+      expected[key]=element.open;
+      element.addEventListener('toggle',()=>{
+        if(element.open!==expected[key]){
+          expected[key]=element.open;preferences[key]=element.open;
+          try{storage?.setItem(foldStorageKey,JSON.stringify(preferences));}catch(_){/* Keep the preference for this window when storage is unavailable. */}
+        }
+        onReveal(key,element.open); // Includes native keyboard activation.
+      });
+      if(key in preferences)set(element,preferences[key]);
+    }
+    return {apply(value){
+      if(settingsApplied)return;settingsApplied=true;
+      const defaults=defaultFolds(value);
+      for(const element of elements){const key=element.dataset.managedFold;if(foldKeys.includes(key))set(element,key in preferences?preferences[key]:defaults[key]);}
+    }};
+  }
+  const helpers={normalizeSettings,validateSettings,pageIds,controlState,requiredCapabilities,statistics,duration,capabilityAvailable,selectedDifficulty,availableMaps,equipmentPreset,equipmentSummary,characterClass,slotEquipment,withSlotChoice,disabledChoice,foldKeys,foldStorageKey,normalizeFoldPreferences,defaultFolds,foldSummaries,createFoldState};
   if(typeof module!=='undefined'&&module.exports)module.exports=helpers;
   if(!root.document)return;
   const $=id=>root.document.getElementById(id);
@@ -114,6 +172,7 @@
   let context=null,packet=null,draft=null,dirty=false,connected=false,busy=false,polling=false,active=false,initialized=false;
   let receivedAt=0,pageSignature='',mapSignature='',slotSignature='',statsSignature='',historySignature='',actionVersion=0;
   let currentCharacter=null,pickerSlot=null,pickerSignature='';
+  let folds=null;
   const farmFields=['managed-farm-mode','managed-difficulty','managed-map','managed-repeat-two','managed-repeat-count','managed-difficulty-two','managed-map-two','managed-repeat-count-two','managed-free-threshold'];
   const fieldIds=['managed-rule-monitoring','managed-inventory-automation','managed-auto-equip','managed-farming',...farmFields,'managed-rune-action','managed-gem-action'];
   const catalog=()=>context?.catalog||{};
@@ -266,9 +325,17 @@
     root.document.querySelector('.managed-repeat-count-label').hidden=!two;
     $('managed-farm-note').textContent=push?'从最高已解锁难度的最后一张已解锁图开始；通关前进一关，失败后退一关，上一关通关后再次挑战。普通通关后进入噩梦，噩梦通关后进入炼狱。':two?'依次打满图 1、图 2 的局数后循环；胜负结算各计一局，途中回城整理不计局数。':'重复进入选定关卡；背包空格不足时先回城整理，再继续刷图。';
     root.ManagedGrowthUI?.render(draft,packet?.progression_catalog,packet?.progression_state,running||busy,(next,renderNow=true)=>{
-      draft={...readForm(),...next};markDirty();if(renderNow){renderDependencies();renderCapabilities();}
+      draft={...readForm(),...next};markDirty();if(renderNow){renderDependencies();renderCapabilities();}else renderFoldSummaries();
     },connected);
-    renderControls();
+    renderFoldSummaries();renderControls();
+  }
+  function renderFoldSummaries(){
+    const rows=foldSummaries(draft||normalizeSettings(),connected?packet:null);
+    for(const key of foldKeys){
+      const row=rows[key],summary=root.document.querySelector(`[data-managed-fold-summary="${key}"]`),status=root.document.querySelector(`[data-managed-fold-status="${key}"]`);
+      if(summary)summary.textContent=row.summary;
+      if(status){status.textContent=row.status;status.classList.toggle('enabled',row.enabled);}
+    }
   }
   function renderControls(){
     const controls=controlState(packet,draft||normalizeSettings(),connected,busy);
@@ -314,6 +381,7 @@
     if(!value||typeof value!=='object')return;
     const next=value.managed||value;packet={...next,stats:next.stats||next.statistics,message:next.message||next.status,paused:next.paused??next.phase==='paused'};receivedAt=Date.now();
     if(!dirty&&packet.settings){draft=normalizeSettings(packet.settings);writeForm();}
+    if(packet.settings)folds?.apply(draft||packet.settings);
     if(!draft){draft=normalizeSettings();writeForm();}render();
   }
   async function refresh(){
@@ -351,7 +419,13 @@
     }catch(error){if(ticket===actionVersion)report(error);}finally{if(ticket===actionVersion){busy=false;renderDependencies();renderCapabilities();}}
   }
   function init(options){
-    context=options;if(initialized)return;initialized=true;root.ManagedGrowthUI?.init();draft=normalizeSettings();writeForm();render();
+    context=options;if(initialized)return;initialized=true;root.ManagedGrowthUI?.init();draft=normalizeSettings();
+    let storage=null;try{storage=root.localStorage;}catch(_){/* Storage access can be blocked independently of the UI. */}
+    folds=createFoldState([...root.document.querySelectorAll('[data-managed-fold]')],storage,(key,open)=>{
+      if(key==='equip'&&!open)closePicker();
+      if(open)root.requestAnimationFrame?.(()=>root.ManagedGrowthUI?.reveal?.());
+    });
+    writeForm();render();
     $('managed-page').addEventListener('change',event=>{
       if(event.target.matches('input,select')&&!event.target.closest('#managed-growth')){
         draft=readForm();
@@ -363,8 +437,8 @@
         markDirty();renderDependencies();renderCapabilities();
       }
     });
-    $('managed-free-threshold').addEventListener('input',()=>{draft=readForm();markDirty();});
-    for(const id of ['managed-repeat-count','managed-repeat-count-two'])$(id).addEventListener('input',()=>{draft=readForm();markDirty();});
+    $('managed-free-threshold').addEventListener('input',()=>{draft=readForm();markDirty();renderFoldSummaries();});
+    for(const id of ['managed-repeat-count','managed-repeat-count-two'])$(id).addEventListener('input',()=>{draft=readForm();markDirty();renderFoldSummaries();});
     for(const [id,action] of [['managed-save','save'],['managed-growth-save','save'],['managed-shop-save','save'],['managed-start','start'],['managed-pause','pause'],['managed-stop','stop'],['managed-reset-stats','reset']])$(id).addEventListener('click',()=>runAction(action));
     $('managed-refresh').addEventListener('click',refresh);
     $('managed-slot-locks').addEventListener('click',event=>{const button=event.target.closest('[data-managed-picker]');if(button)openPicker(button.dataset.managedPicker);});

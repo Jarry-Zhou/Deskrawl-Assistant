@@ -10,7 +10,7 @@ from deskrawl_assistant.native_dispatcher import compile_mailbox, load_profile, 
 from deskrawl_assistant.progression import catalog
 from deskrawl_assistant.progression_runtime import ProgressionRuntime, _GrowthCopy
 from deskrawl_assistant.recommendation_reader import _Copy
-from deskrawl_assistant.native_memory import SnapshotChangedError, MemoryReadError
+from deskrawl_assistant.native_memory import SnapshotChangedError, MemoryReadError, GameBusyError
 from test_progression import state
 
 
@@ -192,7 +192,8 @@ class RuntimeBoundaryTests(unittest.TestCase):
             return {'invoked':True,'completed':True}
         dispatcher.invoke.side_effect = invoke
         actions = SimpleNamespace(reader=reader, profile=profile, dispatcher=dispatcher,
-                                  _context=Mock(return_value=(read,1000,8000,1)), _require_empty_town=Mock())
+                                  _context=Mock(return_value=(read,1000,8000,1)), _require_empty_town=Mock(),
+                                  _online_state=Mock(return_value={'online_saving':False,'online_pending_requests':0}))
         runtime = ProgressionRuntime(actions)
         runtime.snapshot = Mock(side_effect=[before, after])
         runtime._copy = Mock(return_value=copy)
@@ -319,6 +320,62 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(calls[0].arguments[0].value,0)
         self.assertEqual(result['before_shards'],after['soul_shards']['current'])
 
+    def test_pending_online_request_defers_purchase_and_refill_before_submission(self):
+        for kind in ('merchant_buy', 'merchant_refresh'):
+            for sync in ({'online_saving':False,'online_pending_requests':1},
+                         {'online_saving':True,'online_pending_requests':0}):
+                with self.subTest(kind=kind, sync=sync):
+                    before=state(); runtime,actions,_=self.fixture(before,deepcopy(before))
+                    actions._online_state.return_value=sync
+                    with self.assertRaisesRegex(GameBusyError,'等待在线同步'):
+                        runtime.execute(kind,{'class_mask':4})
+                    actions.dispatcher.invoke.assert_not_called()
+                    actions.reader.snapshot.assert_not_called()
+
+    def test_drained_online_queue_allows_one_purchase_and_keeps_submission_guards(self):
+        before=state(); quote=before['merchant']['stock'][0]
+        before['_item_map']={quote['id']:999}; before['_guards']=[]; after=deepcopy(before)
+        after['soul_shards']['current']-=quote['price']
+        runtime,actions,_=self.fixture(before,after)
+        runtime.snapshot.side_effect=[before,before,after]
+        read=actions._context.return_value[0]
+        def online_state(current_read):
+            self.assertIs(current_read,read)
+            pending=1 if actions._online_state.call_count==1 else 0
+            current_read.guards.append((50,struct.pack('<i',pending)))
+            return {'online_saving':False,'online_pending_requests':pending}
+        actions._online_state.side_effect=online_state
+        empty={'complete':True,'containers':{'inventory':{'occupied_count':0,'slot_count':40,'slots':[]}}}
+        filled=deepcopy(empty)
+        filled['containers']['inventory']['slots']=[{'item_uid':'received','equip_slot':quote['slot']}]
+        actions.reader.snapshot.side_effect=[empty,filled]
+        payload={'class_mask':4,'stock_id':quote['id'],'shop_slot':quote['slot'],
+                 'expected_price':quote['price'],'before_shards':before['soul_shards']['current']}
+        with self.assertRaises(GameBusyError):runtime.execute('merchant_buy',payload)
+        actions.dispatcher.invoke.assert_not_called()
+        # Each real context read has fresh guards; discard the first rejected read.
+        read.guards=[(10,b'\0'*8)]
+        result=runtime.execute('merchant_buy',payload)
+        self.assertTrue(result['effect_confirmed'])
+        self.assertEqual(actions.dispatcher.invoke.call_count,1)
+        self.assertIn((50,struct.pack('<i',0)),actions.dispatcher.invoke.call_args.args[1])
+
+    def test_temporary_receipt_read_failure_rechecks_without_another_purchase(self):
+        before=state(); quote=before['merchant']['stock'][0]
+        before['_item_map']={quote['id']:999}; before['_guards']=[]; after=deepcopy(before)
+        after['soul_shards']['current']-=quote['price']
+        runtime,actions,_=self.fixture(before,after)
+        runtime.snapshot.side_effect=[before,SnapshotChangedError('库存刷新'),after]
+        empty={'complete':True,'containers':{'inventory':{'occupied_count':0,'slot_count':40,'slots':[]}}}
+        filled=deepcopy(empty)
+        filled['containers']['inventory']['slots']=[{'item_uid':'received','equip_slot':quote['slot']}]
+        actions.reader.snapshot.side_effect=[empty,filled]
+        with patch('deskrawl_assistant.progression_runtime.time.sleep'):
+            result=runtime.execute('merchant_buy',{'class_mask':4,'stock_id':quote['id'],'shop_slot':quote['slot'],
+                'expected_price':quote['price'],'before_shards':before['soul_shards']['current']})
+        self.assertTrue(result['effect_confirmed'])
+        self.assertEqual(actions.dispatcher.invoke.call_count,1)
+
     def test_batch_uses_ten_original_single_purchases_and_confirms_all_uids_and_debit(self):
         before=state();quote=before['merchant']['stock'][0];quote['available_count']=10
         before['_item_map']={quote['id']:999};after=deepcopy(before)
@@ -352,10 +409,34 @@ class RuntimeBoundaryTests(unittest.TestCase):
         partial=deepcopy(empty);partial['containers']['inventory']['slots']=[{'item_uid':str(n),'equip_slot':quote['slot']} for n in range(9)]
         actions.reader.snapshot.side_effect=[empty,partial]
         with patch('deskrawl_assistant.progression_runtime.time.monotonic',side_effect=[0,0,13]), \
-                patch('deskrawl_assistant.progression_runtime.time.sleep'),self.assertRaises(NativeActionError) as caught:
+                patch('deskrawl_assistant.progression_runtime.time.sleep'), \
+                patch('deskrawl_assistant.progression_runtime.record') as recorded, \
+                self.assertRaisesRegex(NativeActionError,'神秘商人购买.*预计 10 件，读到 9 件') as caught:
             runtime.execute('merchant_buy',{'class_mask':4,'stock_id':quote['id'],'shop_slot':quote['slot'],
                 'expected_price':quote['price'],'before_shards':before['soul_shards']['current'],'quantity':10})
         self.assertTrue(caught.exception.uncertain);self.assertEqual(actions.dispatcher.invoke.call_count,1)
+        failure=next(c.kwargs for c in recorded.call_args_list if c.args[0]=='growth_action_unconfirmed')
+        self.assertEqual(failure['quantity'],10)
+        self.assertEqual(failure['expected_price'],quote['price'])
+        self.assertEqual(failure['observed']['received_count'],9)
+        self.assertEqual(failure['observed']['after_shards'],after['soul_shards']['current'])
+
+    def test_unreadable_purchase_receipt_logs_last_error_and_never_repeats(self):
+        before=state(); quote=before['merchant']['stock'][0]
+        before['_item_map']={quote['id']:999}; before['_guards']=[]
+        runtime,actions,_=self.fixture(before,before)
+        runtime.snapshot.side_effect=[before,MemoryReadError('物品注册表读取不完整')]
+        with patch('deskrawl_assistant.progression_runtime.time.monotonic',side_effect=[0,0,13]), \
+                patch('deskrawl_assistant.progression_runtime.time.sleep'), \
+                patch('deskrawl_assistant.progression_runtime.record') as recorded, \
+                self.assertRaises(NativeActionError) as caught:
+            runtime.execute('merchant_buy',{'class_mask':4,'stock_id':quote['id'],'shop_slot':quote['slot'],
+                'expected_price':quote['price'],'before_shards':before['soul_shards']['current']})
+        self.assertTrue(caught.exception.uncertain)
+        self.assertEqual(actions.dispatcher.invoke.call_count,1)
+        failure=next(c.kwargs for c in recorded.call_args_list if c.args[0]=='growth_action_unconfirmed')
+        self.assertEqual(failure['last_read_error'],'MemoryReadError: 物品注册表读取不完整')
+        self.assertEqual(failure['attempts'],1)
 
     def test_compact_guards_keep_dictionary_versions_and_full_copy_consistency(self):
         copy = object.__new__(_GrowthCopy)

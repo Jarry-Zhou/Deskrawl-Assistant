@@ -15,8 +15,8 @@ import struct
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-METADATA_HASH = '57627070d0fe8a00f82e373100768f529c4829f02d6aeb8ac3057aaab13cacfc'
-ASSEMBLY_HASH = 'd46f0a321e8e07646cca37c7460e58fbfecc47ade5027ea2e00fc71f0fec0565'
+METADATA_HASH = 'f5cf7ba1bbd13cb099ea231ac89ed772f10c9f28d329f5dab9bc805a3809b802'
+ASSEMBLY_HASH = 'f8221364be8101c60d76be3e031f2cd5be376a7fb6b9b73a7cfb45e2a52a9fab'
 CONFIG = {'XpPerBaseHealth': 1.0, 'XpPerLevelScale': 0.10000000149011612,
           'XpZeroUnderLevel': 6, 'MaxPlayerLevel': 70,
           'health_growth': [0.11999999731779099, 0.07999999821186066, 0.05999999865889549],
@@ -196,10 +196,8 @@ def extract(game, unitypy_path=None):
             'asset_sha256': {p: file_hash(assets_root/p) for p in ['resources.assets', 'sharedassets0.assets', 'globalgamemanagers.assets']},
             'config': CONFIG, 'difficulties': DIFFICULTIES, 'difficulty_options': [{'id': key, 'label': localization.get('UI.Difficulty.'+('Inferno1' if key == 'Inferno' else key), key)} for key in DIFFICULTIES],
             'maps': sorted(maps, key=lambda m: m['map_id']), 'enemies': enemies,
-            'evidence': {'xp': 'Enemy.cmg 0x73BC80; GameManager death 0x77DFC0; MapData.cha 0x711870',
-                         'health': 'Enemy.bjv 0x744320; GameConfig.ccv 0x707D50',
-                         'waves': 'WaveManager.esn 0x7F5420 replaces last wave; eso 0x7F59E0 rolls elite per non-boss wave; esp 0x7F5BF0 weights pools',
-                         'levels': 'MapData.cgt/cgu 0x7114F0/0x711590: Normal uses asset range, higher difficulties use level 70'},
+            'evidence': {'assets': 'MapData and Enemy references and values are read from the exact hashed assets above.',
+                         'formulas': 'Constants retain the previously reviewed model. Obfuscated method names and RVAs from older builds are not reused as current-build evidence.'},
             'limitations': ['特殊/神话图未参与理论排序', '首轮时间为理论模型；真实刷图可被动校准', '未验证特殊掉落/召唤怪奖励，不计为固定额外经验']}
 
 

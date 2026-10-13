@@ -7,7 +7,7 @@ import struct
 import time
 from contextlib import contextmanager, nullcontext
 
-from .native_memory import MemoryReadError, SnapshotChangedError
+from .native_memory import MemoryReadError, SnapshotChangedError, GameBusyError
 from .native_dispatcher import Argument, Invocation, NativeActionError
 from .recommendation_reader import _Copy, decode_obscured_int
 from .progression import catalog, merchant_prices
@@ -393,6 +393,16 @@ class ProgressionRuntime:
             if scene != 1: raise NativeActionError('神秘商人只在主城消费。')
             if kind!='merchant_close' and (before['merchant'].get('unlock_known') is not True or before['merchant'].get('unlocked') is not True):
                 raise NativeActionError('神秘商人尚未解锁或解锁状态未确认，不能购买。')
+            if kind in ('merchant_buy', 'merchant_refresh'):
+                # gzu also checks GameManager.dlu -> CloudClient's pending
+                # requests, independently of SaveSystem's saving flag. Its
+                # void early return is not a purchase receipt. Keep the read
+                # guards in the mailbox so a newly queued request defers the
+                # batch before any method is invoked.
+                online = self.actions._online_state(read)
+                if online['online_saving'] or online['online_pending_requests']:
+                    raise GameBusyError('等待在线同步完成后执行神秘商人操作'
+                                        f"（待处理请求 {online['online_pending_requests']}）。")
             if kind != 'merchant_close': self.actions._require_empty_town(read, manager, scene)
             ui = self._singleton(copy, 'MerchantUI')
             if kind == 'merchant_close':
@@ -432,25 +442,37 @@ class ProgressionRuntime:
         if not calls: return {'effect_confirmed': True}
         copy.finish(); read.guards.extend(copy.action_guards); read.finish()
         guards = list(dict.fromkeys(read.guards))
-        record('growth_action_requested', kind=kind, target=payload.get('node_id', payload.get('stock_id')))
+        diagnostic = {'kind':kind, 'target':payload.get('node_id', payload.get('stock_id')),
+                      'action_id':payload.get('action_id')}
+        if kind == 'merchant_buy':
+            diagnostic.update(quantity=quantity, shop_slot=payload['shop_slot'],
+                              expected_price=payload['expected_price'],
+                              before_shards=before['soul_shards']['current'])
+        record('growth_action_requested', **diagnostic)
         result = self.actions.dispatcher.invoke(calls, guards, cancel_event=cancel_event, validate=validate)
         deadline = time.monotonic() + (12 if kind.startswith('merchant') else 3)
-        confirmed = False
+        confirmed = False; attempts = 0; last_read_error = None; observed = {}
         while time.monotonic() < deadline:
+            attempts += 1
             try:
                 after = self.snapshot(merchant=kind.startswith('merchant'), after_action=True)
+                observed = {'class_mask':after['class_mask'], 'busy':after.get('busy'),
+                            'after_shards':after['soul_shards']['current']}
                 if after['class_mask'] != before['class_mask']: raise NativeActionError('动作执行期间角色已改变。', uncertain=True)
                 if kind == 'allocate_talent':
                     # Leveling can award another point between the original
                     # setter and this read. The target rank is the receipt.
                     confirmed = after['talents']['ranks'].get(key, 0) == payload['expected_rank'] + 1
+                    observed['rank'] = after['talents']['ranks'].get(key, 0)
                 elif kind == 'learn_life_skill':
                     # fmv returned true after its original gold deduction.
                     # Concurrent gold drops do not invalidate that receipt.
                     confirmed = after['life_skills']['ranks'].get(key, 0) == payload['expected_rank'] + 1
+                    observed['rank'] = after['life_skills']['ranks'].get(key, 0)
                 elif kind == 'set_skill':
                     confirmed = (after['skills'].get('readable') is not False
                                  and after['skills']['equipped'] == payload['skill_slots'])
+                    observed['skills'] = after['skills'].get('equipped')
                 elif kind == 'merchant_open': confirmed = after['merchant']['open']
                 elif kind == 'merchant_close': confirmed = not after['merchant']['open']
                 elif kind == 'merchant_refresh':
@@ -464,10 +486,29 @@ class ProgressionRuntime:
                         and len({row['item_uid'] for row in received}) == quantity
                         and all(row.get('equip_slot') == payload['shop_slot'] for row in received)
                         and after['soul_shards']['current'] == before['soul_shards']['current'] - payload['expected_price']*quantity)
+                    observed.update(inventory_complete=snapshot.get('complete'),
+                                    snapshot_issues=snapshot.get('issues', []),
+                                    received_count=len(received),
+                                    received_uids=[row['item_uid'] for row in received],
+                                    received_slots=[row.get('equip_slot') for row in received],
+                                    expected_shards=before['soul_shards']['current'] - payload['expected_price']*quantity)
                 if confirmed: break
-            except (MemoryReadError, SnapshotChangedError): pass
+            except (MemoryReadError, SnapshotChangedError) as exc:
+                last_read_error = f'{type(exc).__name__}: {exc}'
             time.sleep(.05)
-        if not confirmed: raise NativeActionError('成长／商人动作已提交，但实际结果未确认；已停止重复操作。', uncertain=True)
+        if not confirmed:
+            record('growth_action_unconfirmed', **diagnostic, attempts=attempts,
+                   last_read_error=last_read_error, observed=observed,
+                   native_state={name:result.get(name) for name in ('state','sequence','last_call','completed')})
+            label = {'allocate_talent':'战斗天赋加点', 'learn_life_skill':'生活技能学习',
+                     'set_skill':'技能切换', 'merchant_open':'打开神秘商人',
+                     'merchant_close':'关闭神秘商人', 'merchant_refresh':'神秘商人库存补充',
+                     'merchant_buy':'神秘商人购买'}[kind]
+            detail = ''
+            if kind == 'merchant_buy' and observed.get('received_count') is not None:
+                detail = (f"（预计 {quantity} 件，读到 {observed['received_count']} 件；"
+                          f"碎片 {before['soul_shards']['current']} → {observed['after_shards']}）")
+            raise NativeActionError(f'{label}动作已提交，但实际结果未确认{detail}；已停止重复操作。', uncertain=True)
         if kind == 'merchant_buy':
             result['received_uid'] = received[0]['item_uid']
             result['received_uids']=[row['item_uid'] for row in received]
@@ -478,5 +519,5 @@ class ProgressionRuntime:
         result.update(effect_confirmed=True, online_save_confirmed=False, native_verified=False,
                       before_shards=before['soul_shards']['current'], kind=kind)
         if kind == 'learn_life_skill': result['gold_cost'] = payload['gold_cost']
-        record('growth_action_confirmed', kind=kind, target=payload.get('node_id', payload.get('stock_id')))
+        record('growth_action_confirmed', **diagnostic)
         return result

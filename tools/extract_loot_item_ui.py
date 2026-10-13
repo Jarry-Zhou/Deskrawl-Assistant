@@ -99,7 +99,9 @@ def main():
             else:
                 note = '游戏资源未提供独立效果说明。'
         file = icons/(key+'.png')
-        if not file.exists():
+        # Equipment/gem/rune exports already refresh their sprites. Refresh
+        # remaining items too, since a new build can change an existing icon.
+        if not file.exists() or kind not in ('equipment', 'gem', 'rune'):
             image = sprite.read().image
             image.thumbnail((112,112))
             image.save(file)

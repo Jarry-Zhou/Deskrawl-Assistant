@@ -26,5 +26,12 @@ class ItemAssetTests(unittest.TestCase):
         value=data['UncommonRune_DamageVsHealthy']['effect_groups'][0]['values'][0]
         self.assertEqual(value['display_value'],'+30%');self.assertEqual(value['growth'],'每级 +3%')
 
+    def test_current_shipped_swords_include_monk_and_exclude_hunter(self):
+        equipment=json.loads((BASE/'data/equipment-ui.json').read_text(encoding='utf-8'))['equipment']
+        for key in ('LegendarySword1', 'DivineSword1'):
+            with self.subTest(key=key):
+                self.assertTrue(equipment[key]['class_mask'] & 8)
+                self.assertFalse(equipment[key]['class_mask'] & 4)
+
 
 if __name__=='__main__':unittest.main()

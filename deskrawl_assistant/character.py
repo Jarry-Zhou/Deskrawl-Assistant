@@ -21,6 +21,11 @@ PANEL_GROUPS = (
      (43, .15), (45, .25), (46, .25), (63, .25), (40, .25)),
     ((33, .5), (34, .25), (61, .25)),
 )
+# Deskrawl 1.0.2b bg.wx / bg.wz: the native caller applies upper bounds
+# after composing each stat, including before using it as a conversion source.
+# AttackSpeed and WeaponSpeed have no upper bound in that table.
+STAT_CAPS = {4: .85, 13: .8, 22: .85, 37: .85, 49: .9,
+             51: .9, 52: .9, 53: .9, 54: .9, 55: .9, 60: 1, 64: .9}
 PREVIEW_NOTE = '固定单体 Boss 场景：角色满血、一个 Boss、无临时增益；近战 2 米、远程 7 米。沿用攻击力面板公式估算，仅替换词条和已有宝石；传奇特效、技能触发变化不预测，不自动转移宝石。'
 
 
@@ -79,10 +84,8 @@ use capped source values; unexpected cycles are refused, never turned to zero.
             value *= 1 + stat({7: 42, 8: 44, 9: 59, 10: 57}[key])
         value = (value + flat.get(key, 0)) * (1 + percent.get(key, 0)) * product.get(key, 1)
         number(value)
-        if key in (4, 13, 22, 37):
-            value = min(value, .85)
-        elif key == 60:
-            value = min(value, 1)
+        if key in STAT_CAPS:
+            value = min(value, STAT_CAPS[key])
         result[key] = value
         visiting.remove(key)
         return value

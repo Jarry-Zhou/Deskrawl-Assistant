@@ -21,9 +21,9 @@ from pathlib import Path
 import struct
 
 
-METADATA_HASH = "57627070d0fe8a00f82e373100768f529c4829f02d6aeb8ac3057aaab13cacfc"
-GAME_VERSION = "1.0.2a"
-STEAM_BUILD = 25842017
+METADATA_HASH = "f5cf7ba1bbd13cb099ea231ac89ed772f10c9f28d329f5dab9bc805a3809b802"
+GAME_VERSION = "1.0.2b"
+STEAM_BUILD = 25895065
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deskrawl_assistant.il2cpp_metadata import PE, MetadataInspector
@@ -54,6 +54,15 @@ class Inspector(MetadataInspector):
                 selected.append({"name": d["name"], "namespace": d["namespace"], "typeDefinitionIndex": index,
                                  "isValueType": d["isValueType"], "byvalTypeIndex": d["byvalTypeIndex"],
                                  "fields": fields, "methods": self.methods(index)})
+        by_name = {row["name"]: row for row in selected}
+
+        def field_name(owner, resolved_type, *, static=False):
+            matches = [field["name"] for field in by_name[owner]["fields"]
+                       if field["resolvedType"] == resolved_type and field["isStatic"] == static]
+            if len(matches) != 1:
+                raise ValueError(f"Expected one {owner} field of type {resolved_type}")
+            return matches[0]
+
         return {
             "source": "Read-only on-disk metadata and GameAssembly PE; no process reads, runtime invocation, or player data",
             "metadataSha256": METADATA_HASH, "gameAssemblySha256": hashlib.sha256(self.pe.data).hexdigest(),
@@ -63,11 +72,14 @@ class Inspector(MetadataInspector):
                                      "preferredVa": f"0x{self.pe.va(self.registration_raw):X}",
                                      "preferredImageBase": f"0x{self.pe.base:X}"},
             "readPathHints": {
-                "inventory": {"class": "Inventory", "namespace": "", "singletonStaticField": "<nys>k__BackingField",
-                              "slotsInstanceField": "<nyv>k__BackingField", "slotsType": "InventorySlot[]"},
-                "storage": {"class": "Storage", "namespace": "", "singletonStaticField": "<oeo>k__BackingField",
-                            "slotsInstanceField": "<oer>k__BackingField", "slotsType": "InventorySlot[]"},
-                "registry": {"class": "gj", "namespace": "", "dictionaryStaticField": "ndp",
+                "inventory": {"class": "Inventory", "namespace": "",
+                              "singletonStaticField": field_name("Inventory", "Inventory", static=True),
+                              "slotsInstanceField": field_name("Inventory", "InventorySlot[]"), "slotsType": "InventorySlot[]"},
+                "storage": {"class": "Storage", "namespace": "",
+                            "singletonStaticField": field_name("Storage", "Storage", static=True),
+                            "slotsInstanceField": field_name("Storage", "InventorySlot[]"), "slotsType": "InventorySlot[]"},
+                "registry": {"class": "gj", "namespace": "", "dictionaryStaticField": field_name(
+                    "gj", "System.Collections.Generic.Dictionary`2<System.String, GeneratedItemData>", static=True),
                              "dictionaryType": "System.Collections.Generic.Dictionary`2<System.String, GeneratedItemData>",
                              "candidateKeySlotField": "ItemUid", "keyAssociationValidatedAtRuntime": False},
                 "modifiers": {"class": "GeneratedItemData", "field": "Modifiers", "type": "StatModifier[]",

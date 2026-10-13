@@ -16,8 +16,10 @@ from deskrawl_assistant.native_reader import NativeReader
 
 BASE = 0x180000000
 TOKENS = {
-    'CombatMapCompletionUI': 0x20009589,
-    'MythicCompletionUI': 0x2000CA01,
+    # Deskrawl 1.0.2b / Steam 25895065: copied from each TypeInfo slot in
+    # GameAssembly before IL2CPP resolves the encoded type reference.
+    'CombatMapCompletionUI': 0x2000958F,
+    'MythicCompletionUI': 0x2000CA07,
 }
 VISIBILITY_OFFSETS = {'CombatMapCompletionUI': 0, 'MythicCompletionUI': 8}
 
@@ -159,6 +161,14 @@ class CompletionTypeInitializationTests(unittest.TestCase):
     def test_release_profile_records_the_two_verified_exact_tokens(self):
         self.assertEqual({key:load_profile()['uninitialized_type_tokens'][key] for key in TOKENS}, TOKENS)
 
+    def test_exact_cold_tokens_are_bound_to_the_revalidated_1_0_2b_build(self):
+        profile = load_profile()
+        self.assertEqual(profile['build'], 'Deskrawl 1.0.2b / Steam 25895065')
+        self.assertEqual(profile['sha256']['GameAssembly.dll'],
+                         'f8221364be8101c60d76be3e031f2cd5be376a7fb6b9b73a7cfb45e2a52a9fab')
+        self.assertEqual({name:profile['statics'][name] for name in TOKENS},
+                         {'CombatMapCompletionUI':61001216, 'MythicCompletionUI':61001208})
+
     def test_both_cold_tokens_are_absent_without_being_dereferenced(self):
         fixture = CompletionFixture()
         read = fixture.read()
@@ -207,7 +217,8 @@ class CompletionTypeInitializationTests(unittest.TestCase):
         self.assertEqual(len(fixture.reader.field_cache), 2)
 
     def test_unknown_encoded_tokens_and_null_class_remain_errors(self):
-        for value in (0, 0x20009581, 0x2000CA09, 0x10000001):
+        # The previous build's exact tokens must also fail closed.
+        for value in (0, 0x20009581, 0x2000CA09, 0x10000001, 0x20009589, 0x2000CA01):
             with self.subTest(value=hex(value)):
                 fixture = CompletionFixture()
                 fixture.memory.pointer(fixture.slot('CombatMapCompletionUI'), value)

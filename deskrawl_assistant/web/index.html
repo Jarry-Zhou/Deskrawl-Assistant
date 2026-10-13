@@ -102,19 +102,25 @@
       <p id="managed-test-notice" class="muted" hidden>本地托管测试模式：新增动作尚未完成实机验收。保存配置并点击启动后执行；动作结果无法确认时暂停。</p>
       <div class="managed-layout">
         <div class="managed-config">
-          <section class="panel managed-card">
-            <div class="managed-card-heading"><div><span class="eyebrow">托管期间 · 推荐开启</span><h2>装备监控与自动整理</h2></div></div>
+          <div class="managed-save-bar managed-main-save-bar"><span id="managed-draft-state" class="note">设置已保存</span><button id="managed-reset-draft" class="button ghost" type="button">重置改动</button><button id="managed-save" class="button" type="button">保存托管设置</button></div>
+          <details class="panel managed-card managed-fold" data-managed-fold="background">
+            <summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">托管期间 · 推荐开启</span><h2>装备监控与自动整理</h2><p data-managed-fold-summary="background"></p></div><span class="managed-fold-status" data-managed-fold-status="background">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary>
+            <div class="managed-fold-content">
             <div class="managed-background-options"><label class="managed-toggle"><input id="managed-rule-monitoring" type="checkbox" checked>背包 / 仓库命中规则自动锁定</label><label class="managed-toggle"><input id="managed-inventory-automation" type="checkbox" checked>启用背包 / 仓库自动整理</label></div>
             <p class="managed-card-note">自动整理沿用「背包与仓库」中已保存的类型、触发门槛和存放页设置。两项功能与托管动作依次执行。关闭监控不影响回城清理时的装备保护：先筛选锁定，再处置垃圾。</p>
-          </section>
-          <section class="panel managed-card">
-            <div class="managed-card-heading"><div><span class="eyebrow">01 · 自动换装</span><h2>只换更高战力的装备</h2></div><label class="managed-toggle"><input id="managed-auto-equip" type="checkbox">启用</label></div>
+            </div>
+          </details>
+          <details class="panel managed-card managed-fold" data-managed-fold="equip">
+            <summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">01 · 只换更高战力的装备</span><h2>自动换装</h2><p data-managed-fold-summary="equip"></p></div><span class="managed-fold-status" data-managed-fold-status="equip">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary>
+            <div class="managed-fold-content"><div class="managed-module-enable"><label class="managed-toggle"><input id="managed-auto-equip" type="checkbox">启用自动换装</label></div>
             <p class="managed-card-note">比较背包与仓库中的可穿戴装备，按固定单体 Boss 基准战力选择。神圣装备禁止自动穿戴。未指定暗金时，其他品质均可换装；指定但尚未穿上时，允许普通、优秀、稀有装备过渡，穿上后只在同名装备中升级。</p>
             <details id="managed-lock-details"><summary>各部位换装设置 <small>选择指定暗金、不限制名称或不参与自动换装</small></summary><p id="managed-class-scope" class="managed-class-scope">连接游戏后，自动按当前职业筛选装备。</p><div id="managed-slot-locks" class="managed-slot-locks"></div></details>
             <p class="managed-footnote">比较沿用当前战力估算；暗金特效、技能联动不完整模拟，已有宝石不会自动转移。</p>
-          </section>
-          <section class="panel managed-card">
-            <div class="managed-card-heading"><div><span class="eyebrow">02 · 自动刷图 / 推图</span><h2>选择刷图方式</h2></div><label class="managed-toggle"><input id="managed-farming" type="checkbox">启用</label></div>
+            </div>
+          </details>
+          <details class="panel managed-card managed-fold" data-managed-fold="farming">
+            <summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">02 · 选择刷图方式</span><h2>自动刷图 / 推图</h2><p data-managed-fold-summary="farming"></p></div><span class="managed-fold-status" data-managed-fold-status="farming">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary>
+            <div class="managed-fold-content"><div class="managed-module-enable"><label class="managed-toggle"><input id="managed-farming" type="checkbox">启用自动刷图 / 推图</label></div>
             <div class="managed-farming-fields">
               <label class="managed-map-field">刷图模式<select id="managed-farm-mode"><option value="push">自动推图</option><option value="repeat">重复刷图</option></select></label>
               <div id="managed-push-preview" class="managed-push-preview" hidden><span>自动选择最高已解锁关卡</span><strong id="managed-push-target">连接后读取</strong><small>胜利 → 下一关 · 失败 → 上一关 · 提升后继续挑战</small></div>
@@ -127,10 +133,12 @@
             </div>
             <p id="managed-farm-note" class="managed-footnote">通关后重复进入选定关卡；背包空格不足时先回城整理，再继续刷图。</p>
             <p id="managed-farm-progress" class="managed-footnote" role="status" hidden></p>
-          </section>
+            </div>
+          </details>
           <div id="managed-growth">
-            <section class="panel managed-card">
-              <div class="managed-card-heading"><div><span class="eyebrow">03 · 灵魂碎片</span><h2>回城消费神秘商人</h2></div><label class="managed-toggle"><input id="managed-merchant" type="checkbox">启用</label></div>
+            <details class="panel managed-card managed-fold" data-managed-fold="merchant">
+            <summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">03 · 灵魂碎片</span><h2>神秘商人消费</h2><p data-managed-fold-summary="merchant"></p></div><span class="managed-fold-status" data-managed-fold-status="merchant">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary>
+            <div class="managed-fold-content"><div class="managed-module-enable"><label class="managed-toggle"><input id="managed-merchant" type="checkbox">启用自动消费</label></div>
               <p id="managed-shard-state" class="managed-card-note">连接后读取实际碎片上限。</p>
               <p id="managed-merchant-unlock" class="managed-card-note" role="status">连接后确认商人解锁状态。</p>
               <div class="growth-thresholds"><label>容量达到 <input id="managed-shard-trigger" type="number" min="1" max="100" value="85"> % 时回城</label><label>购买后保留 <input id="managed-shard-reserve" type="number" min="0" max="99" value="0"> % 碎片</label></div>
@@ -138,35 +146,45 @@
               <p id="managed-shop-price-note" class="managed-footnote" aria-live="polite">连接后显示价格，购买计划可提前配置。</p>
               <div class="managed-save-bar growth-save-bar"><span id="managed-shop-save-state" class="note" role="status">设置已保存</span><button id="managed-shop-save" class="button" type="button" title="同时保存当前页面的托管设置">保存购买计划</button></div>
               <p class="managed-footnote">实际容量随生活技能变化（2000 → 3000）。先整理全部奖励，再连续购买至背包满或预算不足，统一筛选、锁定和换装。保留装备入库；商人未命中装备直接按品质出售／分解，若该品质配置为入库，则使用其满仓备用方式。保护装备无法入库时暂停消费。</p>
-            </section>
-            <section class="panel managed-card growth-planner">
-              <div class="managed-card-heading"><div><span class="eyebrow">04 · 成长规划</span><h2>预先点好，逐步养成</h2></div><span id="managed-growth-class" class="growth-class-state" role="status" aria-label="当前角色职业">连接后识别职业</span></div>
+              </div>
+          </details>
+            <details class="panel managed-card growth-planner managed-fold" data-managed-fold="growth">
+            <summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">04 · 预先点好，逐步养成</span><h2>成长规划</h2><span id="managed-growth-class" class="growth-class-state" role="status" aria-label="当前角色职业">连接后识别职业</span><p data-managed-fold-summary="growth"></p></div><span class="managed-fold-status" data-managed-fold-status="growth">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary>
+            <div class="managed-fold-content">
               <p class="managed-card-note">连接后显示当前职业的天赋与技能，按职业保存方案；生活技能通用。先规划并保存，再启用对应开关，由托管按可用点数、金币和等级执行。</p>
               <div class="growth-game-tabs" role="tablist" aria-label="成长规划"><button id="growth-tab-talents" type="button" role="tab" data-growth-tab="talents" aria-controls="growth-view-talents" aria-selected="true">战斗天赋</button><button id="growth-tab-life" type="button" role="tab" data-growth-tab="life" aria-controls="growth-view-life" aria-selected="false">生活技能</button><button id="growth-tab-skills" type="button" role="tab" data-growth-tab="skills" aria-controls="growth-view-skills" aria-selected="false">技能配置</button></div>
               <div id="growth-view-talents" class="growth-game-view" role="tabpanel" aria-labelledby="growth-tab-talents">
+                <details class="managed-fold growth-subfold" data-managed-fold="talents"><summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">按已保存预设自动执行</span><h2>战斗天赋</h2><p data-managed-fold-summary="talents"></p></div><span class="managed-fold-status" data-managed-fold-status="talents">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary><div class="managed-fold-content">
                 <div class="growth-game-toolbar"><span id="managed-talent-total">目标 0 点</span><label class="managed-toggle"><input id="managed-talents" type="checkbox">自动点天赋</label><button id="managed-talent-clear" class="text-button" type="button">清空预设</button></div>
                 <p class="growth-help">最多预设 70 点。左键 +1，Shift + 左键点满（剩余点数内），右键 −1。左侧进度与门槛按预设投入点数点亮；节点下方为目标点数，小圆点表示实际已学。</p>
                 <div id="managed-talent-tree" class="growth-tree-scroll" aria-label="战斗天赋规划"></div>
                 <p id="growth-talent-feedback" class="growth-feedback" aria-live="polite"></p>
+                </div></details>
               </div>
               <div id="growth-view-life" class="growth-game-view" role="tabpanel" aria-labelledby="growth-tab-life" hidden>
+                <details class="managed-fold growth-subfold" data-managed-fold="life"><summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">按已保存预设自动执行</span><h2>生活技能</h2><p data-managed-fold-summary="life"></p></div><span class="managed-fold-status" data-managed-fold-status="life">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary><div class="managed-fold-content">
                 <div class="growth-game-toolbar"><label class="managed-toggle"><input id="managed-life" type="checkbox">自动点生活技能</label><label>保留金币 <input id="managed-life-gold" type="number" min="0" max="2147483647" step="1" value="0"></label></div>
                 <p id="managed-life-note" class="growth-help">点击节点选择优先路径，自动补齐前置；先沿优先路径学习，再逐步点满所有节点。</p>
                 <div class="growth-life-tools"><input id="managed-life-search" type="search" placeholder="搜索节点或效果…" aria-label="搜索生活技能"><button type="button" id="growth-life-zoom-out" aria-label="缩小生活技能树">−</button><span id="growth-life-zoom-label">100%</span><button type="button" id="growth-life-zoom-in" aria-label="放大生活技能树">+</button><button type="button" id="growth-life-center">回到中心</button></div>
                 <div class="growth-life-board"><aside id="growth-life-summary" class="growth-life-summary"></aside><div id="managed-life-nodes" class="growth-life-viewport" aria-label="生活技能树，拖动空白区域移动视图" tabindex="0"></div></div>
                 <div class="growth-priority-heading"><strong>优先路径</strong><button id="growth-life-clear" class="text-button" type="button">清空优先路径</button></div><ol id="managed-life-priorities" class="growth-priorities"></ol>
+                </div></details>
               </div>
               <div id="growth-view-skills" class="growth-game-view" role="tabpanel" aria-labelledby="growth-tab-skills" hidden>
+                <details class="managed-fold growth-subfold" data-managed-fold="skills"><summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">按已保存预设自动执行</span><h2>技能配置</h2><p data-managed-fold-summary="skills"></p></div><span class="managed-fold-status" data-managed-fold-status="skills">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary><div class="managed-fold-content">
                 <div class="growth-game-toolbar"><span id="growth-skill-status">连接后显示当前技能</span><label class="managed-toggle"><input id="managed-skills" type="checkbox">自动切换技能</label><button id="growth-skills-clear" class="text-button" type="button">清空预设</button></div>
                 <p class="growth-help">直接点击图标预设技能；再次点击取消。未到解锁等级继续使用当前技能，等级满足后自动换上。</p>
                 <div id="managed-skill-stages" class="growth-skills-layout"></div>
                 <p id="growth-skills-note" class="growth-help"></p>
+                </div></details>
               </div>
               <div class="managed-save-bar growth-save-bar"><span id="managed-growth-save-state" class="note" role="status">设置已保存</span><button id="managed-growth-save" class="button" type="button" title="保存战斗天赋、生活技能优先路径和技能预设，同时保存当前页面的托管设置">保存成长预设</button></div>
-            </section>
+              </div>
+          </details>
           </div>
-          <section class="panel managed-card managed-cleanup-card">
-            <div class="managed-card-heading"><div><span class="eyebrow">05 · 回城整理</span><h2>保留什么，如何处理其他奖励</h2></div><span class="badge locked">先保留 · 后处置</span></div>
+          <details class="panel managed-card managed-cleanup-card managed-fold" data-managed-fold="cleanup">
+            <summary class="managed-fold-heading"><div class="managed-fold-title"><span class="eyebrow">05 · 先保留，后处置</span><h2>回城整理</h2><p data-managed-fold-summary="cleanup"></p></div><span class="managed-fold-status" data-managed-fold-status="cleanup">待读取</span><span class="managed-fold-caret" aria-hidden="true">⌄</span><span class="managed-fold-hint" aria-hidden="true"></span></summary>
+            <div class="managed-fold-content">
             <p class="managed-footnote">新用户默认：装备 1／2／3 页、符文 4 页、宝石 5 页。只使用已解锁的所选页；没有可用目标页时保留物品并暂停，可修改分区后继续。</p>
             <div class="managed-policy-presets"><span>未命中装备快捷设置</span><button class="button ghost" type="button" data-managed-preset="sell_low">普通 / 优秀出售，其余分解</button><button class="button ghost" type="button" data-managed-preset="sell">全部出售</button><button class="button ghost" type="button" data-managed-preset="salvage">全部分解</button><button class="button ghost" type="button" data-managed-preset="store">全部入库</button></div>
             <div class="managed-cleanup-table-wrap"><table class="managed-cleanup-table"><thead><tr><th>物品范围</th><th>处理方式</th><th>仓库满时</th><th>存放仓库页签</th></tr></thead><tbody>
@@ -183,8 +201,8 @@
             </tbody></table></div>
             <p class="managed-footnote">品质设置只对不符合规则的装备生效，包含没有启用规则的装备。仓库满时，按待清理装备自己的品质选择出售 / 分解，包含所选页里的原有垃圾装备；其他页不清理。已锁定和待核验装备保留；保护装备无处存放时暂停等待。不符合规则的强化 / 已镶嵌装备也按所选策略处理，不自动返还强化材料和宝石。</p>
             <div class="managed-loop-note"><span class="step">↻</span><div><strong>先批量收取，宝箱最后开启</strong><p>背包有空位时连续收取马车和地面物品，收完或背包满后统一筛选、锁定和整理，再收下一批。装备、符文和宝石处理完后再开宝箱；开箱奖励重新经过收取与保护流程。主城地面与马车未清空或仍在卸货时，禁止入图与切换难度。神圣、黑雾装备及套装、宏伟符文必须收纳；指定页满时暂停，不改为出售。</p></div></div>
-          </section>
-          <div class="managed-save-bar"><span id="managed-draft-state" class="note">设置已保存</span><button id="managed-reset-draft" class="button ghost" type="button">重置改动</button><button id="managed-save" class="button" type="button">保存托管设置</button></div>
+            </div>
+          </details>
         </div>
         <aside class="managed-side">
           <section class="panel managed-loot">

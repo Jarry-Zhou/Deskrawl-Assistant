@@ -19,7 +19,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.7'
+NAME = 'Deskrawl装备助手-v1.2.8'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -39,7 +39,8 @@ def main():
     normalized = {n.replace('\\','/'):n for n in names}
     icons = {n for n in normalized if n.startswith('deskrawl_assistant/web/icons/')}
     loot_items = json.loads(archive.extract(normalized['data/loot-item-ui.json']))['items']
-    assert len(icons) == len(loot_items) == 573
+    assert len(icons) == len(loot_items) == 574
+    assert loot_items['WerewolfMat']['name'] == '狼人毛皮'
     assert all('deskrawl_assistant/web'+i['icon'] in icons for i in loot_items.values())
     item_ui = json.loads(archive.extract(normalized['data/item-ui.json']))
     assert len(item_ui['items']) == 235
@@ -58,6 +59,10 @@ def main():
     assert any(n.endswith('Python.Runtime.dll') for n in names)
     assert 'deskrawl_assistant/web/rule-tools.js' in normalized
     assert 'deskrawl_assistant/web/inventory-tools.js' in normalized
+    bundled_modules = archive.open_embedded_archive(next(n for n in names if n.endswith('.pyz')))
+    assert 'deskrawl_assistant.stargazing' not in bundled_modules.toc
+    managed_page = archive.extract(normalized['deskrawl_assistant/web/index.html']).decode('utf-8')
+    assert managed_page.count('data-managed-fold="') == 9
     assert 'deskrawl_assistant/update_replace.ps1' in normalized
     assert 'data/compatibility-baseline.json' in normalized
     actions_profile = json.loads(archive.extract(normalized['data/game-actions-profile.json']))
@@ -125,7 +130,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.7'
+                assert request('/api/state')['app_version'] == '1.2.8'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:

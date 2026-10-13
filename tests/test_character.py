@@ -57,6 +57,39 @@ class CharacterMathTests(unittest.TestCase):
         self.assertEqual(0,result['delta'])
         self.assertFalse(any(a['stat']==4 for a in result['attributes']))
 
+    def test_updated_cooldown_cap_limits_conversion_and_swap_gain(self):
+        c=character();c['model']['caches'][536][13]=.79
+        c['model']['conversions']=[(13,3,100)]
+        result=preview(item(mods=[(13,.2)]),c,{'items':{}})
+        self.assertTrue(result['available'])
+        changes={a['stat']:a for a in result['attributes']}
+        self.assertAlmostEqual(.8,changes[13]['after'])
+        self.assertAlmostEqual(1,changes[3]['after']-changes[3]['before'])
+        # More cooldown reduction after reaching the native cap cannot be
+        # mistaken for an upgrade and trigger another automatic gear change.
+        c['model']['caches'][536][13]=.8
+        self.assertEqual(0,preview(item(mods=[(13,.2)]),c,{'items':{}})['delta'])
+
+    def test_updated_damage_reduction_caps_apply_after_all_layers(self):
+        c=character();keys=(49,51,52,53,54,55,64)
+        c['model']['caches'][536].update({k:.8 for k in keys})
+        c['model']['status']=({k:.05 for k in keys},{k:.2 for k in keys},{})
+        before=deepcopy(c['model'])
+        stats=final_stats(c['model'])
+        for key in keys:
+            with self.subTest(stat=key):self.assertEqual(.9,stats[key])
+        self.assertEqual(before,c['model'])
+        # Damage conversion consumes the bounded source, rather than the raw
+        # accumulated value that can exceed 100% on upgraded equipment.
+        c['model']['conversions']=[(64,3,100)]
+        self.assertAlmostEqual(100.5,final_stats(c['model'])[3])
+
+    def test_native_stat_bounds_do_not_cap_attack_or_weapon_speed(self):
+        c=character();c['model']['caches'][536].update({6:3,21:2.5})
+        stats=final_stats(c['model'])
+        self.assertEqual(3,stats[6]);self.assertEqual(2.5,stats[21])
+        self.assertEqual(int(110.5*2*10*(1+.2*1.5)),panel_attack(stats,1))
+
     def test_two_ring_targets_have_distinct_deltas_and_select_best(self):
         c=character(equipment=[item(7,[(1,50)],equipped_slot=6,item_uid='r1'),item(7,[(1,10)],equipped_slot=7,item_uid='r2')])
         c['model']['caches'][536][1]=60

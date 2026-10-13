@@ -9,7 +9,7 @@ import time
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from deskrawl_assistant.game_compatibility import ASSET_FILES, resolve
+from deskrawl_assistant.game_compatibility import ASSET_FILES, detect_game_build, resolve
 from deskrawl_assistant.il2cpp_metadata import MetadataInspector
 from deskrawl_assistant.native_signatures import Signatures
 
@@ -17,9 +17,14 @@ from deskrawl_assistant.native_signatures import Signatures
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--game-dir',type=Path,default=Path(r'G:\SteamLibrary\steamapps\common\Deskrawl'))
+    parser.add_argument('--output-dir',type=Path)
     args=parser.parse_args();source=args.game_dir
-    folder=ROOT/'build'/'auto-compatibility-fixture';folder.mkdir(parents=True,exist_ok=True)
+    folder=args.output_dir or ROOT/'build'/('auto-compatibility-fixture-'+(detect_game_build(source) or 'current'))
     game=folder/'Deskrawl';data=game/'Deskrawl_Data';metadata=data/'il2cpp_data/Metadata/global-metadata.dat'
+    installation=source.resolve()
+    if any(path.resolve()==installation or installation in path.resolve().parents for path in (folder,game)):
+        parser.error('Verification output must be outside the game installation')
+    folder.mkdir(parents=True,exist_ok=True)
     metadata.parent.mkdir(parents=True,exist_ok=True)
     for name in ASSET_FILES:
         target=data/name
@@ -37,7 +42,8 @@ def main():
     dirty=next(f for f in i.fields(save) if f['rawRegistrationOffset']==92 and f['resolvedType']=='System.Boolean')
     string_index=struct.unpack_from('<i',meta,i.field_offset+dirty['fieldIndex']*10)[0]
     position=i.string_offset+string_index
-    assert meta[position:position+4]==b'nly\0'
+    old_dirty=dirty['name']
+    assert len(old_dirty)==3 and meta[position:position+4]==old_dirty.encode()+b'\0'
     meta[position:position+3]=b'zzz'
     metadata.write_bytes(meta)
     s=Signatures(i);old_rva=s.singleton_rva('GameManager')
@@ -76,7 +82,7 @@ def main():
         save=next(t for t in profile['types'] if t.get('logicalName')=='SaveSystem')
         assert next(f for f in save['fields'] if f['rawRegistrationOffset']==92)['name']=='zzz'
     report={'success':True,'seconds':round(time.monotonic()-started,2),'status':result['status'],
-        'save_field':'nly → zzz','registry_type':'gj → zz','difficulty_type':'ey → xy',
+        'save_field':old_dirty+' → zzz','registry_type':'gj → zz','difficulty_type':'ey → xy',
         'additional_readers_adapted':['experience-types.json','recommendation-types.json'],
         'old_game_manager_rva':hex(old_rva),'new_game_manager_rva':hex(new_rva),
         'original_game_files_modified':False,'game_writes':False}
