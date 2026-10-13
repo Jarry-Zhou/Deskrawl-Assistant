@@ -467,6 +467,35 @@ class LifecycleTests(unittest.TestCase):
         town['scene']['difficulty']='Normal'
         action = engine.next_action(town); self.assertEqual((action['dungeon_id'],action['difficulty']),('last','Normal'))
 
+    def test_death_returns_even_without_run_or_merchant_growth_data(self):
+        for run in (None,{'id':'dead-run','status':'running'}):
+            with self.subTest(run=run):
+                config=settings();config['merchant']['enabled']=True
+                config['merchant']['weights']['2']=1
+                world=observation();world['scene'].update(dead=True,run=run)
+                world['progression']={'available':False,'reason':'死亡期间成长数据未加载'}
+                engine=ManagedMode(config);engine.start(world)
+                action=engine.next_action(world)
+                self.assertEqual(action['kind'],'return_town');self.assertTrue(engine.running)
+                self.assertIn('死亡',action['reason'])
+
+    def test_repeat_death_returns_then_enters_configured_map_once(self):
+        engine,world=self._native_repeat(runs=2)
+        world['scene'].update(dead=True)
+        world['scene']['run']['status']='failed'
+        action=engine.next_action(world);self.assertEqual(action['kind'],'return_town')
+        verified(engine,action)
+        town=observation([],town=True);town['scene'].update(difficulty='Normal',dead=False,run=None)
+        for _ in range(6):
+            action=engine.next_action(town)
+            if action:break
+        self.assertEqual(action['kind'],'enter_dungeon');self.assertEqual(action['dungeon_id'],'a')
+        self.assertEqual(engine.repeat_completed,1)
+        verified(engine,action)
+        world['scene'].update(dead=False);world['scene']['run'].update(id='next-run',status='running')
+        self.assertIsNone(engine.next_action(world));self.assertTrue(engine.running)
+        self.assertEqual(engine.repeat_completed,1)
+
     def test_current_difficulty_is_fixed_at_start_not_changed_by_later_reads(self):
         world = observation(); world['scene']['difficulty']='Nightmare'
         engine = ManagedMode(settings()); engine.start(world)

@@ -262,11 +262,11 @@ class ActionBoundaryTests(unittest.TestCase):
         for completion,dead,expected in (({},False,'TownPortalSystem.frk'),
                 ({'CombatMapCompletionUI':True},False,'TownPortalSystem.frl'),
                 ({'MythicCompletionUI':True},False,'TownPortalSystem.frl'),
-                ({},True,'TownPortalSystem.frl')):
+                ({},True,'DeathUI.return_to_town')):
             with self.subTest(completion=completion,dead=dead):
                 reader,dispatcher,read = Mock(),Mock(),Mock()
-                reader.class_name.return_value='Player'
-                read.singleton.return_value=3;read.ptr.return_value=4;read.verify.return_value=5;read.guards=[]
+                reader.class_name.return_value='Player';reader.module={'base':1000}
+                read.singleton.return_value=3;read.ptr.return_value=4;read.klass.return_value=100;read.verify.return_value=5;read.guards=[]
                 read.boolean.side_effect=lambda address:dead if address==4+296 else False
                 dispatcher.invoke.return_value={}
                 game=GameActions(reader,dispatcher=dispatcher,allow_unverified=True)
@@ -276,13 +276,29 @@ class ActionBoundaryTests(unittest.TestCase):
                     result=game.execute('return_town')
                 calls=dispatcher.invoke.call_args.args[0]
                 self.assertEqual(len(calls),1);self.assertEqual(calls[0].method,expected)
-                self.assertTrue(calls[0].require_true)
+                self.assertEqual(calls[0].require_true,not dead)
+                if dead: read.verify.assert_any_call(4,'DeathUI')
                 self.assertTrue(result['transition_requested']);self.assertFalse(result['effect_confirmed'])
+
+    def test_death_return_waits_for_loading_or_already_submitted_death_ui(self):
+        for loading,submitted in ((True,False),(False,True)):
+            with self.subTest(loading=loading,submitted=submitted):
+                reader,dispatcher,read=Mock(),Mock(),Mock()
+                reader.module={'base':1000};reader.class_name.return_value='Player'
+                read.verify.return_value=5;read.singleton.return_value=8;read.klass.return_value=100
+                game=GameActions(reader,dispatcher=dispatcher)
+                pointer=1000+game.profile['singletons']['DeathUI']
+                token=game.profile['uninitialized_type_tokens']['DeathUI']
+                read.ptr.side_effect=lambda address:token if address==pointer and loading else 4
+                read.boolean.side_effect=lambda address:True if address==4+296 else submitted
+                with patch.object(game,'_require_travel_ready'),patch.object(game,'_completion_state',return_value={}):
+                    with self.assertRaises(GameBusyError):game._return_town_call(read,1,2)
+                dispatcher.invoke.assert_not_called()
 
     def test_rejected_return_town_never_claims_a_requested_transition(self):
         reader,dispatcher,read=Mock(),Mock(),Mock()
         reader.class_name.return_value='Player'
-        read.singleton.return_value=3;read.ptr.return_value=4;read.verify.return_value=5;read.guards=[]
+        read.singleton.return_value=3;read.ptr.return_value=4;read.klass.return_value=100;read.verify.return_value=5;read.guards=[]
         read.boolean.return_value=False
         dispatcher.invoke.side_effect=NativeActionError('游戏原生操作拒绝本次请求',state=REJECTED)
         game=GameActions(reader,dispatcher=dispatcher,allow_unverified=True)

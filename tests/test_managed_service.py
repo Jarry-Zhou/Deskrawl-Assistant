@@ -241,6 +241,34 @@ class ManagedServiceTests(unittest.TestCase):
         self.client.run_status='success'
         self.ready(farming=True,auto_equip=False)
 
+    def test_death_flag_overrides_stale_running_plan_and_return_resumes_farming(self):
+        self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
+        raw_control=self.client.control_snapshot
+        dead={'value':True}
+        def control():
+            value=raw_control();value['scene']['dead']=dead['value'];return value
+        self.client.control_snapshot=control
+        self.ready(farming=True,auto_equip=False)
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        self.service._managed_once()
+        self.assertEqual([a[0] for a in self.client.actions],['return_town'])
+        self.assertEqual(self.service.managed_transition['requested_scene']['run_status'],'failed')
+        self.assertIn('offline-run',self.service.managed.handled_runs)
+        self.assertIsNone(self.service.managed.last_success)
+        for _ in range(3):self.service._managed_once()
+        self.assertEqual(self.client.native_handler.call_count,1)
+        self.client.in_town=True;dead['value']=False;self.client.current_map=None
+        self.service._managed_once()
+        self.assertIsNone(self.service.managed_transition);self.assertTrue(self.service.managed.running)
+        for _ in range(6):
+            if len(self.client.actions)>1:break
+            self.service._managed_once()
+        self.assertEqual([a[0] for a in self.client.actions],['return_town','enter_map'])
+        self.client.in_town=False;self.client.current_map='offline-map'
+        self.service._managed_once()
+        self.assertIsNone(self.service.managed_transition);self.assertTrue(self.service.managed.running)
+        self.assertEqual(self.service.managed.phase,'farming')
+
     def test_rejected_return_waits_then_requests_once_and_confirms_scene(self):
         self.returning_world()
         self.client.native_handler=Mock(side_effect=[NativeActionError('原生拒绝',state=REJECTED),

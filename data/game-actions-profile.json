@@ -11752,6 +11752,129 @@
           "rawRegistrationOffset": 32
         }
       ]
+    },
+    "DeathUI": {
+      "name": "DeathUI",
+      "typeDefinitionIndex": 6290,
+      "fields": [
+        {
+          "name": "<old>k__BackingField",
+          "fieldIndex": 27480,
+          "token": "0x040012A7",
+          "typeIndex": 20108,
+          "resolvedType": "DeathUI",
+          "typeKind": 18,
+          "attributes": "0x0011",
+          "isStatic": true,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 0
+        },
+        {
+          "name": "DeathPanel",
+          "fieldIndex": 27481,
+          "token": "0x040012A8",
+          "typeIndex": 22169,
+          "resolvedType": "UnityEngine.GameObject",
+          "typeKind": 18,
+          "attributes": "0x0006",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 32
+        },
+        {
+          "name": "ReviveButton",
+          "fieldIndex": 27482,
+          "token": "0x040012A9",
+          "typeIndex": 18358,
+          "resolvedType": "UnityEngine.UI.Button",
+          "typeKind": 18,
+          "attributes": "0x0006",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 40
+        },
+        {
+          "name": "BackToTownButton",
+          "fieldIndex": 27483,
+          "token": "0x040012AA",
+          "typeIndex": 18358,
+          "resolvedType": "UnityEngine.UI.Button",
+          "typeKind": 18,
+          "attributes": "0x0006",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 48
+        },
+        {
+          "name": "ReviveCountdownText",
+          "fieldIndex": 27484,
+          "token": "0x040012AB",
+          "typeIndex": 30614,
+          "resolvedType": "TMPro.TextMeshProUGUI",
+          "typeKind": 18,
+          "attributes": "0x0006",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 56
+        },
+        {
+          "name": "ReviveCountdownSeconds",
+          "fieldIndex": 27485,
+          "token": "0x040012AC",
+          "typeIndex": 29253,
+          "resolvedType": "System.Single",
+          "typeKind": 12,
+          "attributes": "0x0006",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 64
+        },
+        {
+          "name": "ole",
+          "fieldIndex": 27486,
+          "token": "0x040012AD",
+          "typeIndex": 29248,
+          "resolvedType": "System.Single",
+          "typeKind": 12,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 68
+        },
+        {
+          "name": "olf",
+          "fieldIndex": 27487,
+          "token": "0x040012AE",
+          "typeIndex": 18210,
+          "resolvedType": "System.Boolean",
+          "typeKind": 2,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 72
+        },
+        {
+          "name": "olg",
+          "fieldIndex": 27488,
+          "token": "0x040012AF",
+          "typeIndex": 18210,
+          "resolvedType": "System.Boolean",
+          "typeKind": 2,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 73
+        }
+      ]
     }
   },
   "methods": {
@@ -12227,6 +12350,15 @@
       "parameters": [],
       "rva": 7810512,
       "prefix": "40534883ec20803d832e4603007529488d0d02c62a03e8c5"
+    },
+    "DeathUI.return_to_town": {
+      "name": "gbi",
+      "token": "0x060013A4",
+      "isStatic": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "rva": 5624672,
+      "prefix": "40534883ec20803de77d670300488bd97518488d0d6f204c"
     }
   },
   "singletons": {
@@ -12243,7 +12375,8 @@
     "PlayerLifeSkillBook": 60989232,
     "PlayerTalentBook": 60989240,
     "PlayerAbilityBook": 60973048,
-    "CloudClient": 61001192
+    "CloudClient": 61001192,
+    "DeathUI": 61008056
   },
   "iat": {
     "peek_message_w_rva": 28941400
@@ -12258,7 +12391,8 @@
   "uninitialized_type_tokens": {
     "CombatMapCompletionUI": 536909199,
     "MythicCompletionUI": 536922631,
-    "merchant_stock_type": 536937833
+    "merchant_stock_type": 536937833,
+    "DeathUI": 536911127
   },
   "panel_log": {
     "class_rva": 60989752,

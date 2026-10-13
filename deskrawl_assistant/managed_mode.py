@@ -1224,6 +1224,12 @@ class ManagedMode:
                 if not self.running: return None
             if scene.get('online_saving') is True:
                 self.status = '等待游戏完成在线同步。'; return None
+            if (self.settings['farming']['enabled'] and scene.get('available') is True
+                    and scene.get('dead') is True and not self._town(observation)):
+                # Death recovery must not depend on a still-readable wave plan,
+                # merchant data, or growth data while the character is dead.
+                self.phase = 'returning'
+                return self._action('return_town', reason='角色已死亡，返回主城整理后继续刷图。')
             if growth_enabled(self.settings) and observation.get('progression', {}).get('busy') is True:
                 self.status = '等待游戏完成在线同步，已确认的动作不会重复执行。'; return None
             if self.finishing:
