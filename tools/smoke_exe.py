@@ -19,7 +19,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.2.8'
+NAME = 'Deskrawl装备助手-v1.2.9'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -130,7 +130,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.2.8'
+                assert request('/api/state')['app_version'] == '1.2.9'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
