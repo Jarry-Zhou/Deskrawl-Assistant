@@ -398,11 +398,25 @@ class GameActions:
         if not player or self.reader.class_name(self.reader.memory.u64(player)) != 'Player':
             raise NativeActionError('当前角色实体未确认')
         dead = read.boolean(player+296)
-        # frj is a shortcut toggle: visible completion UI makes it silently
-        # return, and a second call may cancel an active channel. Use accepted
-        # Boolean entrances instead. frl is the completion/death return button;
-        # frk preserves the usual channel while the character is still alive.
-        method = 'TownPortalSystem.frl' if any(completion.values()) or dead else 'TownPortalSystem.frk'
+        if dead:
+            # The portal shortcut does not cancel DeathUI's auto-revive timer
+            # or run the death settlement coroutine. Use BackToTownButton's
+            # original handler, which stops the timer and marks its request.
+            type_info = read.ptr(self.reader.module['base'] + self.profile['singletons']['DeathUI'])
+            if not type_info or type_info == self.profile['uninitialized_type_tokens']['DeathUI']:
+                raise GameBusyError('等待死亡界面载入后返回主城。')
+            klass = read.klass(type_info, 'DeathUI')
+            static = read.ptr(klass + 184)
+            death_ui = read.ptr(static) if static else 0
+            if not death_ui:
+                raise GameBusyError('等待死亡界面实例载入后返回主城。')
+            read.verify(death_ui, 'DeathUI')
+            if read.boolean(death_ui + 73):
+                raise GameBusyError('死亡后的复活或回城正在处理，等待游戏完成。')
+            return Invocation('DeathUI.return_to_town', death_ui)
+        # frj is a shortcut toggle and may cancel an active channel. Keep the
+        # accepted Boolean paths for living characters and completion returns.
+        method = 'TownPortalSystem.frl' if any(completion.values()) else 'TownPortalSystem.frk'
         return Invocation(method, portal, require_true=True)
 
     def action_context_snapshot(self):

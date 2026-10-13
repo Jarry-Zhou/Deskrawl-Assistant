@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from deskrawl_assistant.game_actions import GameActions, _Read
 from deskrawl_assistant.native_dispatcher import load_profile
-from deskrawl_assistant.native_memory import MemoryReadError, SnapshotChangedError
+from deskrawl_assistant.native_memory import MemoryReadError, SnapshotChangedError, GameBusyError
 from deskrawl_assistant.native_reader import NativeReader
 
 
@@ -75,7 +75,7 @@ class ByteMemory:
 class CompletionFixture:
     def __init__(self):
         self.profile = copy.deepcopy(load_profile())
-        self.profile['uninitialized_type_tokens'] = dict(TOKENS)
+        self.profile['uninitialized_type_tokens'].update(TOKENS)
         self.memory = ByteMemory()
         # Bypass construction, which is the only step that opens a process.
         self.reader = NativeReader.__new__(NativeReader)
@@ -154,6 +154,7 @@ class CompletionFixture:
         self.memory.pointer(manager + 64, combat)
         self.memory.pointer(combat + 32, player)
         self.memory.put(player + 296, bytes((dead,)))
+        if dead: self.singleton('DeathUI')
         return manager, area, portal
 
 
@@ -330,9 +331,41 @@ class CompletionTypeInitializationTests(unittest.TestCase):
                 read = fixture.read()
                 call = fixture.game._return_town_call(read, manager, portal)
                 read.finish()
-                self.assertEqual(call.method, 'TownPortalSystem.frl')
-                self.assertTrue(call.require_true)
+                self.assertEqual(call.method, 'DeathUI.return_to_town' if dead else 'TownPortalSystem.frl')
+                self.assertEqual(call.require_true, not dead)
+                if dead: self.assertEqual(call.instance,fixture.objects['DeathUI'])
                 fixture.dispatcher.invoke.assert_not_called()
+
+    def test_cold_death_ui_waits_without_dereferencing_encoded_type(self):
+        fixture=CompletionFixture();manager,_,portal=fixture.context(dead=True)
+        address=BASE+fixture.profile['singletons']['DeathUI']
+        token=fixture.profile['uninitialized_type_tokens']['DeathUI']
+        fixture.memory.pointer(address,token)
+        with self.assertRaises(GameBusyError):
+            fixture.game._return_town_call(fixture.read(),manager,portal)
+        self.assertFalse(any(token<=a<token+0x140 for a,_ in fixture.memory.reads))
+        fixture.dispatcher.invoke.assert_not_called()
+
+    def test_death_ui_static_or_instance_not_loaded_waits_instead_of_stopping(self):
+        for null_static in (True,False):
+            with self.subTest(null_static=null_static):
+                fixture=CompletionFixture();manager,_,portal=fixture.context(dead=True)
+                klass=fixture.classes['DeathUI'];static=fixture.memory.u64(klass+184)
+                fixture.memory.pointer(klass+184 if null_static else static,0)
+                with self.assertRaises(GameBusyError):
+                    fixture.game._return_town_call(fixture.read(),manager,portal)
+                fixture.dispatcher.invoke.assert_not_called()
+
+    def test_auto_revive_submitted_during_plan_invalidates_death_return(self):
+        fixture=CompletionFixture();manager,_,portal=fixture.context(dead=True)
+        address=fixture.objects['DeathUI']+73
+        def changed(a,size,raw):
+            if a==address: fixture.memory.put(address,b'\1')
+        fixture.memory.after_read=changed
+        read=fixture.read();call=fixture.game._return_town_call(read,manager,portal)
+        self.assertEqual(call.method,'DeathUI.return_to_town')
+        with self.assertRaises(SnapshotChangedError):read.finish()
+        fixture.dispatcher.invoke.assert_not_called()
 
     def test_complete_control_snapshot_remains_available_before_ui_initialization(self):
         fixture = CompletionFixture()

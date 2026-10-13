@@ -175,6 +175,10 @@ class ManagedServiceMixin:
         if run:
             run.setdefault('id',run.get('run_id'))
             run.setdefault('dungeon_id',run.get('map_id',scene['dungeon_id']))
+        if scene.get('dead') is True and scene.get('in_town') is not True and run:
+            # The death flag is independent of the online wave-plan lifecycle.
+            # Never treat a stale running/completion plan as a successful run.
+            run.update(status='failed', completion_confirmed=False)
         scene['run'] = run
         return scene
 
