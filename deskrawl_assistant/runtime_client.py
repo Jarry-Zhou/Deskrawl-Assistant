@@ -141,6 +141,14 @@ class RuntimeClient:
                 raise RuntimeConnectionError('尚未连接游戏。')
             return read_character(self._reader)
 
+    def statistics_snapshot(self):
+        """Native cumulative playtime and rewards, bound to the current character."""
+        from .statistics_reader import read_player_statistics
+        with self._guard:
+            if self._reader is None:
+                raise RuntimeConnectionError('尚未连接游戏。')
+            return read_player_statistics(self._reader)
+
     def loot_preview_snapshot(self):
         from .loot_plan_reader import read_loot_plan
         with self._guard:

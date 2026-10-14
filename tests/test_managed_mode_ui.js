@@ -16,6 +16,26 @@ const settings=(extra={})=>ui.normalizeSettings({auto_equip:{enabled:false,minim
   cleanup:{equipment_action:'store',equipment_fallback:'sell',equipment_pages:[1],rune_action:'store',rune_pages:[3],gem_action:'store',gem_pages:[3]},...extra});
 const capabilities=value=>Object.fromEntries(['transfer','lock','equip','travel','difficulty','sell','salvage','chests','ground_pickup'].map(key=>[key,value]));
 
+test('material partition migration preserves policies and independent page choices through saving',()=>{
+  const old=settings({cleanup:{equipment_action:'salvage',equipment_pages:[2,3]}});
+  for(const key of ['gold_bar','legendary_rein']){
+    assert.equal(old.cleanup[key+'_action'],'store');assert.deepEqual(old.cleanup[key+'_pages'],[5]);
+  }
+  old.cleanup.gold_bar_action='keep';old.cleanup.gold_bar_pages=[];old.cleanup.legendary_rein_pages=[5];
+  const saved=ui.normalizeSettings(JSON.parse(JSON.stringify(old)));
+  assert.deepEqual(saved,old);assert.equal(ui.validateSettings(saved),'');
+  assert.deepEqual(ui.equipmentPreset(saved,'sell_low').cleanup.gold_bar_pages,[]);
+  saved.cleanup.gold_bar_action='store';assert.match(ui.validateSettings(saved),/金条/);
+});
+
+test('five new stargazing choices migrate selected and retain user deselections',()=>{
+  const options=['silver_chest','golden_chest','mythic_chest','legendary_rein','gold_bar'];
+  const next=ui.normalizeSettings({farming:{stargazing:{enabled:true,rewards:{gem:false}}}});
+  assert.equal(next.farming.stargazing.rewards.gem,false);
+  for(const key of options){assert.equal(next.farming.stargazing.rewards[key],true);next.farming.stargazing.rewards[key]=false;}
+  assert.deepEqual(ui.normalizeSettings(JSON.parse(JSON.stringify(next))).farming.stargazing,next.farming.stargazing);
+});
+
 test('partition defaults fill absent values without replacing saved choices or explicit empty selections',()=>{
   const defaults=ui.normalizeSettings();
   assert.deepEqual(defaults.cleanup.equipment_pages,[1,2,3]);

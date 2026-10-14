@@ -4,10 +4,12 @@
   const storageTools=typeof module!=='undefined'&&module.exports?require('./automation-tools.js'):root.AutomationTools;
   const phaseNames={idle:'尚未启动',stopped:'已停止',paused:'已暂停',starting:'准备托管',farming:'刷图中',pushing:'推图中',travel:'进入关卡',returning:'回城中',scanning:'扫描奖励',equipping:'自动换装',cleanup:'整理奖励',collecting:'收取马车 / 地面物品',opening_chests:'开启宝箱',waiting:'等待处理',blocked:'已暂停 · 需要处理',error:'已停止 · 操作异常',growing:'自动成长',shopping:'神秘商人购买'};
   const rarityNames=[['divine','神圣'],['black_mist','黑雾传说'],['ancient','远古传说'],['legendary','普通传说'],['rare','稀有'],['uncommon','优秀'],['normal','普通']];
-  const disposalRarities=rarityNames.slice(2),dispositionNames={store:'放入仓库',sell:'出售',salvage:'分解'};
+  const disposalRarities=rarityNames.slice(2),dispositionNames={store:'放入仓库',sell:'出售',salvage:'分解',keep:'留在背包'};
+  const storageMaterials=[['gold_bar','金条'],['legendary_rein','传说缰绳']];
+  const storageKinds=['equipment','rune','gem',...storageMaterials.map(([key])=>key)];
   const capabilityNames={transfer:'物品转移',lock:'装备保护',equip:'后台换装',travel:'回城 / 进入关卡',difficulty:'主城切换难度',sell:'出售',salvage:'分解',chests:'开启宝箱',ground_pickup:'地面拾取',merchant:'神秘商人消费',talents:'职业天赋加点',life_skills:'生活技能学习',skills:'技能切换'};
   const difficultyNames={Normal:'普通',Nightmare:'噩梦',Inferno:'炼狱'};
-  const stargazingRewards=['divine_equipment','black_mist_equipment','primary_perfect','rule_match','set_rune','legendary_rune','rare_rune','uncommon_rune','gem'];
+  const stargazingRewards=['divine_equipment','black_mist_equipment','primary_perfect','rule_match','set_rune','legendary_rune','rare_rune','uncommon_rune','gem','silver_chest','golden_chest','mythic_chest','legendary_rein','gold_bar'];
   const fixedStargazing=new Set(['divine_equipment','black_mist_equipment','set_rune','legendary_rune']);
   function normalizeStargazing(value={}){value=value||{};return {enabled:value.enabled===true,rewards:Object.fromEntries(stargazingRewards.map(key=>[key,fixedStargazing.has(key)||value.rewards?.[key]!==false]))};}
   const disabledChoice='__disabled_slot__';
@@ -22,7 +24,8 @@
       farming:{enabled:!!farm.enabled,mode,dungeon_id:mode==='repeat'&&repeatMaps.length?repeatMaps[0].dungeon_id:farm.dungeon_id??null,difficulty:mode==='repeat'&&repeatMaps.length?repeatMaps[0].difficulty:oneOf(farm.difficulty,['current','Normal','Nightmare','Inferno'],'current'),progression:Array.isArray(farm.progression)?clone(farm.progression):[],repeat_maps:repeatMaps,free_threshold:safeNumber(farm.free_threshold,4),stargazing:normalizeStargazing(farm.stargazing)},
       cleanup:{equipment_action:oneOf(cleanup.equipment_action,['store','sell','salvage'],'store'),equipment_fallback:oneOf(cleanup.equipment_fallback,['sell','salvage'],'sell'),
         equipment_policies:Object.fromEntries(disposalRarities.map(([key])=>{const p=cleanup.equipment_policies?.[key]||{};return [key,{action:oneOf(p.action,['store','sell','salvage'],oneOf(cleanup.equipment_action,['store','sell','salvage'],'store')),fallback:oneOf(p.fallback,['sell','salvage'],oneOf(cleanup.equipment_fallback,['sell','salvage'],'sell'))}];})),equipment_pages:pageIds(cleanup.equipment_pages??storageTools.defaultPages.equipment),
-        rune_action:oneOf(cleanup.rune_action,['store','sell'],'store'),rune_pages:pageIds(cleanup.rune_pages??storageTools.defaultPages.rune),gem_action:oneOf(cleanup.gem_action,['store','sell'],'store'),gem_pages:pageIds(cleanup.gem_pages??storageTools.defaultPages.gem)}};
+        rune_action:oneOf(cleanup.rune_action,['store','sell'],'store'),rune_pages:pageIds(cleanup.rune_pages??storageTools.defaultPages.rune),gem_action:oneOf(cleanup.gem_action,['store','sell'],'store'),gem_pages:pageIds(cleanup.gem_pages??storageTools.defaultPages.gem),
+        ...Object.fromEntries(storageMaterials.flatMap(([key])=>[[key+'_action',oneOf(cleanup[key+'_action'],['store','keep'],'store')],[key+'_pages',pageIds(cleanup[key+'_pages']??storageTools.defaultPages.gem)]]))}};
   }
   function equipmentPreset(settings,preset){
     const next=normalizeSettings(settings);
@@ -49,6 +52,10 @@
     if(!c.equipment_pages.length)return '请选择装备存放页，黑雾 / 神圣与符合规则的装备需要保留空间。';
     if(!c.rune_pages.length)return '请勾选符文存放页，套装与宏伟符文必须收纳。';
     if(c.gem_action==='store'&&!c.gem_pages.length)return '宝石选择放入仓库时，需要至少勾选一个仓库页。';
+    for(const [key,label] of storageMaterials){
+      if(!['store','keep'].includes(c[key+'_action']))return label+'处理方式仅支持放入仓库或留在背包。';
+      if(c[key+'_action']==='store'&&!c[key+'_pages'].length)return label+'选择放入仓库时，需要至少勾选一个仓库页。';
+    }
     const {merchant:m,life_skills:l}=growthTools.normalize(settings);
     if(Object.values(settings.progression.talent_targets).some(targets=>Object.values(targets).reduce((sum,n)=>sum+n,0)>growthTools.talentPointLimit))return `每个职业的战斗天赋预设最多 ${growthTools.talentPointLimit} 点，请先减少预设点数。`;
     if(!Number.isInteger(m.trigger_percent)||!Number.isInteger(m.spend_to_percent)||m.trigger_percent<1||m.trigger_percent>100||m.spend_to_percent<0||m.spend_to_percent>=m.trigger_percent)return '购买后保留比例须低于碎片回城触发比例。';
@@ -138,7 +145,7 @@
       farming:state(s.farming.enabled,progress+(s.farming.mode==='push'?'自动推图 · 最高已解锁关卡':maps.length?maps.join(' → '):'重复刷图 · 未选择关卡')+(s.farming.mode==='repeat'&&s.farming.stargazing.enabled?' · 观星开启':'')+` · 空格 < ${s.farming.free_threshold} 回城`),
       merchant:state(s.merchant.enabled,`${s.merchant.trigger_percent}% 回城 · 保留 ${s.merchant.spend_to_percent}% · ${buying.length} 部位 / 每轮 ${buying.reduce((a,b)=>a+b,0)} 件`),
       growth:state(growing.length>0,growing.length?growing.join(' / ')+'自动养成':'战斗天赋 / 生活技能 / 技能预设'),
-      cleanup:{enabled:true,status:'固定保护',summary:`装备 ${folders('equipment')} 页 · 符文 ${folders('rune')} 页 · 宝石 ${folders('gem')} 页`},
+      cleanup:{enabled:true,status:'固定保护',summary:`装备 ${folders('equipment')} 页 · 符文 ${folders('rune')} 页 · 宝石 ${folders('gem')} 页 · `+storageMaterials.map(([key,label])=>`${label}${s.cleanup[key+'_action']==='store'?' '+folders(key)+' 页':'留在背包'}`).join(' · ')},
       talents:state(s.progression.talents_enabled,currentClass?`当前职业目标 ${points} / ${growthTools.talentPointLimit} 点`:'按职业保存 · 连接后显示当前预设'),
       life:state(s.life_skills.enabled,`最终点满 · ${s.life_skills.priorities.length} 个优先节点 · 保留 ${s.life_skills.gold_reserve.toLocaleString('zh-CN')} 金币`),
       skills:state(s.progression.skills_enabled,currentClass?`${growthTools.skillTargets(stages).filter(Boolean).length} 个预设技能 · 达到等级后切换`:'按职业保存 · 达到等级后切换')
@@ -177,7 +184,7 @@
   let currentCharacter=null,pickerSlot=null,pickerSignature='';
   let folds=null;
   const farmFields=['managed-farm-mode','managed-difficulty','managed-map','managed-repeat-two','managed-repeat-count','managed-difficulty-two','managed-map-two','managed-repeat-count-two','managed-free-threshold','managed-stargazing'];
-  const fieldIds=['managed-rule-monitoring','managed-inventory-automation','managed-auto-equip','managed-farming',...farmFields,'managed-rune-action','managed-gem-action'];
+  const fieldIds=['managed-rule-monitoring','managed-inventory-automation','managed-auto-equip','managed-farming',...farmFields,'managed-rune-action','managed-gem-action',...storageMaterials.map(([key])=>'managed-'+key+'-action')];
   const catalog=()=>context?.catalog||{};
   const maps=()=>availableMaps(packet,draft||normalizeSettings());
   const mapId=row=>row.id??row.dungeon_id;
@@ -199,8 +206,8 @@
     if(f.mode==='push'&&f.repeat_maps.some(row=>row.dungeon_id===null||!Number.isInteger(row.runs)||row.runs<1||row.runs>10000))f.repeat_maps=[];
     if(f.mode==='repeat')f.progression=[]; // Only the backend declares the campaign route.
     for(const [key] of disposalRarities){const p=c.equipment_policies[key];for(const field of ['action','fallback'])p[field]=$(`managed-equipment-${key}-${field}`).value;}
-    c.rune_action=$('managed-rune-action').value;c.gem_action=$('managed-gem-action').value;
-    for(const kind of ['equipment','rune','gem'])c[kind+'_pages']=pageIds([...root.document.querySelectorAll(`[data-managed-pages="${kind}"]:checked`)].map(input=>input.value));
+    for(const kind of ['rune','gem',...storageMaterials.map(([key])=>key)])c[kind+'_action']=$('managed-'+kind+'-action').value;
+    for(const kind of storageKinds)c[kind+'_pages']=pageIds([...root.document.querySelectorAll(`[data-managed-pages="${kind}"]:checked`)].map(input=>input.value));
     return next;
   }
   function slots(){
@@ -269,7 +276,7 @@
   }
   function renderPages(){
     const rows=packet?.warehouse_pages||[],ready=connected&&packet?.warehouse_ready===true,signature=JSON.stringify([rows,ready,draft?.cleanup]);if(signature===pageSignature)return;pageSignature=signature;
-    for(const kind of ['equipment','rune','gem']){
+    for(const kind of storageKinds){
       const choices=storageTools.pageChoices(rows,draft?.cleanup[kind+'_pages']||[],ready);
       $('managed-'+kind+'-pages').innerHTML=choices.map(row=>{
         const label=row.status==='available'?`${row.free} 空`:row.status==='locked'?'未解锁':'待读取';
@@ -314,7 +321,7 @@
     $('managed-repeat-count-two').value=draft.farming.repeat_maps[1]?.runs||1;
     $('managed-stargazing').checked=draft.farming.stargazing.enabled;
     for(const key of stargazingRewards)$('managed-stargazing-'+key).checked=draft.farming.stargazing.rewards[key];
-    for(const kind of ['rune','gem'])$('managed-'+kind+'-action').value=draft.cleanup[kind+'_action'];
+    for(const kind of ['rune','gem',...storageMaterials.map(([key])=>key)])$('managed-'+kind+'-action').value=draft.cleanup[kind+'_action'];
     for(const [key] of disposalRarities)for(const field of ['action','fallback'])$(`managed-equipment-${key}-${field}`).value=draft.cleanup.equipment_policies[key][field];
     renderSlots();renderMaps();renderPages();renderDependencies();
   }
@@ -325,7 +332,7 @@
     root.document.querySelectorAll('[data-managed-slot]').forEach(input=>input.disabled=running||busy||!$('managed-auto-equip').checked);
     root.document.querySelectorAll('[data-managed-picker]').forEach(input=>input.disabled=running||busy||!$('managed-auto-equip').checked);
     if(running||busy||!$('managed-auto-equip').checked)closePicker();
-    for(const kind of ['equipment','rune','gem'])root.document.querySelectorAll(`[data-managed-pages="${kind}"]`).forEach(input=>input.disabled=running||busy||(kind==='gem'&&$('managed-gem-action').value!=='store'));
+    for(const kind of storageKinds)root.document.querySelectorAll(`[data-managed-pages="${kind}"]`).forEach(input=>input.disabled=running||busy||(!['equipment','rune'].includes(kind)&&$('managed-'+kind+'-action').value!=='store'));
     root.document.querySelectorAll('[data-managed-policy], [data-managed-preset]').forEach(input=>input.disabled=running||busy);
     for(const id of ['managed-save','managed-growth-save','managed-shop-save'])$(id).disabled=running||busy||!draft;
     $('managed-reset-draft').disabled=running||busy||!dirty;
@@ -416,7 +423,7 @@
         if(ticket!==actionVersion)return;
         const c=draft.cleanup,disposition=dispositionNames;
         const growthNotice=[draft.progression.talents_enabled?'按当前职业的目标逐点学习天赋，不重置已有天赋。':'',draft.progression.skills_enabled?'到达设定等级并解锁后切换目标技能组合。':'',draft.life_skills.enabled?`按优先顺序学习生活技能，随后补满；至少保留 ${draft.life_skills.gold_reserve} 金币。`:'',draft.merchant.enabled?'灵魂碎片达到实际容量的回城比例后，整理奖励并按部位比例消费；新购买的装备重新筛选整理。':''].filter(Boolean).join('\n');
-        const cleanupNotice=(draft.farming.enabled||draft.merchant.enabled)?`不符合规则的装备按品质处理：\n${equipmentSummary(c)}。\n仓库满时清理所选页的未锁定垃圾：\n${equipmentSummary(c,true)}。\n普通符文：${disposition[c.rune_action]}；宝石：${disposition[c.gem_action]}。出售和分解无法撤回，强化和宝石不自动返还。神圣、黑雾装备及套装、宏伟符文必须收纳；已锁定、符合规则与待核验装备保留。神圣装备禁止自动穿戴，主城奖励未收完不得入图。`:draft.auto_equip.enabled?'按固定单体 Boss 战力更换更高战力的装备。神圣装备禁止自动穿戴。未指定暗金时允许其他品质；指定但尚未穿上时允许普通、优秀、稀有装备过渡，穿上后只比较同名装备。不自动转移宝石。':'';
+        const cleanupNotice=(draft.farming.enabled||draft.merchant.enabled)?`不符合规则的装备按品质处理：\n${equipmentSummary(c)}。\n仓库满时清理所选页的未锁定垃圾：\n${equipmentSummary(c,true)}。\n普通符文：${disposition[c.rune_action]}；宝石：${disposition[c.gem_action]}；${storageMaterials.map(([key,label])=>label+'：'+disposition[c[key+'_action']]).join('；')}。出售和分解无法撤回，强化和宝石不自动返还。神圣、黑雾装备及套装、宏伟符文必须收纳；已锁定、符合规则与待核验装备保留。神圣装备禁止自动穿戴，主城奖励未收完不得入图。`:draft.auto_equip.enabled?'按固定单体 Boss 战力更换更高战力的装备。神圣装备禁止自动穿戴。未指定暗金时允许其他品质；指定但尚未穿上时允许普通、优秀、稀有装备过渡，穿上后只比较同名装备。不自动转移宝石。':'';
         const confirmed=await context.confirmAction?.('启动托管？',[growthNotice,cleanupNotice].filter(Boolean).join('\n\n'),'启动托管',false);
         if(confirmed===false||ticket!==actionVersion)return;
         const result=await context.api('managed/run',{enabled:true});if(ticket===actionVersion)applyPacket(result);

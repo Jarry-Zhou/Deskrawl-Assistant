@@ -5,7 +5,7 @@ import json
 import time
 
 from .managed_mode import (ManagedMode, DEFAULT_SETTINGS, validate_settings, identity,
-    run_record, DIFFICULTIES, equip_candidate_allowed, equipment_actions, equipment_policy)
+    run_record, DIFFICULTIES, equip_candidate_allowed, equipment_actions, equipment_policy, storage_material_kind)
 from .models import ValidationError
 from .rules import evaluate, DEFAULT_MIN_CONFIDENCE
 from .native_memory import SnapshotChangedError, GameBusyError
@@ -583,9 +583,17 @@ class ManagedServiceMixin:
                 if (item.get('item_uid') in self.managed_merchant_uids and item.get('kind')=='equipment'
                         and item.get('matches') is False and not self.managed._protected(item)):
                     return {'verified':False,'retryable':True,'reason':'商人未命中装备直接出售或分解，重新规划。'}
-                pages = (observation['automation_settings'][action['automation_group']]['pages']
-                    if action.get('reason_code') == 'background_organize' else
-                    self.managed.settings['cleanup'][item['kind']+'_pages'])
+                if action.get('reason_code') == 'background_organize':
+                    pages = observation['automation_settings'][action['automation_group']]['pages']
+                elif item.get('kind') == 'material':
+                    group = storage_material_kind(item)
+                    if (group is None or action.get('storage_group') != group
+                            or self.managed.settings['cleanup'][group+'_action'] != 'store'
+                            or not self.managed._safe(item)):
+                        return {'verified':False,'retryable':True,'reason':'金条或传说缰绳的身份、品质或收纳设置已变化，重新规划。'}
+                    pages = self.managed.settings['cleanup'][group+'_pages']
+                else:
+                    pages = self.managed.settings['cleanup'][item['kind']+'_pages']
                 approved = set(self.managed._targets(observation,pages))
                 if not set(action.get('target_indices',[])) <= approved or not action.get('target_indices'):
                     raise ValidationError('目标仓库页不在托管配置范围内。')

@@ -121,6 +121,13 @@ class AssistantService(ManagedServiceMixin):
         self.loot_capture = LootCaptureMonitor((self.config.parent if config else runtime_dir()) / 'loot-captures')
         self.loot_capture_thread = threading.Thread(target=self._loot_capture_loop, daemon=True)
         self.loot_capture_thread.start()
+        from .community_stats import CommunityStats
+        self.community = CommunityStats((self.config.parent if config else runtime_dir()) / 'community-stats.sqlite3',
+            VERSION, provider=lambda: self.client.connected and not self.closed.is_set(),
+            statistics_provider=lambda: self.client.statistics_snapshot())
+
+    def community_status(self):
+        return self.community.status()
 
     def _describe_item(self, key):
         entry = self.item_names.get(key, {})
@@ -1107,4 +1114,5 @@ class AssistantService(ManagedServiceMixin):
         if self.recommendation_thread and self.recommendation_thread is not threading.current_thread():
             self.recommendation_thread.join(10)
         if self.loot_capture_thread is not threading.current_thread(): self.loot_capture_thread.join(10)
+        if getattr(self, 'community', None) is not None: self.community.close()
         self.client.close()

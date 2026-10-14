@@ -29,8 +29,11 @@ DEFAULT_SETTINGS = {
                 'progression': [], 'repeat_maps': [], 'free_threshold': 4, 'stargazing': deepcopy(DEFAULT_STARGAZING)},
     'cleanup': {'equipment_action': 'store', 'equipment_fallback': 'sell', 'equipment_policies': {},
                 'equipment_pages': list(DEFAULT_STORAGE_PAGES['equipment']), 'rune_action': 'store', 'rune_pages': list(DEFAULT_STORAGE_PAGES['rune']),
-                'gem_action': 'store', 'gem_pages': list(DEFAULT_STORAGE_PAGES['gem'])},
+                'gem_action': 'store', 'gem_pages': list(DEFAULT_STORAGE_PAGES['gem']),
+                'gold_bar_action': 'store', 'gold_bar_pages': list(DEFAULT_STORAGE_PAGES['gem']),
+                'legendary_rein_action': 'store', 'legendary_rein_pages': list(DEFAULT_STORAGE_PAGES['gem'])},
 }
+STORAGE_MATERIALS = {'gold_bar': '金条', 'legendary_rein': '传说缰绳'}
 EQUIPMENT_BUCKETS = ('divine', 'black_mist', 'ancient', 'legendary', 'rare', 'uncommon', 'normal')
 BUCKET_LABELS = dict(zip(EQUIPMENT_BUCKETS, ('神圣', '黑雾传说', '远古传说', '普通传说', '稀有', '优秀', '普通')))
 DISPOSABLE_BUCKETS = EQUIPMENT_BUCKETS[2:]
@@ -64,6 +67,9 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
         raw['auto_equip'].setdefault('disabled_slots',[])
     if isinstance(raw.get('cleanup'),dict):
         raw['cleanup'].setdefault('equipment_policies',{})
+        for kind in STORAGE_MATERIALS:
+            raw['cleanup'].setdefault(kind+'_action', 'store')
+            raw['cleanup'].setdefault(kind+'_pages', deepcopy(DEFAULT_SETTINGS['cleanup'][kind+'_pages']))
     result = deepcopy(raw)
     for group, defaults in DEFAULT_SETTINGS.items():
         if not isinstance(raw[group], dict) or set(raw[group]) != set(defaults):
@@ -133,7 +139,10 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
         {'action':c['equipment_action'],'fallback':c['equipment_fallback']})) for bucket in DISPOSABLE_BUCKETS}
     if c['rune_action'] not in ('sell', 'store') or c['gem_action'] not in ('sell', 'store'):
         raise ValidationError('符文或宝石处理方式无效。')
-    for name in ('equipment_pages', 'rune_pages', 'gem_pages'):
+    for kind, label in STORAGE_MATERIALS.items():
+        if c[kind+'_action'] not in ('store', 'keep'):
+            raise ValidationError(label+'处理方式仅支持放入仓库或留在背包。')
+    for name in ('equipment_pages', 'rune_pages', 'gem_pages', *(kind+'_pages' for kind in STORAGE_MATERIALS)):
         pages = c[name]
         if (not isinstance(pages, list) or len(pages) > 256 or any(type(n) is not int or n < 1 for n in pages)
                 or len(set(pages)) != len(pages)):
@@ -156,6 +165,18 @@ def item_kind(row):
     if row.get('item_class') == 'GemData' or name.startswith('Gem'): return 'gem'
     if name.startswith('TreasureChest'): return 'chest'
     return 'material'
+
+
+def storage_material_kind(row):
+    """Only known physical gold bars and legendary servant reins use these policies."""
+    if item_kind(row) != 'material': return None
+    names = {row[key] for key in ('internal_name', 'name_key') if isinstance(row.get(key), str)}
+    if 'GoldBar' in names: return 'gold_bar'
+    rarity = row.get('rarity')
+    if rarity is None: rarity = row.get('base_rarity')
+    if type(rarity) is int and rarity == 3 and any(name.startswith('Rein_') for name in names):
+        return 'legendary_rein'
+    return None
 
 
 def equip_candidate_allowed(row, score, settings, character):
@@ -953,13 +974,17 @@ class ManagedMode:
 
     def _storage_transfer(self, observation, row, pages, all_items, mandatory=False):
         targets = self._targets(observation, pages)
+        material = storage_material_kind(row)
+        label = STORAGE_MATERIALS.get(material) or {'equipment':'装备','rune':'符文','gem':'宝石'}.get(item_kind(row),'物品')
         if not targets:
-            label = {'equipment':'装备','rune':'符文','gem':'宝石'}.get(item_kind(row),'物品')
             return self._pause('所选'+label+'仓库页尚未解锁或没有开放格位，物品保留；请解锁仓库页或修改存放分区。')
         if self._room(row, targets, all_items):
             return self._action('transfer', row, target='storage', target_indices=targets,
+                                **({'storage_group': material} if material else {}),
                                 reason='将奖励存入指定仓库页。')
         if item_kind(row) != 'equipment':
+            if material:
+                return self._pause('容量不足：所选'+label+'仓库页已满，物品留在背包；请腾出空格或修改存放分区。')
             return self._pause('容量不足：所选符文或宝石仓库页没有可用空格或堆叠容量。')
         cleanup = self.settings['cleanup']
         if not mandatory:
@@ -1131,6 +1156,12 @@ class ManagedMode:
         for row in bag:
             if item_kind(row) == 'rune' and mandatory_storage(row):
                 return self._storage_transfer(observation, row, settings['rune_pages'], all_items, mandatory=True)
+        for row in bag:
+            material = storage_material_kind(row)
+            if material and settings[material+'_action'] == 'store':
+                if not self._safe(row):
+                    return self._pause(STORAGE_MATERIALS[material]+'身份或搬运状态未确认，物品保留，等待重新读取。')
+                return self._storage_transfer(observation, row, settings[material+'_pages'], all_items)
         for row in bag:
             kind = item_kind(row)
             if not self._safe(row): continue

@@ -2,15 +2,19 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -19,7 +23,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.3.0'
+NAME = 'Deskrawl装备助手-v1.3.1'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -61,6 +65,9 @@ def main():
     assert 'deskrawl_assistant/web/inventory-tools.js' in normalized
     bundled_modules = archive.open_embedded_archive(next(n for n in names if n.endswith('.pyz')))
     assert 'deskrawl_assistant.stargazing' in bundled_modules.toc
+    assert 'deskrawl_assistant.community_stats' in bundled_modules.toc
+    assert 'deskrawl_assistant.statistics_reader' in bundled_modules.toc
+    assert not any(n.startswith('deskrawl_assistant.remote_') for n in bundled_modules.toc)
     managed_page = archive.extract(normalized['deskrawl_assistant/web/index.html']).decode('utf-8')
     assert managed_page.count('data-managed-fold="') == 9
     assert 'deskrawl_assistant/update_replace.ps1' in normalized
@@ -85,6 +92,40 @@ def main():
     working = folder / '空白工作目录'
     working.mkdir()
     persistent = folder / '用户数据'
+    # Keep packaging checks away from the real community statistics service.
+    # Seed only this test's isolated database with a local receipt endpoint.
+    class ReceiptHandler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_POST(self):
+            payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            if self.path == '/v1/register':
+                result = {'schema': 1, 'client_id': payload['client_id'], 'token': 'a' * 64}
+            elif self.path == '/v1/report':
+                assert self.headers.get('Authorization') == 'Bearer ' + 'a' * 64
+                assert payload['version'] == '1.3.1'
+                result = {'accepted': True, 'report_id': payload['report_id'],
+                          'sequence': payload['sequence'], 'accepted_at': datetime.now(timezone.utc).isoformat()}
+            else:
+                self.send_error(404)
+                return
+            raw = json.dumps(result).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+    receipt_server = ThreadingHTTPServer(('127.0.0.1', 0), ReceiptHandler)
+    receipt_thread = threading.Thread(target=receipt_server.serve_forever, daemon=True)
+    receipt_thread.start()
+    receipt_url = f'http://127.0.0.1:{receipt_server.server_port}'
+    statistics_database = persistent / 'data/runtime/community-stats.sqlite3'
+    statistics_database.parent.mkdir(parents=True)
+    with sqlite3.connect(statistics_database) as db:
+        db.execute('CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+        db.execute('INSERT INTO settings VALUES (?,?)', ('url', json.dumps(receipt_url)))
     env = os.environ.copy()
     for key in ('PYTHONHOME', 'PYTHONPATH', 'VIRTUAL_ENV', 'CONDA_PREFIX'):
         env.pop(key, None)
@@ -106,9 +147,10 @@ def main():
 
     def request(path, payload=None, session=None):
         headers = {'Origin': base}
+        if session or token:
+            headers['X-Assistant-Token'] = session or token
         if payload is not None:
             headers['Content-Type'] = 'application/json'
-            headers['X-Assistant-Token'] = session or token
         value = None if payload is None else json.dumps(payload).encode('utf-8')
         with OPENER.open(urllib.request.Request(base+path, data=value, headers=headers), timeout=15) as response:
             raw = response.read()
@@ -130,7 +172,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.3.0'
+                assert request('/api/state')['app_version'] == '1.3.1'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -170,6 +212,16 @@ def main():
 
     try:
         start()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            community = request('/api/community')
+            if community['last_ack']:
+                break
+            time.sleep(.1)
+        assert community['enabled'] is True and community['url'] == receipt_url
+        assert community['acknowledged'] >= 1 and community['last_ack']
+        assert community['interval_seconds'] == 30 and community['source'] == 'game_statistics'
+        report['checks'].append('匿名统计默认开启，以匹配回执确认成功；隔离检查只连接本机模拟服务，不上报公网测试身份')
         assert not request('/api/state')['rules']
         assert not request('/api/state')['monitoring']
         assert not request('/api/state')['automation']['running']
@@ -181,6 +233,8 @@ def main():
         assert not any('remote-control' in n for n in names)
         cleanup = managed['settings']['cleanup']
         assert [cleanup[k+'_pages'] for k in ('equipment','rune','gem')] == [[1,2,3],[4],[5]]
+        assert [cleanup[k+'_pages'] for k in ('gold_bar', 'legendary_rein')] == [[5], [5]]
+        assert all(cleanup[k+'_action'] == 'store' for k in ('gold_bar', 'legendary_rein'))
         auto = request('/api/state')['automation']['settings']
         assert [auto[k]['pages'] for k in ('pressure','runes','gems')] == [[1,2,3],[4],[5]]
         assert not managed['warehouse_ready']
@@ -201,6 +255,12 @@ def main():
         assert b'openCombinationManager' in request('/rule-tools.js')
         assert request('/style.css')
         page = request('/').decode('utf-8')
+        assert 'class="brand" href="https://deskrawl.hhyan.me/"' in page
+        assert 'community-notice' in page and '启动后每 30 秒自动匿名上报' in page
+        assert 'community-report-now' not in page and 'community-dialog' not in page
+        assert 'remote-dialog' not in page and 'remote-open' not in page
+        assert 'community-stats.js' not in page and 'community-stats.css' in page
+        report['checks'].append('官网品牌入口和一行统计告知已内置，未包含上报开关、详情及暂停的微信远控入口')
         tabs = re.findall(r'data-tab="([^"]+)"', page)
         assert tabs == ['rules', 'inventory', 'managed', 'loot-preview', 'logs']
         assert 'id="managed-tab-status"' in page
@@ -237,8 +297,10 @@ def main():
         assert not request('/api/state')['automation']['running']
         managed_settings = managed['settings']
         managed_settings['farming']['stargazing']['rewards']['gem'] = False
+        managed_settings['farming']['stargazing']['rewards']['gold_bar'] = False
         managed_settings['farming']['stargazing']['rewards']['divine_equipment'] = False
         managed_settings['cleanup'].update(equipment_pages=[5],rune_pages=[2,4],gem_pages=[1])
+        managed_settings['cleanup'].update(gold_bar_pages=[2],legendary_rein_pages=[4])
         managed_settings['progression']['talent_targets'] = {'4': {'HunterTalent0': 10, 'HunterTalent2': 2}}
         managed_settings['progression']['skill_stages'] = {'4': [{'level': 1, 'slots': ['HunterBasicAttack1', None, None, None]}]}
         managed_settings['life_skills']['priorities'] = [growth['life_skills'][0]['id']]
@@ -248,6 +310,9 @@ def main():
         saved_managed = request('/api/managed/settings', {'settings':managed_settings})['settings']
         assert saved_managed['cleanup']['rune_pages'] == [2,4]
         assert not saved_managed['farming']['stargazing']['rewards']['gem']
+        assert not saved_managed['farming']['stargazing']['rewards']['gold_bar']
+        assert saved_managed['cleanup']['gold_bar_pages'] == [2]
+        assert saved_managed['cleanup']['legendary_rein_pages'] == [4]
         assert saved_managed['farming']['stargazing']['rewards']['divine_equipment']
         assert not request('/api/managed')['running']
         rule = {'id':'packaging-disabled-rule','name':'打包验证（停用）', 'equipment_keys':['LegendaryBelt3'], 'enabled':False,
@@ -353,6 +418,8 @@ def main():
         assert state['automation']['settings'] == settings and not state['automation']['running']
         restored_managed = request('/api/managed')
         assert restored_managed['settings'] == saved_managed and not restored_managed['running']
+        assert request('/api/community')['enabled'] is True
+        assert request('/api/community')['url'] == receipt_url
         report['checks'].append('战斗天赋、生活技能路径、技能组合及自定义93%/17%商人比例与购买件数，保存后重启完整保留')
         report['checks'].append('自定义托管分区、未解锁页选择与自动整理偏好重启后保留，默认方案不覆盖本地配置')
         check_reporting_disabled()
@@ -371,6 +438,9 @@ def main():
             # Terminate only this test's process tree if it could not shut down.
             subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
+        receipt_server.shutdown()
+        receipt_server.server_close()
+        receipt_thread.join(2)
     report['native_window'] = args.desktop
     report['managed_test_entry'] = args.test_managed
     report_path = args.report or ROOT / 'release' / ('native-exe-verification.json' if args.desktop else 'exe-verification.json')

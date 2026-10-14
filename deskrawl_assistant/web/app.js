@@ -24,7 +24,7 @@ const columnMenus={
 const inventoryFilterIds=['inventory-class','inventory-slot','inventory-rarity','inventory-sockets','inventory-upgrade','inventory-level-min','inventory-level-max','inventory-power','inventory-sort','inventory-ancient','inventory-mist','inventory-divine'];
 
 async function api(path,data,retry=true){
-  const response=await fetch('/api/'+path,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Assistant-Token':token},body:JSON.stringify(data)});
+  const response=await fetch('/api/'+path,data===undefined?{headers:{'X-Assistant-Token':token}}:{method:'POST',headers:{'Content-Type':'application/json','X-Assistant-Token':token},body:JSON.stringify(data)});
   const result=await response.json();
   if(response.status===403&&result.session_expired&&retry){
     const session=await fetch('/api/session').then(r=>r.json());

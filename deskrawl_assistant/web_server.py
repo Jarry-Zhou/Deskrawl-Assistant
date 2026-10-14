@@ -63,6 +63,10 @@ def make_handler(service, token):
                     if getattr(self.server,'desktop',None) is None: value['can_install'] = False
                     return self.reply(value)
                 if path=='/api/session': return self.reply({'token':token})
+                if path=='/api/community':
+                    if self.headers.get('X-Assistant-Token') != token:
+                        return self.reply({'error':'请重新打开助手页面。','session_expired':True},403)
+                    return self.reply(service.community_status())
                 if path=='/api/catalog': return self.reply(service.catalog_payload())
                 if path=='/api/state': return self.reply(service.state())
                 if path=='/api/managed':

@@ -18,6 +18,11 @@ REWARDS = {
     'rare_rune': '稀有符文',
     'uncommon_rune': '优秀符文',
     'gem': '任意宝石',
+    'silver_chest': '银色宝箱',
+    'golden_chest': '黄金宝箱',
+    'mythic_chest': '神话宝箱',
+    'legendary_rein': '传奇缰绳',
+    'gold_bar': '金条',
 }
 FIXED_REWARDS = frozenset(('divine_equipment', 'black_mist_equipment', 'set_rune', 'legendary_rune'))
 DEFAULT_STARGAZING = {'enabled': False, 'rewards': dict.fromkeys(REWARDS, True)}
@@ -77,6 +82,13 @@ def reward_categories(item):
         if rarity in (3, 4) or key.startswith('LegendaryRune_'): return ['legendary_rune']
         return {2: ['rare_rune'], 1: ['uncommon_rune']}.get(rarity, [])
     if kind == 'gem': return ['gem']
+    if kind == 'chest':
+        return {'TreasureChest1': ['silver_chest'], 'TreasureChest2': ['golden_chest'],
+                'TreasureChest3': ['mythic_chest']}.get(key, [])
+    if kind == 'material':
+        if key == 'GoldBar': return ['gold_bar']
+        if isinstance(key, str) and key.startswith('Rein_') and type(rarity) is int and rarity == 3:
+            return ['legendary_rein']
     return []
 
 
@@ -177,6 +189,10 @@ def decide(plan, observation, settings):
         if kind not in ('equipment', 'rune', 'gem', 'chest', 'material'):
             uncertain = True
         elif kind in ('equipment', 'rune') and rarity not in range(6):
+            uncertain = True
+        elif (kind == 'material' and isinstance(item.get('item_key'), str)
+              and item['item_key'].startswith('Rein_') and choices['legendary_rein']
+              and (type(rarity) is not int or rarity not in range(6))):
             uncertain = True
         elif kind == 'equipment' and rarity == 3 and (choices['primary_perfect'] or choices['rule_match']):
             if plan.get('rules_known') is not True or item.get('rule_status') == 'review' or 'matches' not in item:

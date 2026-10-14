@@ -69,6 +69,35 @@ class StargazingDecisionTests(unittest.TestCase):
         for rarity in (0,1,2):
             self.assertEqual(self.verdict([{'kind':'equipment','rarity':rarity,'matches':True,'primary_perfect':True}]),'skip')
 
+    def test_new_chest_and_material_rewards_are_selected_by_default_and_can_be_cleared(self):
+        for key, kind, choice in [('TreasureChest1','chest','silver_chest'),
+                ('TreasureChest2','chest','golden_chest'), ('TreasureChest3','chest','mythic_chest'),
+                ('GoldBar','material','gold_bar'), ('Rein_BeachCrabBoss','material','legendary_rein')]:
+            with self.subTest(choice=choice):
+                row={'item_key':key,'kind':kind,'rarity':3}
+                self.assertEqual(self.verdict([row]), 'keep')
+                self.assertEqual(self.verdict([row], {choice:False}), 'skip')
+                self.assertEqual(self.verdict([row,{'kind':'gem'}], {choice:False}), 'keep')
+
+    def test_old_choices_are_preserved_when_new_reward_choices_are_added(self):
+        old={'enabled':True,'rewards':{'gem':False,'rare_rune':False}}
+        result=validate_stargazing(old)
+        for key in ('silver_chest','golden_chest','mythic_chest','legendary_rein','gold_bar'):
+            self.assertTrue(result['rewards'][key])
+        self.assertFalse(result['rewards']['gem']);self.assertFalse(result['rewards']['rare_rune'])
+        self.assertEqual(validate_stargazing(deepcopy(result)),result)
+        self.assertEqual(old['rewards'],{'gem':False,'rare_rune':False})
+
+    def test_other_chests_materials_and_nonlegendary_reins_do_not_match(self):
+        for key,kind in [('TreasureChest4','chest'),('GoldPotion1','material'),('GoldBarFake','material')]:
+            self.assertEqual(self.verdict([{'kind':kind,'item_key':key,'rarity':3}]), 'skip')
+        for rarity in (0,1,2,4,5):
+            self.assertEqual(self.verdict([{'kind':'material','item_key':'Rein_BeachCrabBoss','rarity':rarity}]), 'skip')
+        for rarity in (None,True,'3'):
+            row={'kind':'material','item_key':'Rein_BeachCrabBoss','rarity':rarity}
+            self.assertEqual(self.verdict([row]), 'unknown')
+            self.assertEqual(self.verdict([row],{'legendary_rein':False}), 'skip')
+
     def test_unknown_items_or_unconfirmed_rule_reads_never_yield_a_miss(self):
         for item in ({'kind':'unknown'}, {'kind':'equipment','rarity':None},
                      {'kind':'equipment','rarity':3,'rule_status':'review','matches':False},
