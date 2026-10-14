@@ -41,9 +41,9 @@ function plan(key='first',items=[{name:'测试装备',kind:'equipment',rarity:3,
     waves:[{number:1,state:'current',gold:300,potion_charges:2,items}],warnings:[],updated_at:'2026-10-11T12:00:00Z'};
 }
 
-test('navigation exposes five pages and preserves managed activation',()=>{
+test('navigation exposes six pages and preserves managed activation',()=>{
   const p=page();p.run('loadLootPreview=()=>{};');
-  assert.deepEqual(p.tabs.map(tab=>tab.dataset.tab),['rules','inventory','managed','loot-preview','logs']);
+  assert.deepEqual(p.tabs.map(tab=>tab.dataset.tab),['rules','inventory','managed','loot-preview','logs','feedback']);
   for(const selected of p.tabs.map(tab=>tab.dataset.tab)){
     p.run('switchTab('+JSON.stringify(selected)+')');
     for(const tab of p.tabs)assert.equal(p.ids.get(tab.dataset.tab+'-page').hidden,tab.dataset.tab!==selected);

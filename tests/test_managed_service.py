@@ -69,6 +69,7 @@ class FakeManagedClient:
 
     def control_snapshot(self):
         return {'available':True,'scene':{'available':True,'in_town':self.in_town,'in_dungeon':not self.in_town,'dungeon_id':self.current_map},
+                'scene_changing':False,'teleporting':False,'online_saving':False,'online_pending_requests':0,
                 'difficulty':self.difficulty,'difficulties':deepcopy(self.difficulties),
                 'maps_by_difficulty':{key:deepcopy(self.maps) for key in ('Normal','Nightmare','Inferno')},
                 'run':None if self.in_town else {'id':'offline-run','status':self.run_status,'dungeon_id':self.current_map,'difficulty':self.difficulty},
@@ -980,26 +981,157 @@ class ManagedServiceTests(unittest.TestCase):
         self.service._managed_once()
         self.assertEqual([a[0] for a in self.client.actions],['return_town','enter_map'])
 
-    def test_return_timeout_reports_direction_and_actual_scene_without_resubmitting(self):
+    def test_cancelled_return_replans_native_repeat_without_cleanup_or_false_arrival(self):
         self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
         self.client.run_status='success'
         self.service._publish(self.client.snapshot());self.ready(farming=True,auto_equip=False)
         self.client.native_handler=lambda kind,payload:{'transition_requested':True}
-        self.service._work('managed',{})
-        deadline=self.service.managed_transition['deadline']
-        # The game's built-in repeat continued, but it is not proof of a
-        # successful town visit. Never clean loot or submit a second request.
-        self.client.run_status='running'
-        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=deadline+1), \
-                patch('deskrawl_assistant.managed_service.record') as log:
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
             self.service._work('managed',{})
-        self.assertFalse(self.service.managed.running)
-        self.assertIn('请求回城',self.service.managed.status)
-        self.assertIn('当前关卡 offline-map',self.service.managed.status)
+        # The repeat restarted after a cancelled portal. Discard stale return
+        # intent and reconsider this live run; never pretend town was visited.
+        self.client.run_status='running'
+        for now in (101,109,112):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._work('managed',{})
+        self.assertTrue(self.service.managed.running)
+        self.assertEqual(self.service.managed.phase,'farming')
+        self.assertIsNone(self.service.managed_transition)
         self.assertEqual([a[0] for a in self.client.actions],['return_town'])
-        entry=next(c for c in log.call_args_list if c.args[0]=='managed_transition_timeout')
-        self.assertEqual(entry.kwargs['kind'],'return_town')
-        self.assertEqual(entry.kwargs['scene']['run_status'],'running')
+
+    def test_interrupted_return_retries_then_late_arrival_unlocks_cleanup(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        for now in (100,101,109):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,1)
+        self.assertIsNone(self.service.managed_transition)
+        self.assertIsNone(self.service.managed.pending)
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=112):
+            self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,2)
+        self.client.in_town=True;self.client.current_map=None
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=113):
+            self.service._work('managed',{})
+        self.assertEqual(self.service.managed.phase,'cleanup')
+        self.assertIsNone(self.service.managed_return_recovery)
+        self.assertTrue(self.service.managed.running)
+
+    def test_late_town_arrival_during_interruption_backoff_never_replays_return(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        for now in (100,101,109):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._work('managed',{})
+        self.client.in_town=True;self.client.current_map=None
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=110):
+            self.service._work('managed',{})
+        self.assertEqual([a[0] for a in self.client.actions].count('return_town'),1)
+        self.assertTrue(self.service.managed.running)
+        self.assertIsNone(self.service.managed_return_recovery)
+
+    def test_three_interrupted_returns_pause_and_resume_keep_statistics(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        for now in (100,101,109,112,113,121,124,125,133):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,3)
+        self.assertEqual(self.service.managed.phase,'paused')
+        self.assertTrue(self.service.managed_can_resume)
+        self.assertIsNone(self.service.managed.pending)
+        self.assertIsNone(self.service.managed_transition)
+        stats=deepcopy(self.service.managed.metrics.state())
+        self.client.in_town=True;self.client.current_map=None
+        self.service.set_managed_running(True)
+        self.assertTrue(self.service.managed.running)
+        self.assertEqual(self.service.managed.metrics.state(),stats)
+        self.assertEqual(self.service.managed.phase,'cleanup')
+
+    def test_unknown_portal_flags_pause_without_retrying_an_unconfirmed_return(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._work('managed',{})
+        raw=self.client.control_snapshot();raw.pop('teleporting')
+        with patch.object(self.client,'control_snapshot',return_value=raw):
+            for now in (101,109,146):
+                with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                    self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,1)
+        self.assertEqual(self.service.managed.phase,'paused')
+        self.assertTrue(self.service.managed_can_resume)
+
+    def test_interrupted_return_budget_survives_busy_wait_and_native_acceptance(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        for now in (100,101,109):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._work('managed',{})
+        raw=self.client.control_snapshot();raw['online_saving']=True
+        with patch.object(self.client,'control_snapshot',return_value=raw), \
+                patch('deskrawl_assistant.managed_service.time.monotonic',return_value=112):
+            self.service._work('managed',{})
+        self.assertEqual(self.service.managed_return_recovery['started'],100)
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=115):
+            self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,2)
+        raw=self.client.control_snapshot();raw['teleporting']=True
+        with patch.object(self.client,'control_snapshot',return_value=raw), \
+                patch('deskrawl_assistant.managed_service.time.monotonic',return_value=221):
+            self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,2)
+        self.assertEqual(self.service.managed.phase,'paused')
+        self.assertTrue(self.service.managed_can_resume)
+
+    def test_return_pause_resume_waits_for_a_still_active_portal_before_replanning(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._work('managed',{})
+        raw=self.client.control_snapshot();raw['teleporting']=True
+        with patch.object(self.client,'control_snapshot',return_value=raw):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=221):
+                self.service._work('managed',{})
+            self.service.set_managed_running(True)
+            self.service._work('managed',{})
+        self.assertTrue(self.service.managed.running)
+        self.assertEqual(self.client.native_handler.call_count,1)
+        self.client.in_town=True;self.client.current_map=None
+        self.service._work('managed',{})
+        self.assertEqual([action[0] for action in self.client.actions].count('return_town'),1)
+
+    def test_interrupted_return_then_persistent_sync_pauses_without_another_request(self):
+        self.returning_world()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        for now in (100,101,109):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._work('managed',{})
+        raw=self.client.control_snapshot();raw['online_saving']=True
+        with patch.object(self.client,'control_snapshot',return_value=raw):
+            for now in (112,221):
+                with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                    self.service._work('managed',{})
+        self.assertEqual(self.client.native_handler.call_count,1)
+        self.assertEqual(self.service.managed.phase,'paused')
+        self.assertTrue(self.service.managed_can_resume)
+
+    def test_interrupted_graceful_stop_still_returns_and_never_reenters_a_map(self):
+        self.returning_world()
+        self.service.finish_managed()
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        for now in (100,101,109,112):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._work('managed',{})
+        self.assertTrue(self.service.managed.finishing)
+        self.assertEqual(self.client.native_handler.call_count,2)
+        self.client.in_town=True;self.client.current_map=None
+        for _ in range(8):
+            if not self.service.managed.running:break
+            self.service._work('managed',{})
+        self.assertEqual(self.service.managed.phase,'stopped')
+        self.assertEqual([action[0] for action in self.client.actions],['return_town','return_town'])
 
     def test_scene_transition_without_run_waits_for_active_run(self):
         self.client.items = []

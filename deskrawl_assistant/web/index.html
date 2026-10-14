@@ -36,6 +36,7 @@
     <button id="managed-tab" class="tab" data-tab="managed" role="tab" aria-selected="false">托管模式<span id="managed-tab-status" class="managed-tab-status" role="status" hidden><i aria-hidden="true"></i>运行中</span></button>
     <button class="tab" data-tab="loot-preview" role="tab" aria-selected="false">掉落预览</button>
     <button class="tab" data-tab="logs" role="tab" aria-selected="false">日志</button>
+    <button class="tab" data-tab="feedback" role="tab" aria-selected="false">交流&amp;反馈</button>
     <span id="monitor-badge" hidden><i></i>持续监控中</span>
   </nav>
   <main>
@@ -276,6 +277,16 @@
         <div class="log-pagination"><span id="log-total">共 0 条记录</span><button id="log-latest" class="button ghost" disabled>回到最新</button><button id="log-older" class="button ghost" disabled>更早的记录</button></div>
       </section>
       <p class="note log-note">连接后独立记录，无需开启自动锁定或自动整理。首次清单作为基线，之后记录观测到的新增与数量变化；两次读取间瞬时出现又消失的物品可能无法观测。工具已完成的操作逐次记录。日志保存在本机，重启后仍可查看。格位从 1 开始，仓库使用连续格号。</p>
+    </section>
+    <section id="feedback-page" role="tabpanel" hidden>
+      <div class="page-heading"><div><h1>交流&amp;反馈</h1><p>欢迎进群交流游戏心得以及反馈使用问题。</p></div></div>
+      <section class="panel feedback-panel" aria-label="QQ群交流与反馈">
+        <figure class="feedback-qr">
+          <img src="/images/qq-group.png" width="713" height="1046" alt="桌面破坏神助手QQ群二维码，群号1062040183">
+          <figcaption>QQ群：<strong>1062040183</strong></figcaption>
+        </figure>
+        <p class="note">使用 QQ 扫码加入群聊，也可以搜索群号。</p>
+      </section>
     </section>
   </main>
   <footer><span id="footer-state">本机运行 · 无需切回游戏前台</span><span id="last-read">自动监控默认关闭</span></footer>

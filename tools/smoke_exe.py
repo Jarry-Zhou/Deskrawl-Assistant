@@ -23,7 +23,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.3.1'
+NAME = 'Deskrawl装备助手-v1.3.2'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -104,7 +104,7 @@ def main():
                 result = {'schema': 1, 'client_id': payload['client_id'], 'token': 'a' * 64}
             elif self.path == '/v1/report':
                 assert self.headers.get('Authorization') == 'Bearer ' + 'a' * 64
-                assert payload['version'] == '1.3.1'
+                assert payload['version'] == '1.3.2'
                 result = {'accepted': True, 'report_id': payload['report_id'],
                           'sequence': payload['sequence'], 'accepted_at': datetime.now(timezone.utc).isoformat()}
             else:
@@ -172,7 +172,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.3.1'
+                assert request('/api/state')['app_version'] == '1.3.2'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -262,14 +262,16 @@ def main():
         assert 'community-stats.js' not in page and 'community-stats.css' in page
         report['checks'].append('官网品牌入口和一行统计告知已内置，未包含上报开关、详情及暂停的微信远控入口')
         tabs = re.findall(r'data-tab="([^"]+)"', page)
-        assert tabs == ['rules', 'inventory', 'managed', 'loot-preview', 'logs']
+        assert tabs == ['rules', 'inventory', 'managed', 'loot-preview', 'logs', 'feedback']
         assert 'id="managed-tab-status"' in page
         assert all(page.count('id="'+tab+'-page"') == 1 for tab in tabs)
         assert 'src="/managed-mode.js"' in page
         assert b"$('managed-page').hidden=tab!=='managed'" in request('/app.js')
         assert b"$('loot-preview-page').hidden=tab!=='loot-preview'" in request('/app.js')
         assert 'recommendations-page' not in page and 'experience-page' not in page
-        report['checks'].append('五个页签完整且没有重复；刷图推荐与经验收益界面已移除，托管与掉落预览导航保留')
+        report['checks'].append('六个页签完整且没有重复；交流与反馈位于日志之后，托管与掉落预览导航保留')
+        assert '欢迎进群交流游戏心得以及反馈使用问题。' in page
+        assert '1062040183' in page and request('/images/qq-group.png').startswith(b'\x89PNG')
         assert 'id="equipped-dialog"' in page and page.count('data-column="') == 7
         assert '单体 Boss 基准战力' in page
         assert 'id="loot-preview-page"' in page

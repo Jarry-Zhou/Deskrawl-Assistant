@@ -11,6 +11,28 @@ test('stargazing migration is opt-in with all rewards selected and fixed categor
     ['divine_equipment','black_mist_equipment','set_rune','legendary_rune']);
   assert.deepEqual(ui.normalizeSettings(saved).farming.stargazing,saved.farming.stargazing);
 });
+
+test('stargazing does not require a preview receipt to enable an otherwise ready start',()=>{
+  const cfg=ui.normalizeSettings({farming:{enabled:true,repeat_maps:[{dungeon_id:'offline-map',difficulty:'current',runs:3}]}});
+  const packet={can_start:true,control_available:true,capabilities:Object.fromEntries(ui.requiredCapabilities(cfg).map(key=>[key,true])),loot_plan:{available:false}};
+  const expected=ui.requiredCapabilities(cfg);
+  cfg.farming.stargazing.enabled=true;
+  assert.deepEqual(ui.requiredCapabilities(cfg),expected);
+  assert.equal(ui.controlState(packet,cfg,true).canStart,true);
+  cfg.farming.repeat_maps[0].runs=0;
+  assert.match(ui.controlState(packet,cfg,true).configurationError,/局数/);
+  assert.equal(ui.controlState(packet,cfg,true).canStart,false);
+  cfg.farming.repeat_maps[0].runs=3;
+  assert.equal(ui.controlState(packet,cfg,true).canStart,true);
+});
+
+test('configuration load errors retain a concrete disabled reason',()=>{
+  const cfg=ui.normalizeSettings({auto_equip:{enabled:true}});
+  const packet={can_start:false,config_error:'请补选符文存放页',capabilities:{transfer:true,equip:true,lock:true}};
+  const state=ui.controlState(packet,cfg,true);
+  assert.equal(state.canStart,false);
+  assert.equal(state.startDisabledReason,packet.config_error);
+});
 const settings=(extra={})=>ui.normalizeSettings({auto_equip:{enabled:false,minimum_delta:1,slot_locks:{}},
   farming:{enabled:true,mode:'repeat',dungeon_id:12,progression:[],free_threshold:4},
   cleanup:{equipment_action:'store',equipment_fallback:'sell',equipment_pages:[1],rune_action:'store',rune_pages:[3],gem_action:'store',gem_pages:[3]},...extra});

@@ -1,7 +1,7 @@
 """Synthetic executor checks. No threads, process reads or native dispatch."""
 from copy import deepcopy
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from deskrawl_assistant.native_dispatcher import NativeActionError, REJECTED
 from deskrawl_assistant.native_memory import GameBusyError
@@ -139,3 +139,55 @@ class StargazingServiceTests(unittest.TestCase):
         self.service._init_managed()
         choices=self.service.managed.settings['farming']['stargazing']['rewards']
         self.assertFalse(choices['gem']);self.assertTrue(choices['divine_equipment'])
+
+    def request_town_for_stargazing(self):
+        self.service.managed.stargazing_return={'source_run_id':self.run_id,'next_repeat_index':1}
+        self.client.native_handler=Mock(return_value={'transition_requested':True})
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=100):
+            self.service._managed_once()
+        self.assertEqual(self.client.actions[-1][0],'return_town')
+
+    def test_interrupted_skip_rechecks_new_high_value_run_without_returning_or_counting_a_skip(self):
+        self.request_town_for_stargazing()
+        self.run_id='valuable-new-run';self.plan_items=[{'kind':'gem','name':'新局宝石'}]
+        for now in (101,109,112):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._managed_once()
+        self.assertTrue(self.service.managed.running)
+        self.assertEqual(self.service.managed.stargazing_state['verdict'],'keep')
+        self.assertEqual(self.service.managed.stargazing_state['skipped'],0)
+        self.assertEqual(self.service.managed.repeat_completed,0)
+        self.assertEqual([row[0] for row in self.client.actions],['return_town'])
+
+    def test_final_wave_during_return_wait_counts_completion_once_and_never_counts_skip(self):
+        self.request_town_for_stargazing()
+        original=self.client.control_snapshot
+        def completed():
+            result=original()
+            if result['run']:result['run'].update(status='settling',completion_confirmed=True)
+            return result
+        self.client.control_snapshot=completed
+        for now in (101,102):
+            with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):
+                self.service._managed_once()
+        self.assertEqual(self.service.managed.repeat_completed,1)
+        self.client.in_town=True;self.client.current_map=None
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=103):
+            self.service._managed_once()
+        self.assertEqual(self.service.managed.repeat_completed,1)
+        self.assertEqual(self.service.managed.stargazing_state['skipped'],0)
+        self.assertEqual(self.service.managed.target_dungeon,'offline-map')
+        self.assertEqual(self.service.managed.phase,'cleanup')
+
+    def test_town_arrival_after_new_run_does_not_commit_old_skip(self):
+        self.request_town_for_stargazing()
+        self.run_id='another-run'
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=101):
+            self.service._managed_once()
+        self.client.in_town=True;self.client.current_map=None
+        with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=102):
+            self.service._managed_once()
+        self.assertEqual(self.service.managed.stargazing_state['skipped'],0)
+        self.assertEqual(self.service.managed.repeat_completed,0)
+        self.assertEqual(self.service.managed.target_dungeon,'offline-map')
+        self.assertEqual(self.service.managed.phase,'cleanup')

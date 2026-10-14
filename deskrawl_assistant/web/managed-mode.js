@@ -83,7 +83,7 @@
     const configurationError=validateSettings(settings)||(!settings.auto_equip.enabled&&!settings.farming.enabled&&!growth.merchant.enabled&&!growth.life_skills.enabled&&!growth.progression.talents_enabled&&!growth.progression.skills_enabled?'请至少启用一项托管功能。':'');
     const merchantBlocked=growth.merchant.enabled&&(packet?.progression_state?.available!==true||packet.progression_state.merchant?.unlock_known!==true||packet.progression_state.merchant?.unlocked!==true);
     const serverReasons=Array.isArray(packet?.blocked_reasons)?packet.blocked_reasons.filter(reason=>typeof reason==='string'&&reason):[];
-    const startDisabledReason=packet?.start_disabled_reason||serverReasons.join('；')
+    const startDisabledReason=packet?.config_error||packet?.start_disabled_reason||serverReasons.join('；')
       ||(merchantBlocked?'神秘商人：尚未解锁或解锁状态未确认。':'')
       ||(settings.farming.enabled&&packet?.control_available===false?'关卡读取：'+(packet.control_error||'等待关卡与场景完整读取。'):'');
     const blocked=packet?.can_start===false||serverReasons.length>0||missing.length>0||!!configurationError||merchantBlocked||(settings.farming.enabled&&packet?.control_available===false);
@@ -183,14 +183,15 @@
   let receivedAt=0,pageSignature='',mapSignature='',slotSignature='',statsSignature='',historySignature='',actionVersion=0;
   let currentCharacter=null,pickerSlot=null,pickerSignature='';
   let folds=null;
+  let actionError='';
   const farmFields=['managed-farm-mode','managed-difficulty','managed-map','managed-repeat-two','managed-repeat-count','managed-difficulty-two','managed-map-two','managed-repeat-count-two','managed-free-threshold','managed-stargazing'];
   const fieldIds=['managed-rule-monitoring','managed-inventory-automation','managed-auto-equip','managed-farming',...farmFields,'managed-rune-action','managed-gem-action',...storageMaterials.map(([key])=>'managed-'+key+'-action')];
   const catalog=()=>context?.catalog||{};
   const maps=()=>availableMaps(packet,draft||normalizeSettings());
   const mapId=row=>row.id??row.dungeon_id;
   const phaseLabel=()=>packet?.phase_label||phaseNames[packet?.phase]||packet?.phase||'尚未启动';
-  function markDirty(value=true){dirty=value;const text=dirty?'有未保存的托管设置':'设置已保存';for(const id of ['managed-draft-state','managed-growth-save-state','managed-shop-save-state'])$(id).textContent=text;context?.onDirty?.();}
-  function report(error){$('managed-error').textContent=error?.message||String(error);$('managed-error').hidden=false;context?.toast?.($('managed-error').textContent,true);}
+  function markDirty(value=true){dirty=value;if(value)actionError='';const text=dirty?'有未保存的托管设置':'设置已保存';for(const id of ['managed-draft-state','managed-growth-save-state','managed-shop-save-state'])$(id).textContent=text;context?.onDirty?.();}
+  function report(error){actionError=error?.message||String(error);renderControls();context?.toast?.(actionError,true);}
   function readForm(){
     const next=normalizeSettings({...draft,...root.ManagedGrowthUI?.read?.()}),f=next.farming,c=next.cleanup;
     next.background.rule_monitoring=$('managed-rule-monitoring').checked;next.background.inventory_automation=$('managed-inventory-automation').checked;
@@ -343,7 +344,7 @@
     root.document.querySelector('.managed-repeat-count-label').hidden=!two;
     $('managed-farm-note').textContent=push?'从最高已解锁难度的最后一张已解锁图开始；通关前进一关，失败后退一关，上一关通关后再次挑战。普通通关后进入噩梦，噩梦通关后进入炼狱。':two?'依次打满图 1、图 2 的成功通关局数后循环；观星退出、失败和途中回城均不计数。':'重复进入选定关卡，仅成功通关计数；背包空格不足时先回城整理，再继续刷图。';
     root.ManagedGrowthUI?.render(draft,packet?.progression_catalog,packet?.progression_state,running||busy,(next,renderNow=true)=>{
-      draft={...readForm(),...next};markDirty();if(renderNow){renderDependencies();renderCapabilities();}else renderFoldSummaries();
+      draft={...readForm(),...next};markDirty();if(renderNow){renderDependencies();renderCapabilities();}else {renderFoldSummaries();renderControls();}
     },connected);
     renderFoldSummaries();renderControls();
   }
@@ -360,9 +361,11 @@
     $('managed-stop').textContent=controls.stopLabel;$('managed-stop').title=packet?.finishing?'立即中止整理，等待当前已提交动作结束。':'返回主城，整理背包、马车和地面奖励后停止。';
     $('managed-start').disabled=!controls.canStart;$('managed-start').hidden=!!packet?.running;$('managed-start').textContent=packet?.paused?'继续托管':'启动托管';
     $('managed-pause').hidden=!packet?.running;$('managed-pause').disabled=!controls.canPause;$('managed-stop').disabled=!controls.canStop;$('managed-reset-stats').disabled=!controls.canReset;
-    if(!connected)$('managed-start').title='请先连接游戏';
-    else if(controls.missing.length)$('managed-start').title='尚未通过验证：'+controls.missing.map(key=>capabilityNames[key]).join('、');
-    else $('managed-start').title=controls.startDisabledReason||controls.configurationError||'按保存的设置开始托管';
+    const reason=controls.configurationError||(controls.missing.length?'尚未通过验证：'+controls.missing.map(key=>capabilityNames[key]).join('、'):'')||controls.startDisabledReason||(packet?.can_start===false?'启动条件尚未满足，请刷新状态。':'');
+    $('managed-start').title=!connected?'请先连接游戏':reason||'按保存的设置开始托管';
+    let error=actionError||packet?.error||(connected&&!packet?.running?reason:'');
+    if(error&&!actionError&&!packet?.error&&dirty&&packet?.can_start===false&&!controls.configurationError)error+=' 如已修改相关功能，请先保存托管设置。';
+    $('managed-error').textContent=String(error||'');$('managed-error').hidden=!error;
   }
   function renderCapabilities(){
     const requirements=requiredCapabilities(draft||normalizeSettings());
@@ -391,20 +394,18 @@
   function render(){
     $('managed-phase').textContent=packet?.finishing?'结束中 · '+phaseLabel():phaseLabel();$('managed-message').textContent=packet?.message||(!connected?'请先连接游戏，读取关卡和仓库页签。':'配置托管策略后，点击启动。');
     $('managed-status-dot').className='managed-status-dot '+(packet?.running?'running':packet?.phase==='error'||packet?.phase==='blocked'?'error':'');
-    const controls=controlState(packet,draft||normalizeSettings(),connected,busy);
-    const error=packet?.error||(connected&&controls.startDisabledReason)||(draft?.farming.enabled&&connected&&packet?.control_error);if(error){$('managed-error').textContent=String(error);$('managed-error').hidden=false;}
     renderMaps();renderPages();renderSlots();renderDependencies();renderCapabilities();renderStats();renderHistory();renderTime();
   }
   function applyPacket(value){
     if(!value||typeof value!=='object')return;
-    const next=value.managed||value;packet={...next,stats:next.stats||next.statistics,message:next.message||next.status,paused:next.paused??next.phase==='paused'};receivedAt=Date.now();
+    const next=value.managed||value;packet={...next,stats:next.stats||next.statistics,message:next.message||next.status,paused:next.paused??next.phase==='paused'};receivedAt=Date.now();actionError='';
     if(!dirty&&packet.settings){draft=normalizeSettings(packet.settings);writeForm();}
     if(packet.settings)folds?.apply(draft||packet.settings);
     if(!draft){draft=normalizeSettings();writeForm();}render();
   }
   async function refresh(){
     if(!context||polling)return;polling=true;
-    try{applyPacket(await context.api('managed'));if(!packet?.error&&!(connected&&controlState(packet,draft||normalizeSettings(),connected,busy).startDisabledReason)&&!(draft?.farming.enabled&&connected&&packet?.control_error))$('managed-error').hidden=true;}
+    try{applyPacket(await context.api('managed'));}
     catch(error){report(error);}finally{polling=false;}
   }
   async function save(){
@@ -413,7 +414,7 @@
   }
   async function runAction(action){
     if(!context||busy&&!['pause','stop'].includes(action))return;
-    const ticket=++actionVersion;busy=true;renderDependencies();$('managed-error').hidden=true;
+    const ticket=++actionVersion;busy=true;actionError='';renderDependencies();
     try{
       if(action==='save')await save();
       if(action==='start'){
@@ -455,8 +456,7 @@
         markDirty();renderDependencies();renderCapabilities();
       }
     });
-    $('managed-free-threshold').addEventListener('input',()=>{draft=readForm();markDirty();renderFoldSummaries();});
-    for(const id of ['managed-repeat-count','managed-repeat-count-two'])$(id).addEventListener('input',()=>{draft=readForm();markDirty();renderFoldSummaries();});
+    for(const id of ['managed-free-threshold','managed-repeat-count','managed-repeat-count-two'])$(id).addEventListener('input',()=>{draft=readForm();markDirty();renderFoldSummaries();renderControls();});
     for(const [id,action] of [['managed-save','save'],['managed-growth-save','save'],['managed-shop-save','save'],['managed-start','start'],['managed-pause','pause'],['managed-stop','stop'],['managed-reset-stats','reset']])$(id).addEventListener('click',()=>runAction(action));
     $('managed-refresh').addEventListener('click',refresh);
     $('managed-slot-locks').addEventListener('click',event=>{const button=event.target.closest('[data-managed-picker]');if(button)openPicker(button.dataset.managedPicker);});

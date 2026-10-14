@@ -61,7 +61,7 @@ function itemNameClass(item){
 }
 function rulesFor(key){return (state?.rules||[]).filter(r=>r.equipment_keys.includes(key));}
 function switchTab(tab){
-  if(!['rules','inventory','managed','loot-preview','logs'].includes(tab))return;
+  if(!['rules','inventory','managed','loot-preview','logs','feedback'].includes(tab))return;
   closeColumnMenu();
   activeTab=tab;
   document.querySelectorAll('.tab').forEach(button=>{let active=button.dataset.tab===tab;button.classList.toggle('active',active);button.setAttribute('aria-selected',active);});
@@ -69,6 +69,7 @@ function switchTab(tab){
   $('managed-page').hidden=tab!=='managed';
   window.ManagedModeUI?.setActive(tab==='managed');
   $('loot-preview-page').hidden=tab!=='loot-preview';
+  $('feedback-page').hidden=tab!=='feedback';
   if(tab==='inventory')renderInventory();
   if(tab==='logs')loadLogs();
   if(tab==='loot-preview'){clearLootPreview('正在读取本趟计划…');loadLootPreview();}

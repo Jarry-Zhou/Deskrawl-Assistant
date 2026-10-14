@@ -113,6 +113,7 @@ class ManagedServiceMixin:
         self.managed_fast_followup = False
         self.managed_transition = None
         self.managed_retry = None
+        self.managed_return_recovery = None
         self.managed_elapsed = 0
         self.managed_config_error = ''
         self.managed_catalog = json.loads((RESOURCE_ROOT/'data/recommendation-catalog.json').read_text(encoding='utf-8'))['maps']
@@ -324,7 +325,7 @@ class ManagedServiceMixin:
                     'message':self.managed_config_error or engine['status'], 'stats':engine['statistics'],
                     'started_at':self.managed_started_at,'elapsed_seconds':elapsed,
                     'capabilities':capabilities,'can_start':not blocked and not self.managed_config_error,
-                    'control_available':control_available,'control_error':control_error,
+                    'control_available':control_available,'control_error':control_error,'config_error':self.managed_config_error,
                     'blocked_reasons':blocked,'maps':maps,'warehouse_pages':pages,'warehouse_ready':warehouse_ready,
                     'maps_by_difficulty':maps_by_difficulty,'current_difficulty':self.managed_control.get('difficulty'),
                     'automatic_start':automatic_start,
@@ -407,10 +408,12 @@ class ManagedServiceMixin:
                             raise ValidationError('目标关卡尚未解锁或入场材料不足。')
                 if self.managed_can_resume and hasattr(self.managed,'resume'):
                     self.managed_retry = None
+                    self.managed_return_recovery = None
                     self.managed.resume(observation)
                 else:
                     self.managed_transition = None
                     self.managed_retry = None
+                    self.managed_return_recovery = None
                     self.managed.start(observation)
                     self.managed_started_at = datetime.now(timezone.utc).isoformat()
                     self.managed_elapsed = 0
@@ -440,6 +443,7 @@ class ManagedServiceMixin:
                 self.managed.stop(reason or '托管已停止。')
             if self.operation_kind!='managed': self._managed_freeze_clock()
             if self.operation_kind!='managed': self.managed_retry = None
+            if self.operation_kind!='managed': self.managed_return_recovery = None
         return self.managed_page()
 
     def finish_managed(self):
@@ -471,6 +475,7 @@ class ManagedServiceMixin:
         if not self.managed.running:
             self.managed_transition = None
             self.managed_retry = None
+            self.managed_return_recovery = None
             self._managed_freeze_clock()
 
     def reset_managed(self):
@@ -480,6 +485,7 @@ class ManagedServiceMixin:
             self.managed_can_resume=False; self.managed_started_at=None; self.managed_started_clock=None
             self.managed_transition=None; self.managed_elapsed=0
             self.managed_retry=None
+            self.managed_return_recovery=None
             self.managed_history=[]
         return self.managed_page()
 
@@ -654,6 +660,7 @@ class ManagedServiceMixin:
             if result.get('transition_requested'):
                 started = time.monotonic()
                 self.managed_transition = {'action':action,'deadline':started+45,'hard_deadline':started+120,
+                                           'started':started,'session':observation.get('session'),
                                            'requested_scene':self._transition_scene(observation['scene'])}
                 record('managed_transition_requested',kind=kind,
                        target_map=action.get('dungeon_id'),difficulty=action.get('difficulty'),
@@ -681,6 +688,8 @@ class ManagedServiceMixin:
             old = self.managed_retry
             attempts = old['attempts']+1 if old and old['key']==key else 1
             started = old['started'] if old and old['key']==key else now
+            if action.get('kind') == 'return_town' and self.managed_return_recovery:
+                started = min(started,self.managed_return_recovery['started'])
             elapsed = now-started
             self.managed.pending = None
             self.error = ''
@@ -702,6 +711,73 @@ class ManagedServiceMixin:
                    scene=self._transition_scene(self._managed_scene()),reason=reason)
             return self.managed.status
 
+    def _managed_pause_return(self, reason):
+        """An unconfirmed town visit never authorizes inventory cleanup."""
+        self.managed_transition = None
+        self.managed_retry = None
+        self.managed_return_recovery = None
+        self.managed.pause(reason+' 托管已暂停，统计已保留；继续时会重新读取游戏状态。')
+        self.managed_can_resume = True
+        self._managed_freeze_clock()
+        return self.managed.status
+
+    def _managed_wait_return(self, transition, observation):
+        """Recover a cancelled portal only after two explicit idle observations.
+
+        Acceptance is not arrival. Unknown flags or a live portal keep the
+        receipt fence; only a stable dungeon with no outstanding native work
+        can release it for the planner to reconsider the need to return.
+        """
+        now = time.monotonic()
+        scene = observation['scene']
+        action = transition['action']
+        if observation.get('session') != transition.get('session'):
+            return self._managed_pause_return('游戏连接或角色已改变，未确认原回城结果。')
+        recovery = self.managed_return_recovery
+        if recovery is None:
+            recovery = self.managed_return_recovery = {'started':transition['started'],'interruptions':0}
+        pending = scene.get('online_pending_requests')
+        active = (scene.get('scene_changing') is True or scene.get('teleporting') is True
+            or scene.get('online_saving') is True or type(pending) is int and pending > 0)
+        stable = (observation.get('complete') is True and scene.get('available') is True
+            and scene.get('in_town') is False and scene.get('in_dungeon') is True
+            and all(scene.get(key) is False for key in ('scene_changing','teleporting','online_saving'))
+            and type(pending) is int and pending == 0)
+        if stable:
+            signature = (scene.get('dungeon_id'),scene.get('difficulty'),run_record(scene.get('run')).get('id'))
+            if transition.get('idle_signature') != signature:
+                transition.update(idle_signature=signature,idle_since=now)
+        else:
+            transition.pop('idle_signature',None); transition.pop('idle_since',None)
+        if now-recovery['started'] >= 120:
+            record('managed_return_recovery_paused',scene=self._transition_scene(scene),
+                   interruptions=recovery['interruptions'],reason='timeout')
+            return self._managed_pause_return('连续 2 分钟未确认回到主城。')
+        if (stable and now-transition['started'] >= 8
+                and now-transition.get('idle_since',now) >= 2):
+            recovery['interruptions'] += 1
+            record('managed_return_interrupted',scene=self._transition_scene(scene),
+                   requested_scene=transition['requested_scene'],interruptions=recovery['interruptions'])
+            if recovery['interruptions'] >= 3:
+                return self._managed_pause_return('回城连续 3 次被打断，尚未回到主城。')
+            self.managed_transition = None
+            self.managed.pending = None
+            # The native repeat may already have started a new/high-value run.
+            # Do not retain cleanup intent from the interrupted old request.
+            self.managed.phase = 'farming'
+            return self._managed_defer(action,'回城未完成，已确认传送结束；重新读取奖励与角色状态后规划。',
+                                       'return_town_interrupted')
+        if now > transition['deadline']:
+            if not active and not stable:
+                record('managed_transition_timeout',kind='return_town',requested_scene=transition['requested_scene'],
+                       scene=self._transition_scene(scene),control_error=self.managed_control.get('reason'))
+                return self._managed_pause_return('回城结果与传送状态暂时无法确认，未执行回城整理。')
+            if not transition.get('extended'):
+                transition['extended'] = True
+                record('managed_transition_wait_extended',kind='return_town',scene=self._transition_scene(scene))
+        self.managed.status = '等待游戏完成回城；传送或在线同步期间不重复请求。'
+        return self.managed.status
+
     def _managed_once(self):
         self.managed_fast_followup = False
         observation = self._managed_observation()
@@ -716,13 +792,26 @@ class ManagedServiceMixin:
                     self.managed._runs(observation)
                 if retry['action_kind']=='return_town' and scene.get('in_town') is True:
                     self.managed_retry = None
+                    self.managed_return_recovery = None
                 elif time.monotonic() < retry['next_at']:
                     return self.managed.status
             transition = self.managed_transition
             if transition:
                 action = transition['action']
                 scene = observation['scene']
-                confirmed = scene.get('available') is True and (scene.get('in_town') is True if action['kind']=='return_town'
+                if action['kind']=='return_town' and observation.get('session') != transition.get('session'):
+                    return self._managed_pause_return('游戏连接或角色已改变，未确认原回城结果。')
+                if action['kind']=='return_town' and self.managed.settings['farming']['enabled']:
+                    if (observation.get('complete') is True and scene.get('available') is True and scene.get('scene_changing') is not True
+                            and scene.get('teleporting') is not True):
+                        self.managed._runs(observation)
+                    source = action.get('source_run_id')
+                    run = run_record(scene.get('run'))
+                    if source and (str(source) in self.managed.handled_runs
+                            or scene.get('in_dungeon') is True and run.get('id') and run['id'] != source):
+                        transition['skip_cancelled'] = True
+                    if not self.managed.running: return self.managed.status
+                confirmed = observation.get('complete') is True and scene.get('available') is True and (scene.get('in_town') is True if action['kind']=='return_town'
                      else scene.get('in_dungeon') is True and str(scene.get('dungeon_id'))==str(action['dungeon_id'])
                      and (not action.get('difficulty') or scene.get('difficulty')==action['difficulty'])
                      and run_record(scene.get('run')).get('status') in ('running','settling'))
@@ -731,7 +820,18 @@ class ManagedServiceMixin:
                     confirmed = bool(new_id and new_id != action.get('source_run_id'))
                 if confirmed:
                     self.managed_transition = None
+                    if action['kind']=='return_town':
+                        self.managed_return_recovery = None
+                        if transition.get('skip_cancelled'):
+                            # The requested run finished/changed while returning.
+                            # Town arrival still authorizes cleanup, not a skip.
+                            action = {k:v for k,v in action.items() if k not in
+                                      ('reason_code','source_run_id','next_repeat_index')}
+                            self.managed.pending = action
+                            self.managed.stargazing_return = None
                 else:
+                    if action['kind']=='return_town':
+                        return self._managed_wait_return(transition,observation)
                     now = time.monotonic()
                     pending = scene.get('online_pending_requests')
                     active = (scene.get('scene_changing') is True or scene.get('teleporting') is True
@@ -755,6 +855,19 @@ class ManagedServiceMixin:
             else:
                 action = self.managed.next_action(observation)
                 if self.managed.phase=='paused': self.managed_can_resume=True
+                if action and action['kind']=='return_town':
+                    now = time.monotonic()
+                    if self.managed_return_recovery is None:
+                        self.managed_return_recovery = {'started':now,'interruptions':0}
+                elif (observation.get('complete') is True and observation['scene'].get('available') is True
+                        and not any(observation['scene'].get(key) is True
+                                    for key in ('scene_changing','teleporting','online_saving'))
+                        and not (type(observation['scene'].get('online_pending_requests')) is int
+                                 and observation['scene']['online_pending_requests'] > 0)):
+                    self.managed_return_recovery = None
+                if (self.managed.running and self.managed_return_recovery
+                        and time.monotonic()-self.managed_return_recovery['started'] >= 120):
+                    return self._managed_pause_return('连续 2 分钟未确认回到主城。')
         if not action: return self.managed.status
         try:
             result = {'verified':True,'scene_confirmed':True} if transition else self._managed_execute(action,observation)
