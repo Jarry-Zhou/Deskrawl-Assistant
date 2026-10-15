@@ -2,6 +2,36 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {kinds,storagePages,storageReady,pageChoices,defaultPages} = require('../deskrawl_assistant/web/automation-tools.js');
+const {createSharedStorage,sharedPages,withSharedPages} = require('../deskrawl_assistant/web/automation-tools.js');
+
+test('shared page drafts survive polls and save from either form without changing other fields',()=>{
+  const shared=createSharedStorage(),initial={rune:[3,4],gem:[5]};shared.observe(initial);
+  let managed={cleanup:{rune_pages:[3,4],gem_pages:[5],rune_action:'sell'},auto_equip:{enabled:true}};
+  let auto={runes:{pages:[3,4],enabled:true},gems:{pages:[5],enabled:false},pressure:{pages:[1]}};
+  shared.subscribe(()=>{managed=withSharedPages(managed,shared.current,true);auto=withSharedPages(auto,shared.current);});
+  shared.edit({rune:[2,4]});
+  assert.deepEqual(sharedPages(managed,true),sharedPages(auto));
+  shared.observe(initial);assert.deepEqual(auto.runes.pages,[2,4]);
+  shared.edit({gem:[2,5]});const submitted=shared.current;
+  shared.commit(submitted,submitted);
+  assert.deepEqual(shared.saved,{rune:[2,4],gem:[2,5]});
+  assert.equal(managed.cleanup.rune_action,'sell');assert.equal(managed.auto_equip.enabled,true);
+  assert.equal(auto.runes.enabled,true);assert.equal(auto.gems.enabled,false);assert.deepEqual(auto.pressure.pages,[1]);
+  shared.edit({gem:[3]});shared.reset();assert.deepEqual(auto.gems.pages,[2,5]);assert.deepEqual(managed.cleanup.gem_pages,[2,5]);
+});
+
+test('a poll overtaken by edits or saving cannot restore obsolete shared pages',()=>{
+  const shared=createSharedStorage();shared.observe({rune:[4],gem:[5]});
+  const pollEpoch=shared.epoch;
+  shared.edit({rune:[1]});const submitted=shared.current;
+  shared.edit({gem:[2]}); // An edit in the other form while the save is pending.
+  shared.commit(submitted,submitted);
+  assert.deepEqual(shared.current,{rune:[1],gem:[2]});
+  assert.deepEqual(shared.saved,{rune:[1],gem:[5]});
+  shared.observe({rune:[4],gem:[5]},pollEpoch);
+  assert.deepEqual(shared.saved,{rune:[1],gem:[5]});
+  shared.observe({rune:[1],gem:[5]});assert.deepEqual(shared.current,{rune:[1],gem:[2]});
+});
 
 test('new user partition defaults are equipment 1/2/3, rune 4, gem 5',()=>{
   assert.deepEqual(defaultPages,{equipment:[1,2,3],rune:[4],gem:[5]});

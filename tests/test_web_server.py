@@ -13,6 +13,7 @@ from deskrawl_assistant.web_server import make_handler
 
 class FakeService:
     def __init__(self):self.actions=[]
+    def game_action(self,kind,data):self.actions.append(('game',kind,data));return {'status':'requested'}
     def start(self,kind,data):self.actions.append(kind)
     def recommendation_page(self):
         return {'available':False,'rows':[],'error':'尚未连接角色'}
@@ -59,6 +60,15 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertEqual(headers['Content-Type'],'text/javascript; charset=utf-8')
         self.assertIn(b'async function api',body)
+
+    def test_game_process_actions_require_valid_origin_and_session(self):
+        for endpoint,payload in (('start',{}),('close',{'confirmed':True,'target':{'pid':42,'instance':'42:1'}})):
+            for headers in ({'Origin':self.url},{'Origin':'https://other.example','X-Assistant-Token':'test-session-token'}):
+                self.assertEqual(self.request('/api/game/'+endpoint,payload,headers)[0],403)
+            self.assertFalse(self.service.actions)
+            headers={'Origin':self.url,'X-Assistant-Token':'test-session-token'}
+            self.assertEqual(self.request('/api/game/'+endpoint,payload,headers)[0],200)
+            self.assertEqual(self.service.actions.pop(),('game',endpoint,payload))
 
     def test_loot_capture_toggle_requires_valid_origin_session_and_boolean(self):
         for headers in ({'Origin':self.url},{'Origin':'https://other.example','X-Assistant-Token':'test-session-token'}):

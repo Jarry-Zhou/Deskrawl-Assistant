@@ -17,6 +17,7 @@ from .native_dispatcher import Argument, Invocation, MainThreadDispatcher, Nativ
 from .action_log import record
 from .item_protection import divine_equipment, disposal_protection, mandatory_storage
 from .equipment_requirements import equip_eligibility
+from .mythic import MYTHIC, MAP_ID as MYTHIC_MAP, floor_id, floor_number, WORLD_DIFFICULTIES
 
 
 from .progression import NEW_ACTIONS
@@ -316,8 +317,15 @@ class GameActions:
             else:
                 row = self.reader.base_item(item)
             uid = self.reader.string(struct.unpack_from('<Q', header, 136)[0]) or ''
-            count = max(1, struct.unpack_from('<i', header, 164 if row['item_type'] == 1 else 168)[0])
-            if count > 2147483647:
+            if row['internal_name'] == 'GoldDrop':
+                # LootDrop.cwb passes this value directly to PlayerData's gold
+                # receiver. +164 is the material count, not a coin's value.
+                count = struct.unpack_from('<i', header, 128)[0]
+            elif row['internal_name'] == 'HealthPotionDrop':
+                count = 1  # Native pickup refills exactly one flask charge.
+            else:
+                count = max(1, struct.unpack_from('<i', header, 164 if row['item_type'] == 1 else 168)[0])
+            if not 1 <= count <= 2147483647:
                 raise MemoryReadError('地面物品数量异常')
             identity = f'{self.reader.session_id}:{address}:{item}:{uid}'
             token = hashlib.sha256(f'{identity}:{count}'.encode()).hexdigest()
@@ -447,7 +455,7 @@ class GameActions:
             travel_state = self._combat_travel_state(read, manager) if scene == 0 else {
                 'player_state': None, 'gathering': False, 'travel_blocked': False, 'travel_wait_reason': ''}
             completion = self._completion_state(read)
-            from .recommendation_reader import read_campaign, _catalog
+            from .recommendation_reader import read_campaign, _catalog, _Copy
             recommendation = recommendation or read_campaign(self.reader)
             if not recommendation.get('available'):
                 raise NativeActionError(recommendation.get('reason') or '关卡进度暂不可读')
@@ -466,6 +474,7 @@ class GameActions:
                 tier_completed = set(progress['completed_maps'].get(key,[]))
                 maps = []
                 for row in catalog['maps']:
+                    if row.get('map_type') == 1: continue
                     requirements = [entry for entry in row.get('requirements', []) if entry['difficulty_mask'] & (1 << diff_value)]
                     enough = all(progress['entry_items'].get(entry['item_id'], 0) >= entry['count'] for entry in requirements)
                     maps.append({'map_id':row['map_id'], 'name':row['stage'], 'stage':row['stage'],'difficulty':key,
@@ -475,6 +484,19 @@ class GameActions:
                     'requirements':requirements, 'can_enter':tier['unlocked'] and row['map_id'] in tier_unlocked and row['map_id'] in objects and enough,
                     'min_level':row.get('min_level'), 'max_level':row.get('max_level')})
                 maps_by_difficulty[key] = maps
+            mythic = next((row for row in catalog['maps'] if row['map_id']==MYTHIC_MAP and row.get('map_type')==1),None)
+            maps_by_difficulty[MYTHIC] = []
+            minimum = progress['mythic_min_difficulty']
+            entry_difficulty = max((difficulty,minimum),key=WORLD_DIFFICULTIES.index)
+            if mythic and not mythic.get('unavailable') and not (progress['is_demo'] and mythic.get('locked_in_demo')):
+                requirements = [entry for entry in mythic.get('requirements',[]) if entry['difficulty_mask'] & (1<<WORLD_DIFFICULTIES.index(entry_difficulty))]
+                enough = all(progress['entry_items'].get(entry['item_id'],0)>=entry['count'] for entry in requirements)
+                for floor in progress['mythic_unlocked']:
+                    maps_by_difficulty[MYTHIC].append({'map_id':floor_id(floor),'name':f'层级 {floor}','stage':f'层级 {floor}',
+                        'difficulty':MYTHIC,'map_type':1,'mythic_floor':floor,'unlocked':True,'loaded':MYTHIC_MAP in objects,
+                        'completed':floor_id(floor) in progress['mythic_completed'], 'requirements':requirements,
+                        'can_enter':MYTHIC_MAP in objects and enough})
+            difficulties.append({'id':MYTHIC,'label':'神话裂隙','unlocked':bool(maps_by_difficulty[MYTHIC])})
             ground = self._ground(read, manager)
             carriage = self._carriage(read, in_town=scene == 1)
             try:
@@ -489,8 +511,17 @@ class GameActions:
                 system_log = {'available':False, 'complete':False, 'reason':str(exc)}
             active = read.ptr(manager+112)
             map_id = self.reader.asset_name(active) if active else None
+            scene_difficulty = difficulty
+            if map_id == MYTHIC_MAP and scene == 0:
+                # WaveManager belongs to the connection-verified read profile,
+                # not the narrower native-action profile. Keep its guards until
+                # the whole control snapshot is checked, including floor changes.
+                copy = _Copy(self.reader)
+                wave = copy.verify(copy.ptr(manager+104),'WaveManager')
+                map_id,scene_difficulty = floor_id(copy.integer(wave+304)),MYTHIC
+                read.guards.extend(copy.guards)
             read.finish()
-            run = normalise_run(recommendation.get('run'), completed, dead)
+            run = normalise_run(recommendation.get('run'), completed | set(progress['mythic_completed']), dead)
             if progress['character_id'] != self._last_character:
                 self._last_terminal_run = None
                 self._last_character = progress['character_id']
@@ -503,8 +534,8 @@ class GameActions:
                 'completion_visible':completion,
                 'loot_ledger':loot_ledger,
                 'system_log':system_log,
-                'map_id':map_id, 'difficulty':difficulty, 'run':run,
-                'maps':maps_by_difficulty[difficulty], 'maps_by_difficulty':maps_by_difficulty,'difficulties':difficulties,
+                'map_id':map_id, 'difficulty':scene_difficulty, 'world_difficulty':difficulty,'mythic_entry_difficulty':entry_difficulty, 'run':run,
+                'maps':maps_by_difficulty[scene_difficulty], 'maps_by_difficulty':maps_by_difficulty,'difficulties':difficulties,
                 'ground':[{k:v for k,v in row.items() if not k.startswith('_')} for row in ground],
                 'ground_complete':True, 'character_id':progress['character_id'], 'native_verified':False,
                 'carriage':{**carriage, 'items':[{k:v for k,v in row.items() if not k.startswith('_')} for row in carriage['items']]},
@@ -691,6 +722,11 @@ class GameActions:
                 self._require_stargazing_run(read, manager, payload.get('source_run_id'))
                 travel_state = self._combat_travel_state(read, manager)
                 if travel_state['travel_blocked']: raise GameBusyError(travel_state['travel_wait_reason'])
+            if payload.get('protect_completion_rewards') is True:
+                # Retain list/header guards through native submission as well:
+                # late spawns after service preflight must cancel departure.
+                if self._ground(read, manager):
+                    raise GameBusyError('本局仍有地面奖励，先拾取后再回城。')
             calls = [self._return_town_call(read, manager, portal)]
         elif kind == 'switch_difficulty':
             self._require_travel_ready(read)
@@ -724,21 +760,39 @@ class GameActions:
                 if payload.get('map_id') == state.get('map_id'):
                     raise NativeActionError('游戏不允许局内直接重进同一张图。')
             key = payload.get('map_id')
-            row = next((row for row in state['maps'] if row['map_id'] == key), None)
+            floor = floor_number(key)
+            target_difficulty = payload.get('difficulty', state['difficulty'])
+            if (target_difficulty==MYTHIC) != (floor is not None):
+                raise NativeActionError('神话裂隙层数与目标类型不一致。')
+            row = next((row for row in state.get('maps_by_difficulty',{}).get(target_difficulty,state['maps']) if row['map_id'] == key), None)
             if not row or not row['can_enter']:
                 raise NativeActionError('目标关卡尚未解锁、缺少材料或资源未载入')
-            if payload.get('difficulty', state['difficulty']) != state['difficulty']:
+            if not floor and target_difficulty != state['difficulty']:
                 raise NativeActionError('请先在游戏里切换难度；托管不会绕过难度解锁')
-            obj = self._map_objects(read, area, key)[key]
+            if floor and (scene!=1 or stargazing_entry):
+                raise NativeActionError('神话裂隙必须回城整理后进入。')
+            native_key = MYTHIC_MAP if floor else key
+            obj = self._map_objects(read, area, native_key)[native_key]
             read.read(obj+24, 24)  # prerequisite and availability flags
-            calls = [Invocation('TownPortalSystem.fri', portal, (Argument.reference(obj),), require_true=True)]
+            if floor:
+                if read.integer(obj+32)!=1: raise NativeActionError('神话裂隙地图类型未确认。')
+                if read.boolean(manager+260): raise GameBusyError('游戏正在提交关卡请求，等待完成。')
+                # Match MythicPortalInteractable: native unlock + material gates,
+                # then the floor-aware GameManager entry. WaveManager consumes
+                # entry materials when accepting the run, never deduct twice here.
+                calls = [Invocation('GameManager.travel_busy',require_false=True),
+                    Invocation('SaveSystem.mythic_unlocked',arguments=(Argument.reference(obj),Argument.integer(floor)),require_true=True),
+                    Invocation('TownPortalSystem.entry_materials',arguments=(Argument.reference(obj),),require_true=True),
+                    Invocation('GameManager.enter_mythic',manager,(Argument.reference(obj),Argument.integer(floor)))]
+            else:
+                calls = [Invocation('TownPortalSystem.fri', portal, (Argument.reference(obj),), require_true=True)]
         elif kind == 'collect_ground':
             rows = self._ground(read, manager, payload.get('selection_id'))
             selected = next((row for row in rows if row['selection_id'] == payload.get('selection_id')), None)
             if not selected:
-                raise NativeActionError('这件地面掉落已变化，等待下一轮读取')
+                raise SnapshotChangedError('这件地面掉落已变化，等待下一轮读取')
             if selected.get('issues'):
-                raise NativeActionError('地面物品实际身份或品质未核验，等待下一轮读取')
+                raise SnapshotChangedError('地面物品实际身份或品质未核验，等待下一轮读取')
             self._before_pickup(selected, read)
             calls = [Invocation('LootDrop.cwc', selected['_address'])]
         else:
@@ -796,13 +850,15 @@ class GameActions:
                 ]
         read.finish()
         methods = [call.method for call in calls]
+        item_log = ({k:selected.get(k) for k in ('internal_name', 'item_uid', 'count', 'selection_id')}
+            if selected is not None else None)
         record('game_action_requested',kind=kind,methods=methods,
-               map_id=payload.get('map_id'),difficulty=payload.get('difficulty'))
+               map_id=payload.get('map_id'),difficulty=payload.get('difficulty'),item=item_log)
         try:
             result = self.dispatcher.invoke(calls, read.guards, cancel_event=cancel_event, validate=validate)
         except NativeActionError as exc:
             record('game_action_failed',kind=kind,methods=methods,error=str(exc),
-                   uncertain=exc.uncertain,state=exc.state)
+                   uncertain=exc.uncertain,state=exc.state,item=item_log)
             raise
         # The native call can return before asynchronous travel/save concludes.
         result.update({'kind':kind, 'native_verified':kind in self.verified_kinds,
@@ -819,6 +875,8 @@ class GameActions:
             result['effect_confirmed'] = self._confirm_effect(kind, selected, payload)
             result['quantity'] = selected.get('_confirmed_count', selected.get('count', 1))
             if not result['effect_confirmed']:
+                record('game_action_unconfirmed',kind=kind,item=item_log,
+                    receipt=selected.get('_pickup_receipt'))
                 raise NativeActionError('游戏方法已执行，但物品结果尚未确认；已停止重复操作', uncertain=True)
             if '_confirmed_snapshot' in selected:
                 result['_receipt_snapshot'] = selected['_confirmed_snapshot']
@@ -843,15 +901,17 @@ class GameActions:
         return False
 
     def _virtual_balance(self, selected, read):
-        """Copied receive-side balances for virtual materials, gold and healing."""
+        """Copied receive-side balances for materials, gold and potion charges."""
         name = selected['internal_name']
-        if name in ('GoldDrop','HealthPotionDrop'):
+        if name == 'HealthPotionDrop':
+            system = read.singleton('HealthPotionSystem')
+            charges = read.integer(system+72)
+            if charges < 0: raise MemoryReadError('药水使用次数未确认')
+            return {'charges':charges}
+        if name == 'GoldDrop':
             data = read.singleton('PlayerData')
-            if name=='GoldDrop':
-                from .experience_reader import decode_obscured_int
-                return decode_obscured_int(read.read(data+48,16))
-            maximum, current = struct.unpack('<qq',read.read(data+112,16))
-            return {'current':current,'maximum':maximum}
+            from .experience_reader import decode_obscured_int
+            return decode_obscured_int(read.read(data+48,16))
         from .recommendation_reader import _Copy
         copy = _Copy(self.reader)
         inventory = read.singleton('Inventory')
@@ -870,7 +930,7 @@ class GameActions:
         selected['_before_total_count'] = sum(r.get('count',0) for r in rows
             if r.get('internal_name')==selected['internal_name'])
         if selected.get('item_uid') and any(r.get('item_uid')==selected['item_uid'] for r in rows):
-            raise NativeActionError('掉落唯一编号已在容器中，未重复拾取。')
+            raise SnapshotChangedError('掉落唯一编号已在容器中，未重复拾取。')
         # Bind the receive-side container root, without guarding every unrelated
         # stored item. The selected drop's identity/count/consumed flag are
         # checked on the main thread, followed by conserved receive-side totals.
@@ -878,35 +938,79 @@ class GameActions:
         array = read.ptr(inventory+56)
         read.read(array+24,8)
 
+    def _virtual_drop_consumed(self, selected, read):
+        """Bind the native consumed flag to this exact gold or potion drop.
+
+        Native pickup marks these drops consumed even at full potion charges.
+        Auto-use or other coin pickups may change balances before our read.
+        Disappearance alone is not a receipt; a recycled object cannot qualify.
+        """
+        before = selected.get('_header')
+        flags = {'GoldDrop':(1, 0), 'HealthPotionDrop':(0, 1)}.get(selected.get('internal_name'))
+        if flags is None or not isinstance(before, bytes) or len(before) < 186 or before[185] != 0:
+            return False
+        address = selected['_address']
+        klass = read.ptr(address)
+        read.klass(klass, 'LootDrop')
+        return (struct.pack('<Q', klass) == before[:8]
+            and read.ptr(address+16) in (0, struct.unpack_from('<Q', before, 16)[0])
+            and tuple(before[132:134]) == flags
+            and read.read(address+120, 33) == before[120:153]
+            and read.read(address+164, 8) == before[164:172]
+            and read.boolean(address+185))
+
+    def _confirm_pickup(self, selected):
+        # Receipt reads may overlap the save triggered by the accepted pickup.
+        # They never submit another native call, including on a changing read.
+        read, manager, _, _ = self._context(allow_busy=True)
+        rows = self._ground(read, manager)
+        remaining = next((r for r in rows if r.get('observation_id')==selected['observation_id']), None)
+        removed = selected['count']-(remaining.get('count', 0) if remaining else 0)
+        received = False
+        evidence = {'remaining_count':remaining.get('count', 0) if remaining else 0}
+        if 0 < removed <= selected['count']:
+            if selected.get('item_type') == 1:
+                balance = self._virtual_balance(selected, read)
+                before = selected['_before_virtual']
+                evidence.update(before=before, after=balance)
+                if selected['internal_name'] == 'HealthPotionDrop':
+                    refilled = balance['charges'] > before['charges']
+                    consumed = self._virtual_drop_consumed(selected, read) if not refilled else False
+                    evidence['consumed'] = consumed
+                    received = remaining is None and (refilled or consumed)
+                elif selected['internal_name'] == 'GoldDrop':
+                    consumed = self._virtual_drop_consumed(selected, read)
+                    evidence['consumed'] = consumed
+                    # Other auto-picked coins can arrive in the same frame.
+                    # Require this drop's consumed flag and at least its value,
+                    # rather than an exact total-balance delta of one coin pile.
+                    received = remaining is None and consumed and balance-before >= removed
+                else:
+                    received = balance-before == removed
+            else:
+                snapshot = self.reader.snapshot()
+                evidence['inventory_complete'] = snapshot.get('complete') is True
+                if snapshot.get('complete'):
+                    owned = [r for c in snapshot['containers'].values() for r in c['slots']]
+                    if selected.get('item_uid'):
+                        received = any(r.get('item_uid')==selected['item_uid'] and r.get('internal_name')==selected['internal_name'] for r in owned)
+                    else:
+                        amount = sum(r.get('count', 0) for r in owned if r.get('internal_name')==selected['internal_name'])
+                        received = amount-selected['_before_total_count'] == removed
+        read.finish()
+        selected['_pickup_receipt'] = evidence
+        if received:
+            selected['_confirmed_count'] = removed
+        return received
+
     def _confirm_effect(self, kind, selected, payload):
         deadline = time.monotonic()+2
         while time.monotonic() < deadline:
             if kind == 'collect_ground':
-                read, manager, _, _ = self._context()
-                rows = self._ground(read, manager)
-                remaining = next((r for r in rows if r.get('observation_id')==selected['observation_id']),None)
-                removed = selected['count']-(remaining.get('count',0) if remaining else 0)
-                received = False
-                if 0 < removed <= selected['count']:
-                    if selected.get('item_type')==1:
-                        balance = self._virtual_balance(selected,read)
-                        before = selected['_before_virtual']
-                        if isinstance(balance,dict):
-                            received = (balance['current']>before['current'] or before['current']>=before['maximum']) and remaining is None
-                        else: received = balance-before == removed
-                    else:
-                        snapshot = self.reader.snapshot()
-                        if snapshot.get('complete'):
-                            owned = [r for c in snapshot['containers'].values() for r in c['slots']]
-                            if selected.get('item_uid'):
-                                received = any(r.get('item_uid')==selected['item_uid'] and r.get('internal_name')==selected['internal_name'] for r in owned)
-                            else:
-                                amount = sum(r.get('count',0) for r in owned if r.get('internal_name')==selected['internal_name'])
-                                received = amount-selected['_before_total_count'] == removed
-                read.finish()
-                if received:
-                    selected['_confirmed_count']=removed
-                    return True
+                try:
+                    if self._confirm_pickup(selected): return True
+                except MemoryReadError as exc:
+                    selected['_pickup_receipt'] = {'read_error':str(exc)}
             else:
                 snapshot = self.reader.snapshot()
                 if snapshot.get('complete'):

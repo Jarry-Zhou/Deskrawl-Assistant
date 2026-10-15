@@ -19,7 +19,45 @@
     return indices.map(index=>({...(known.get(index)||{}),index,name:known.get(index)?.name||`第 ${index} 页`,
       selected:selected.includes(index),status:ready?(known.has(index)?'available':'locked'):'pending'}));
   }
-  const helpers={kinds,storagePages,storageReady,pageChoices,defaultPages};
+  function sharedPages(settings,managed=false){
+    return Object.fromEntries(['rune','gem'].map(kind=>[kind,[...(managed?settings.cleanup[kind+'_pages']:settings[kind+'s'].pages)]]));
+  }
+  function withSharedPages(settings,pages,managed=false){
+    const value=JSON.parse(JSON.stringify(settings));
+    for(const kind of ['rune','gem'])if(pages?.[kind]){
+      if(managed)value.cleanup[kind+'_pages']=[...pages[kind]];
+      else value[kind+'s'].pages=[...pages[kind]];
+    }
+    return value;
+  }
+  function createSharedStorage(){
+    let saved=null,current=null,epoch=0;const listeners=[];
+    const clone=value=>value&&JSON.parse(JSON.stringify(value)),equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+    function notify(){for(const listener of listeners)listener();}
+    return {
+      get epoch(){return epoch;},get current(){return clone(current);},get saved(){return clone(saved);},
+      subscribe(listener){listeners.push(listener);},
+      observe(pages,requestEpoch=epoch){
+        if(requestEpoch!==epoch)return; // A save/edit overtook this poll.
+        const next=clone(pages);
+        if(!current)current=clone(next);
+        else for(const kind of ['rune','gem'])if(equal(current[kind],saved?.[kind]))current[kind]=[...next[kind]];
+        if(equal(saved,next))return;saved=next;notify();
+      },
+      edit(pages){
+        const next={...(current||{}),...clone(pages)};
+        if(equal(current,next))return;current=next;epoch++;notify();
+      },
+      commit(pages,submitted){
+        const next=clone(pages);
+        if(!current)current=clone(next);
+        else for(const kind of ['rune','gem'])if(equal(current[kind],submitted[kind]))current[kind]=[...next[kind]];
+        saved=next;epoch++;notify();
+      },
+      reset(){if(!saved)return;current=clone(saved);epoch++;notify();}
+    };
+  }
+  const helpers={kinds,storagePages,storageReady,pageChoices,defaultPages,sharedPages,withSharedPages,createSharedStorage};
   if(typeof module!=='undefined'&&module.exports)module.exports=helpers;
   else root.AutomationTools=helpers;
 })(typeof window!=='undefined'?window:globalThis);

@@ -14,8 +14,10 @@ from .models import ValidationError
 from .game_panel_log import DisposalLogCursor
 from .item_protection import divine_equipment, mandatory_storage, disposal_protection, is_rune, town_rewards_clear
 from .storage_preferences import DEFAULT_STORAGE_PAGES
+from .mythic import MYTHIC, floor_number
 from .equipment_requirements import equip_eligibility
 from .stargazing import DEFAULT_STARGAZING, validate_stargazing, enabled as stargazing_enabled, decide as stargazing_decide, combat_rewards_clear, combat_rewards_known
+from .combat_rewards import CompletionRewards
 from .progression import (DEFAULT_PROGRESSION, DEFAULT_LIFE, DEFAULT_MERCHANT,
                           validate_growth, enabled as growth_enabled, growth_action, next_purchase, PURCHASE_BATCH_LIMIT)
 
@@ -38,7 +40,8 @@ EQUIPMENT_BUCKETS = ('divine', 'black_mist', 'ancient', 'legendary', 'rare', 'un
 BUCKET_LABELS = dict(zip(EQUIPMENT_BUCKETS, ('神圣', '黑雾传说', '远古传说', '普通传说', '稀有', '优秀', '普通')))
 DISPOSABLE_BUCKETS = EQUIPMENT_BUCKETS[2:]
 DIFFICULTIES = ('Normal','Nightmare','Inferno')
-DIFFICULTY_LABELS = dict(zip(DIFFICULTIES,('普通','噩梦','炼狱')))
+FARM_DIFFICULTIES = (*DIFFICULTIES,MYTHIC)
+DIFFICULTY_LABELS = {**dict(zip(DIFFICULTIES,('普通','噩梦','炼狱'))),MYTHIC:'神话裂隙'}
 
 
 def run_record(value):
@@ -99,7 +102,7 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
         raise ValidationError('指定暗金装备无效。')
     if f['mode'] not in ('repeat', 'push') or type(f['free_threshold']) is not int or not 0 <= f['free_threshold'] <= 2048:
         raise ValidationError('刷图模式或回城空格门槛无效。')
-    if f['difficulty'] not in ('current',*DIFFICULTIES):
+    if f['difficulty'] not in ('current',*FARM_DIFFICULTIES):
         raise ValidationError('托管难度无效。')
     if f['dungeon_id'] is not None and (type(f['dungeon_id']) not in (int, str) or not str(f['dungeon_id'])):
         raise ValidationError('关卡标识无效。')
@@ -114,9 +117,11 @@ def validate_settings(raw, *, equipment_keys=None, available_pages=None, allow_e
     if (not isinstance(repeats,list) or len(repeats)>2 or any(
             not isinstance(row,dict) or set(row)!={'dungeon_id','difficulty','runs'}
             or type(row['dungeon_id']) not in (int,str) or not str(row['dungeon_id'])
-            or row['difficulty'] not in ('current',*DIFFICULTIES)
+            or row['difficulty'] not in ('current',*FARM_DIFFICULTIES)
             or type(row['runs']) is not int or not 1<=row['runs']<=10000 for row in repeats)):
         raise ValidationError('重复刷图需要一张或两张关卡，每张循环次数为 1 至 10000。')
+    if any((row['difficulty']==MYTHIC) != (floor_number(row['dungeon_id']) is not None) for row in repeats):
+        raise ValidationError('神话裂隙请选择已解锁的层数。')
     if len({(str(row['dungeon_id']),row['difficulty']) for row in repeats})!=len(repeats):
         raise ValidationError('重复刷图的两张关卡不能相同。')
     f['repeat_maps'] = deepcopy(repeats)
@@ -635,6 +640,7 @@ class ManagedMode:
         self.repeat_completed = 0
         self.repeat_maps = []
         self.handled_runs = set()
+        self.completion_rewards = CompletionRewards()
         self.stargazing_seen = set()
         self.stargazing_skipped = set()
         self.stargazing_state = {'verdict': 'idle', 'reason': '', 'hits': [], 'skipped': 0}
@@ -671,14 +677,14 @@ class ManagedMode:
         self.running = True
         self.session = observation.get('session', observation.get('bridge_session'))
         if self.target_difficulty is None:
-            self.target_difficulty = observation.get('scene',{}).get('difficulty')
+            self.target_difficulty = observation.get('scene',{}).get('world_difficulty') or observation.get('scene',{}).get('difficulty')
         if self.settings['farming']['enabled']:
             if self.settings['farming']['mode']=='push':
                 target = observation.get('farming_start')
                 if target:
                     self.target_dungeon,self.target_difficulty = target['dungeon_id'],target['difficulty']
             else:
-                initial_difficulty = observation.get('scene',{}).get('difficulty')
+                initial_difficulty = observation.get('scene',{}).get('world_difficulty') or observation.get('scene',{}).get('difficulty')
                 self.repeat_maps = [dict(row,difficulty=initial_difficulty if row['difficulty']=='current' else row['difficulty'])
                                     for row in self.settings['farming']['repeat_maps']]
                 first = self.repeat_maps[0]
@@ -1076,6 +1082,36 @@ class ManagedMode:
             self.status = '等待完整读取马车与地面掉落。'
         return None, complete
 
+    def _return_town(self, observation, all_items=None, **data):
+        """Count wins immediately, but collect their settled drops before travel."""
+        if observation.get('scene', {}).get('dead') is not True:
+            if not self.completion_rewards.ready(observation):
+                self.status = self.completion_rewards.reason
+                ground = observation.get('ground') or {}
+                if ground.get('complete') is not True:
+                    return None
+                rows = [r for r in (all_items if all_items is not None else observation_items(observation))
+                        if r.get('container') == 'ground' and identity(r) and not r.get('issues')]
+                # Currency/potions do not consume a bag slot. Chests are picked
+                # last and remain unopened until the normal town cleanup.
+                free = self._bag_free(observation)
+                pickable = [r for r in rows if free > 0 or r.get('item_type') == 1]
+                if pickable:
+                    row = min(pickable, key=lambda r: (r.get('item_type') != 1, item_kind(r) == 'chest'))
+                    return self._action('collect_ground', row, reason_code='completion_rewards',
+                        reason='切图前拾取本局地面奖励，确认收到后再继续。')
+                if rows and free == 0:
+                    action = self._background_organize(observation, all_items or observation_items(observation))
+                    if action:
+                        return action
+                    return self._pause('背包已满，本局地面奖励尚未收完；已暂停且未切图，请腾出空间后继续。')
+                if ground.get('items'):
+                    self.status = '地面奖励身份待核验，等待重新读取，暂不切图。'
+                return None
+        if self.completion_rewards.run_id is not None:
+            data['protect_completion_rewards'] = True
+        return self._action('return_town', **data)
+
     def merchant_batch_ready(self, observation):
         bag=[r for r in observation['items'] if r.get('container')=='inventory']
         return (bool(bag) and self._bag_free(observation)>0 and all(r.get('item_uid') in self.merchant_received_uids
@@ -1099,7 +1135,7 @@ class ManagedMode:
 
     def _cleanup(self, observation, all_items):
         if not self._town(observation):
-            return self._action('return_town', reason='返回主城后整理奖励。')
+            return self._return_town(observation, all_items, reason='返回主城后整理奖励。')
         state = observation.get('progression', {})
         if self.merchant_cleanup_pending:
             if state.get('available') is not True or state.get('busy') is True:
@@ -1231,9 +1267,13 @@ class ManagedMode:
         if self._bag_free(observation) < self.settings['farming']['free_threshold']:
             return self._pause('整理后背包空格仍少于回城门槛，保留装备或材料占用较多，请先处理容量。')
         self.phase = 'travel'
-        if self.target_difficulty and observation.get('scene',{}).get('difficulty')!=self.target_difficulty:
-            return self._action('switch_difficulty',difficulty=self.target_difficulty,
-                reason='主城整理完成，切换到'+DIFFICULTY_LABELS[self.target_difficulty]+'难度。')
+        scene = observation.get('scene',{})
+        entry_difficulty = scene.get('mythic_entry_difficulty') if self.target_difficulty==MYTHIC else self.target_difficulty
+        if self.target_difficulty==MYTHIC and entry_difficulty not in DIFFICULTIES:
+            self.status = '等待读取神话裂隙的解锁难度。'; return None
+        if entry_difficulty and (scene.get('world_difficulty') or scene.get('difficulty'))!=entry_difficulty:
+            return self._action('switch_difficulty',difficulty=entry_difficulty,
+                reason='主城整理完成，切换到'+DIFFICULTY_LABELS[entry_difficulty]+'难度。')
         return self._action('enter_dungeon', dungeon_id=self.target_dungeon,difficulty=self.target_difficulty,
                             reason='奖励整理完成，返回目标关卡。')
 
@@ -1302,11 +1342,11 @@ class ManagedMode:
         # The native entry rejects the active map. A different configured map
         # can be tried in combat; difficulty changes always go through town.
         different = str(target['dungeon_id']) != str(scene.get('dungeon_id'))
-        if different and target['difficulty'] == scene.get('difficulty') and combat_rewards_clear(observation):
+        if different and target['difficulty'] in DIFFICULTIES and target['difficulty'] == scene.get('difficulty') and combat_rewards_clear(observation):
             return self._action('enter_dungeon', dungeon_id=target['dungeon_id'], difficulty=target['difficulty'],
                 source_run_id=run_id, next_repeat_index=alternate, reason_code='stargazing_skip',
                 reason='观星未命中高价值奖励，切换到另一张配置关卡重新观星。')
-        return self._action('return_town', source_run_id=run_id, next_repeat_index=alternate, reason_code='stargazing_skip',
+        return self._return_town(observation, source_run_id=run_id, next_repeat_index=alternate, reason_code='stargazing_skip',
                             reason='观星未命中高价值奖励，回城整理后重新进入配置关卡。')
 
     def stargazing_rejected(self, action):
@@ -1330,6 +1370,7 @@ class ManagedMode:
 
     def next_action(self, observation):
         if not self.running or self.pending is not None: return None
+        self.completion_rewards.observe(observation)
         if observation.get('complete') is not True:
             self.status = '等待完整背包与仓库读取。'; return None
         self.merchant_received_uids.update(observation.get('merchant_uids',[]))
@@ -1404,24 +1445,24 @@ class ManagedMode:
                             return None
                         else:
                             self.phase = 'returning'
-                            return self._action('return_town', source_run_id=self.stargazing_return['source_run_id'],
+                            return self._return_town(observation, all_items, source_run_id=self.stargazing_return['source_run_id'],
                                 next_repeat_index=self.stargazing_return['next_repeat_index'],
                                 reason_code='stargazing_skip', reason='局内切图连续被拒绝，回城收取并整理奖励后重新进入配置关卡。')
                 if self.target_difficulty and scene.get('difficulty')!=self.target_difficulty:
                     self.phase = 'returning'
-                    return self._action('return_town',reason='切换目标难度前，先回到主城整理。')
+                    return self._return_town(observation, all_items, reason='切换目标难度前，先回到主城整理。')
                 if self._bag_free(observation) < self.settings['farming']['free_threshold']:
                     self.phase = 'returning'
-                    return self._action('return_town', reason='背包剩余空格低于门槛，自动回城整理。')
+                    return self._return_town(observation, all_items, reason='背包剩余空格低于门槛，自动回城整理。')
                 if run_record(scene.get('run')).get('status') in ('success', 'failed'):
                     # TownPortalSystem.fri rejects the already active combat map.
                     # Finish every run through the original return/cleanup/entry
                     # path, including repeats of the same map after a failure.
                     self.phase = 'returning'
-                    return self._action('return_town', reason='本轮结束，回城整理后复刷或推进关卡。')
+                    return self._return_town(observation, all_items, reason='本轮结束，回城整理后复刷或推进关卡。')
                 if scene.get('dungeon_id') is not None and str(scene['dungeon_id']) != str(self.target_dungeon):
                     self.phase = 'returning'
-                    return self._action('return_town', reason='当前关卡与托管目标不同，回城整理后切换关卡。')
+                    return self._return_town(observation, all_items, reason='当前关卡与托管目标不同，回城整理后切换关卡。')
                 action = self._stargazing(observation)
                 if action: return action
             if self._town(observation) and any(r.get('container')=='inventory'

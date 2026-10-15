@@ -505,20 +505,27 @@ def _campaign_progress(copy, save, config_obj, catalog):
         raise MemoryReadError('当前难度不在已验证范围。')
     if max_difficulty not in (0,1,2) or diff_enum>max_difficulty:
         raise MemoryReadError('难度解锁状态未确认。')
-    completed_maps = completed_by_difficulty(copy.completed(save))
+    completed_keys = copy.completed(save)
+    completed_maps = completed_by_difficulty(completed_keys)
+    from .mythic import unlocked_floors, floor_number, WORLD_DIFFICULTIES
+    mythic_minimum = copy.integer(config_obj+216)
+    if mythic_minimum not in (0,1,2): raise MemoryReadError('神话裂隙解锁难度未确认。')
     is_demo = copy.boolean(config_obj+48)
     entry_items = {}
     inventory = copy.verify(reader.singleton('Inventory'),'Inventory')
     for item,amount in copy.dictionary(copy.ptr(inventory+64),'int','object').items():
         if amount>0: entry_items[reader.asset_name(item)] = amount
     unlocked_maps = {tier:[m['map_id'] for m in catalog['maps']
-        if not m.get('unavailable') and not (is_demo and m.get('locked_in_demo'))
+        if m.get('map_type') != 1 and not m.get('unavailable') and not (is_demo and m.get('locked_in_demo'))
         and catalog['difficulties'][tier]['value']<=max_difficulty
         and (not m.get('prerequisite') or m['prerequisite'] in completed_maps[tier])]
         for tier in completed_maps}
     return {'difficulty':difficulty,'unlocked_maps':unlocked_maps,'completed_maps':completed_maps,
             'unlocked_difficulties':[key for key,row in catalog['difficulties'].items() if row['value']<=max_difficulty],
-            'entry_items':entry_items,'is_demo':is_demo}
+            'entry_items':entry_items,'is_demo':is_demo,
+            'mythic_min_difficulty':WORLD_DIFFICULTIES[mythic_minimum],
+            'mythic_unlocked':unlocked_floors(completed_keys,eligible=max_difficulty>=mythic_minimum),
+            'mythic_completed':[key for key in completed_keys if floor_number(key) is not None]}
 
 
 def _campaign_run(copy, manager, difficulty):
@@ -534,12 +541,18 @@ def _campaign_run(copy, manager, difficulty):
     plan_difficulty = difficulty_id(copy.reader.string(copy.ptr(plan+48)) or '')
     if not raw_id or map_id!=copy.reader.asset_name(active_map) or plan_difficulty!=difficulty:
         raise SnapshotChangedError('关卡身份尚未稳定。')
+    world_difficulty = difficulty
+    if copy.integer(active_map+32) == 1:
+        from .mythic import MYTHIC, floor_id
+        floor = copy.integer(plan+64)
+        if floor != copy.integer(wave+304): raise SnapshotChangedError('神话裂隙层数正在变化。')
+        map_id, difficulty = floor_id(floor), MYTHIC
     waves = copy.array(copy.ptr(plan+88),8,'RunWave',limit=512)
     alive = 0
     for raw in copy.list(copy.ptr(manager+192),element='Enemy',limit=4096):
         enemy = struct.unpack('<Q',raw)[0]
         if enemy and not copy.boolean(copy.verify(enemy,'Enemy')+296): alive += 1
-    return {'id':hashlib.sha256(raw_id.encode()).hexdigest(),'map_id':map_id,'difficulty':difficulty,
+    return {'id':hashlib.sha256(raw_id.encode()).hexdigest(),'map_id':map_id,'difficulty':difficulty,'world_difficulty':world_difficulty,
             'wave_index':copy.integer(wave+48),'wave_count':len(waves),'wave_active':copy.boolean(wave+64),
             'enemy_count':alive,'finished':copy.boolean(wave+248),'final_kill_settled':copy.boolean(wave+249),
             'status_source':'verified_WaveManager_state'}

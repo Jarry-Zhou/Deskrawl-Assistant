@@ -4,7 +4,7 @@ import unittest
 from deskrawl_assistant.managed_mode import ManagedMode, validate_settings
 from deskrawl_assistant.managed_service import highest_unlocked_map, full_campaign_route
 from deskrawl_assistant.models import ValidationError
-from test_managed_mode import observation, settings, verified
+from test_managed_mode import observation, settings, verified, after_rewards
 
 
 def scene(map_id, difficulty='Normal', status='running', run_id='initial', town=False):
@@ -17,7 +17,7 @@ def scene(map_id, difficulty='Normal', status='running', run_id='initial', town=
 class FarmingCycleTests(unittest.TestCase):
     def finish(self, engine, status, run_id):
         world=scene(engine.target_dungeon,engine.target_difficulty,status,run_id)
-        action=engine.next_action(world)
+        action=after_rewards(engine,world)
         self.assertEqual(action['kind'],'return_town');verified(engine,action)
         # Re-reading the same result during return cannot advance twice.
         target=(engine.target_dungeon,engine.target_difficulty,engine.repeat_completed)

@@ -23,7 +23,7 @@ import uuid
 from PyInstaller.archive.readers import CArchiveReader
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'Deskrawl装备助手-v1.3.2'
+NAME = 'Deskrawl装备助手-v1.3.3'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -67,6 +67,8 @@ def main():
     assert 'deskrawl_assistant.stargazing' in bundled_modules.toc
     assert 'deskrawl_assistant.community_stats' in bundled_modules.toc
     assert 'deskrawl_assistant.statistics_reader' in bundled_modules.toc
+    for module in ('combat_rewards', 'game_lifecycle', 'mythic'):
+        assert 'deskrawl_assistant.' + module in bundled_modules.toc
     assert not any(n.startswith('deskrawl_assistant.remote_') for n in bundled_modules.toc)
     managed_page = archive.extract(normalized['deskrawl_assistant/web/index.html']).decode('utf-8')
     assert managed_page.count('data-managed-fold="') == 9
@@ -104,7 +106,7 @@ def main():
                 result = {'schema': 1, 'client_id': payload['client_id'], 'token': 'a' * 64}
             elif self.path == '/v1/report':
                 assert self.headers.get('Authorization') == 'Bearer ' + 'a' * 64
-                assert payload['version'] == '1.3.2'
+                assert payload['version'] == '1.3.3'
                 result = {'accepted': True, 'report_id': payload['report_id'],
                           'sequence': payload['sequence'], 'accepted_at': datetime.now(timezone.utc).isoformat()}
             else:
@@ -172,7 +174,7 @@ def main():
             try:
                 assert request('/api/ping')['app'] == 'deskrawl-local-assistant'
                 assert request('/api/ping')['desktop'] is args.desktop
-                assert request('/api/state')['app_version'] == '1.3.2'
+                assert request('/api/state')['app_version'] == '1.3.3'
                 token = request('/api/session')['token']
                 if args.desktop:
                     while time.monotonic()<deadline:
@@ -259,6 +261,8 @@ def main():
         assert 'community-notice' in page and '启动后每 30 秒自动匿名上报' in page
         assert 'community-report-now' not in page and 'community-dialog' not in page
         assert 'remote-dialog' not in page and 'remote-open' not in page
+        assert all('id="'+element+'"' in page for element in ('game-state','game-start','game-close'))
+        assert page.count('<option value="Mythic">神话裂隙</option>') == 2
         assert 'community-stats.js' not in page and 'community-stats.css' in page
         report['checks'].append('官网品牌入口和一行统计告知已内置，未包含上报开关、详情及暂停的微信远控入口')
         tabs = re.findall(r'data-tab="([^"]+)"', page)
@@ -291,11 +295,13 @@ def main():
         for item in item_ui['items'].values():
             assert request(item['icon']).startswith(b'\x89PNG')
         report['checks'].append('36 张宝石、199 张符文图标及效果说明全部内置并可读取')
-        settings = {'carriage':{'enabled':False,'types':['gem']},'gems':{'enabled':True,'pages':[5]},
-                    'runes':{'enabled':False,'pages':[4]},
+        settings = {'carriage':{'enabled':False,'types':['gem']},'gems':{'enabled':True,'pages':[3,5]},
+                    'runes':{'enabled':False,'pages':[1,4]},
                     'pressure':{'enabled':False,'threshold':4,'target_free':12,'equipment_filter':'all','pages':[1,2,3]}}
         request('/api/automation/settings', {'settings':settings})
         assert request('/api/state')['automation']['settings'] == settings
+        shared = request('/api/managed')['settings']['cleanup']
+        assert shared['gem_pages'] == [3,5] and shared['rune_pages'] == [1,4]
         assert not request('/api/state')['automation']['running']
         managed_settings = managed['settings']
         managed_settings['farming']['stargazing']['rewards']['gem'] = False
@@ -311,6 +317,10 @@ def main():
         managed_settings['merchant']['weights']['7'] = 10
         saved_managed = request('/api/managed/settings', {'settings':managed_settings})['settings']
         assert saved_managed['cleanup']['rune_pages'] == [2,4]
+        settings['gems']['pages'] = [1]
+        settings['runes']['pages'] = [2,4]
+        assert request('/api/state')['automation']['settings'] == settings
+        report['checks'].append('符文和宝石分区从自动整理与托管双向保存立即同步，其他自动整理设置保留')
         assert not saved_managed['farming']['stargazing']['rewards']['gem']
         assert not saved_managed['farming']['stargazing']['rewards']['gold_bar']
         assert saved_managed['cleanup']['gold_bar_pages'] == [2]

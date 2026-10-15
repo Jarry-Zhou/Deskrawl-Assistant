@@ -11875,6 +11875,219 @@
           "rawRegistrationOffset": 73
         }
       ]
+    },
+    "HealthPotionSystem": {
+      "typeDefinitionIndex": 6218,
+      "fields": [
+        {
+          "name": "<nxu>k__BackingField",
+          "fieldIndex": 26849,
+          "token": "0x04001030",
+          "typeIndex": 22592,
+          "resolvedType": "HealthPotionSystem",
+          "typeKind": 18,
+          "attributes": "0x0011",
+          "isStatic": true,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 0
+        },
+        {
+          "name": "nxv",
+          "fieldIndex": 26850,
+          "token": "0x04001031",
+          "typeIndex": 17037,
+          "resolvedType": "System.Action",
+          "typeKind": 18,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 32
+        },
+        {
+          "name": "nxw",
+          "fieldIndex": 26851,
+          "token": "0x04001032",
+          "typeIndex": 17037,
+          "resolvedType": "System.Action",
+          "typeKind": 18,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 40
+        },
+        {
+          "name": "nxx",
+          "fieldIndex": 26852,
+          "token": "0x04001033",
+          "typeIndex": 17037,
+          "resolvedType": "System.Action",
+          "typeKind": 18,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 48
+        },
+        {
+          "name": "Config",
+          "fieldIndex": 26853,
+          "token": "0x04001034",
+          "typeIndex": 22589,
+          "resolvedType": "HealthPotionConfig",
+          "typeKind": 18,
+          "attributes": "0x0006",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 56
+        },
+        {
+          "name": "UseVFXPrefab",
+          "fieldIndex": 26854,
+          "token": "0x04001035",
+          "typeIndex": 22169,
+          "resolvedType": "UnityEngine.GameObject",
+          "typeKind": 18,
+          "attributes": "0x0006",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 64
+        },
+        {
+          "name": "nxy",
+          "fieldIndex": 26855,
+          "token": "0x04001036",
+          "typeIndex": 24050,
+          "resolvedType": "System.Int32",
+          "typeKind": 8,
+          "attributes": "0x8051",
+          "isStatic": true,
+          "isLiteral": true,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 0
+        },
+        {
+          "name": "<nxz>k__BackingField",
+          "fieldIndex": 26856,
+          "token": "0x04001037",
+          "typeIndex": 24023,
+          "resolvedType": "System.Int32",
+          "typeKind": 8,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 72
+        },
+        {
+          "name": "nya",
+          "fieldIndex": 26857,
+          "token": "0x04001038",
+          "typeIndex": 29248,
+          "resolvedType": "System.Single",
+          "typeKind": 12,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 76
+        },
+        {
+          "name": "nyb",
+          "fieldIndex": 26858,
+          "token": "0x04001039",
+          "typeIndex": 29248,
+          "resolvedType": "System.Single",
+          "typeKind": 12,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 80
+        },
+        {
+          "name": "nyc",
+          "fieldIndex": 26859,
+          "token": "0x0400103A",
+          "typeIndex": 29248,
+          "resolvedType": "System.Single",
+          "typeKind": 12,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 84
+        },
+        {
+          "name": "nyd",
+          "fieldIndex": 26860,
+          "token": "0x0400103B",
+          "typeIndex": 24060,
+          "resolvedType": "System.Int64",
+          "typeKind": 10,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 88
+        },
+        {
+          "name": "nye",
+          "fieldIndex": 26861,
+          "token": "0x0400103C",
+          "typeIndex": 29248,
+          "resolvedType": "System.Single",
+          "typeKind": 12,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 96
+        },
+        {
+          "name": "nyf",
+          "fieldIndex": 26862,
+          "token": "0x0400103D",
+          "typeIndex": 24023,
+          "resolvedType": "System.Int32",
+          "typeKind": 8,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 100
+        },
+        {
+          "name": "nyg",
+          "fieldIndex": 26863,
+          "token": "0x0400103E",
+          "typeIndex": 27046,
+          "resolvedType": "Player",
+          "typeKind": 18,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 104
+        },
+        {
+          "name": "nyh",
+          "fieldIndex": 26864,
+          "token": "0x0400103F",
+          "typeIndex": 24023,
+          "resolvedType": "System.Int32",
+          "typeKind": 8,
+          "attributes": "0x0001",
+          "isStatic": false,
+          "isLiteral": false,
+          "isInitOnly": false,
+          "rawRegistrationOffset": 112
+        }
+      ]
     }
   },
   "methods": {
@@ -12359,6 +12572,70 @@
       "parameters": [],
       "rva": 5624672,
       "prefix": "40534883ec20803de77d670300488bd97518488d0d6f204c"
+    },
+    "SaveSystem.mythic_unlocked": {
+      "name": "ees",
+      "token": "0x06000D01",
+      "isStatic": true,
+      "returnType": "System.Boolean",
+      "parameters": [
+        {
+          "name": "a",
+          "typeIndex": 25195,
+          "resolvedType": "MapData"
+        },
+        {
+          "name": "b",
+          "typeIndex": 24022,
+          "resolvedType": "System.Int32"
+        }
+      ],
+      "rva": 8081232,
+      "prefix": "48895c2408574883ec20803dc80e4203008bda488bf97518"
+    },
+    "TownPortalSystem.entry_materials": {
+      "name": "frq",
+      "token": "0x060011FF",
+      "isStatic": true,
+      "returnType": "System.Boolean",
+      "parameters": [
+        {
+          "name": "a",
+          "typeIndex": 25195,
+          "resolvedType": "MapData"
+        }
+      ],
+      "rva": 5416240,
+      "prefix": "48895c24104889742418574883ec40488bd9803de8aa6a03"
+    },
+    "GameManager.enter_mythic": {
+      "name": "dma",
+      "token": "0x06000A5B",
+      "isStatic": false,
+      "returnType": "System.Void",
+      "parameters": [
+        {
+          "name": "a",
+          "typeIndex": 25195,
+          "resolvedType": "MapData"
+        },
+        {
+          "name": "b",
+          "typeIndex": 24022,
+          "resolvedType": "System.Int32"
+        }
+      ],
+      "rva": 7814848,
+      "prefix": "48895c24084889742410574883ec20803d901d460300418b"
+    },
+    "GameManager.travel_busy": {
+      "name": "dlv",
+      "token": "0x06000A56",
+      "isStatic": true,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "rva": 7811136,
+      "prefix": "40534883ec20803d142c4603007518488d0d92c32a03e855"
     }
   },
   "singletons": {
@@ -12376,7 +12653,8 @@
     "PlayerTalentBook": 60989240,
     "PlayerAbilityBook": 60973048,
     "CloudClient": 61001192,
-    "DeathUI": 61008056
+    "DeathUI": 61008056,
+    "HealthPotionSystem": 60993040
   },
   "iat": {
     "peek_message_w_rva": 28941400

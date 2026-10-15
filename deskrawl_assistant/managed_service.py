@@ -5,7 +5,7 @@ import json
 import time
 
 from .managed_mode import (ManagedMode, DEFAULT_SETTINGS, validate_settings, identity,
-    run_record, DIFFICULTIES, equip_candidate_allowed, equipment_actions, equipment_policy, storage_material_kind)
+    run_record, DIFFICULTIES, FARM_DIFFICULTIES, equip_candidate_allowed, equipment_actions, equipment_policy, storage_material_kind)
 from .models import ValidationError
 from .rules import evaluate, DEFAULT_MIN_CONFIDENCE
 from .native_memory import SnapshotChangedError, GameBusyError
@@ -116,12 +116,15 @@ class ManagedServiceMixin:
         self.managed_return_recovery = None
         self.managed_elapsed = 0
         self.managed_config_error = ''
+        self.managed_config_load_failed = False
+        loaded = False
         self.managed_catalog = json.loads((RESOURCE_ROOT/'data/recommendation-catalog.json').read_text(encoding='utf-8'))['maps']
         try:
             if self.managed_config.exists():
                 settings = validate_settings(json.loads(self.managed_config.read_text(encoding='utf-8')),
                                              equipment_keys=self.ui['equipment'],allow_empty_rune_pages=True)
                 self._validate_slot_locks(settings)
+                loaded = True
                 if not settings['cleanup']['rune_pages']:
                     # Keep every old preference editable; never silently replace
                     # a sale-policy configuration with the default preset.
@@ -130,7 +133,18 @@ class ManagedServiceMixin:
                 else:
                     self.managed = ManagedMode(settings)
         except Exception as exc:
+            self.managed_config_load_failed = True
             self.managed_config_error = '托管配置未载入，原文件已保留：'+str(exc)
+        from .storage_preferences import SHARED_STORAGE_GROUPS, organizer_with_shared_pages
+        if loaded:
+            # Upgrade old installations in memory. Even unavailable pages and
+            # empty legacy choices win over the organizer's conflicting pages.
+            self.automation_settings = organizer_with_shared_pages(self.automation_settings,self.managed.settings['cleanup'])
+        elif not self.managed_config_load_failed:
+            # Users who never configured managed mode keep their organizer's
+            # destinations. Original legacy files are not rewritten on startup.
+            for kind,group in SHARED_STORAGE_GROUPS:
+                self.managed.settings['cleanup'][kind+'_pages'] = list(self.automation_settings[group]['pages'])
 
     def _validate_slot_locks(self, settings):
         from .character import EQUIPPED_SLOTS
@@ -172,7 +186,7 @@ class ManagedServiceMixin:
         scene.setdefault('available',control.get('available') is True)
         scene.setdefault('dungeon_id',control.get('map_id'))
         scene.setdefault('difficulty',control.get('difficulty'))
-        for key in ('scene_changing','teleporting','dead','completion_visible','online_saving','online_pending_requests',
+        for key in ('world_difficulty','mythic_entry_difficulty','scene_changing','teleporting','dead','completion_visible','online_saving','online_pending_requests',
                     'player_state','gathering','travel_blocked','travel_wait_reason'):
             scene.setdefault(key,control.get(key))
         run = deepcopy(run_record(scene.get('run',control.get('run'))))
@@ -327,7 +341,7 @@ class ManagedServiceMixin:
                     'capabilities':capabilities,'can_start':not blocked and not self.managed_config_error,
                     'control_available':control_available,'control_error':control_error,'config_error':self.managed_config_error,
                     'blocked_reasons':blocked,'maps':maps,'warehouse_pages':pages,'warehouse_ready':warehouse_ready,
-                    'maps_by_difficulty':maps_by_difficulty,'current_difficulty':self.managed_control.get('difficulty'),
+                    'maps_by_difficulty':maps_by_difficulty,'current_difficulty':self.managed_control.get('world_difficulty') or self.managed_control.get('difficulty'),
                     'automatic_start':automatic_start,
                     'difficulties':deepcopy(self.managed_control.get('difficulties',[])),
                     'progression_catalog': deepcopy(growth_catalog()), 'progression_state': deepcopy(self.managed_growth),
@@ -336,6 +350,7 @@ class ManagedServiceMixin:
     def save_managed(self, raw):
         with self.guard:
             if self.closed.is_set() or self.updating: raise ValidationError('助手正在退出或更新。')
+            if getattr(self,'game_transition',False): raise ValidationError('游戏正在启动或退出，请稍候。')
             if self.managed.running or self.operation_kind=='managed': raise ValidationError('请先暂停托管再修改设置。')
             settings = validate_settings(raw,equipment_keys=self.ui['equipment'])
             if settings['merchant']['enabled']:
@@ -347,11 +362,17 @@ class ManagedServiceMixin:
             farming = settings['farming']
             if farming['enabled']:
                 farming['progression'] = full_campaign_route(self.managed_catalog) if farming['mode']=='push' else []
-            self.managed_config.parent.mkdir(parents=True,exist_ok=True)
-            temp = self.managed_config.with_suffix('.json.tmp')
-            temp.write_text(json.dumps(settings,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-            temp.replace(self.managed_config)
+            from .storage_preferences import organizer_with_shared_pages, validate_shared_pages, write_settings_files
+            automation = organizer_with_shared_pages(self.automation_settings,settings['cleanup'])
+            validate_shared_pages(automation,settings['cleanup'])
+            files = {self.managed_config:settings}
+            # A damaged independent config must not be silently replaced by its
+            # default switches. It can be repaired through its own save action.
+            if not self.automation_config_load_failed: files[self.automation_config] = automation
+            write_settings_files(files)
             self.managed.settings = settings
+            self.automation_settings = automation
+            self.managed_config_load_failed = False
             self.managed_can_resume = False
             self.managed_config_error = ''
             self.revision += 1
@@ -364,6 +385,7 @@ class ManagedServiceMixin:
             return self.stop_managed(pause=True)
         with self.guard:
             if self.closed.is_set() or self.updating: raise ValidationError('助手正在退出或更新。')
+            if self.game_actions_blocked(): raise ValidationError('游戏正在启动或退出，请稍候。')
             if self.managed.running: return self.managed_page()
             if self.busy: raise ValidationError('请等待当前操作完成。')
             if not self.client.connected: raise ValidationError('请先连接游戏。')
@@ -396,13 +418,13 @@ class ManagedServiceMixin:
                     seen = set()
                     for target in targets:
                         difficulty,target_map = target['difficulty'],target['dungeon_id']
-                        if difficulty not in DIFFICULTIES: raise ValidationError('当前游戏难度未确认。')
+                        if difficulty not in FARM_DIFFICULTIES: raise ValidationError('当前游戏难度未确认。')
                         token = (str(target_map),difficulty)
                         if token in seen: raise ValidationError('重复刷图的两张关卡不能相同。')
                         seen.add(token)
                         option = next((row for row in refreshed['difficulties'] if row['id']==difficulty),None)
                         if not option or option.get('unlocked') is not True: raise ValidationError('目标难度尚未解锁。')
-                        selected_maps = refreshed['maps_by_difficulty'].get(difficulty,refreshed['maps'])
+                        selected_maps = refreshed['maps_by_difficulty'].get(difficulty,[] if difficulty=='Mythic' else refreshed['maps'])
                         selected = next((m for m in selected_maps if str(m['id'])==str(target_map)),None)
                         if selected is None or selected.get('unlocked') is not True or selected.get('can_enter') is False:
                             raise ValidationError('目标关卡尚未解锁或入场材料不足。')
@@ -512,6 +534,15 @@ class ManagedServiceMixin:
         pending = scene.get('online_pending_requests')
         if kind in ('return_town','enter_dungeon','switch_difficulty') and type(pending) is int and pending > 0:
             raise GameBusyError(f'等待在线请求处理完成后切换场景（待处理请求 {pending}）。')
+        if kind == 'return_town' and scene.get('dead') is not True:
+            # A boss can die or another drop can spawn between planning and this
+            # fresh read. Re-plan pickup rather than committing a stale return.
+            if not self.managed.completion_rewards.ready(observation):
+                return {'verified':False, 'retryable':True, 'reason':self.managed.completion_rewards.reason}
+            if self.managed.completion_rewards.run_id is not None:
+                action['protect_completion_rewards'] = True
+        elif kind == 'return_town':
+            action.pop('protect_completion_rewards', None)
         stargazing_entry = kind == 'enter_dungeon' and action.get('reason_code') == 'stargazing_skip'
         if action.get('reason_code') == 'stargazing_skip':
             if scene.get('travel_blocked') is True:
@@ -859,7 +890,8 @@ class ManagedServiceMixin:
                     now = time.monotonic()
                     if self.managed_return_recovery is None:
                         self.managed_return_recovery = {'started':now,'interruptions':0}
-                elif (observation.get('complete') is True and observation['scene'].get('available') is True
+                elif ((action is not None or self.managed.phase != 'returning')
+                        and observation.get('complete') is True and observation['scene'].get('available') is True
                         and not any(observation['scene'].get(key) is True
                                     for key in ('scene_changing','teleporting','online_saving'))
                         and not (type(observation['scene'].get('online_pending_requests')) is int

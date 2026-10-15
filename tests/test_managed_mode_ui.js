@@ -38,6 +38,20 @@ const settings=(extra={})=>ui.normalizeSettings({auto_equip:{enabled:false,minim
   cleanup:{equipment_action:'store',equipment_fallback:'sell',equipment_pages:[1],rune_action:'store',rune_pages:[3],gem_action:'store',gem_pages:[3]},...extra});
 const capabilities=value=>Object.fromEntries(['transfer','lock','equip','travel','difficulty','sell','salvage','chests','ground_pickup'].map(key=>[key,value]));
 
+test('mythic selector shows only unlocked floors without falling back to ordinary maps',()=>{
+  const cfg=settings({farming:{enabled:true,repeat_maps:[{dungeon_id:'MythicDungeon::mythic::22',difficulty:'Mythic',runs:3}]}});
+  const packet={maps:[{id:'Forest1'}],maps_by_difficulty:{Mythic:[
+    {id:'MythicDungeon::mythic::22',unlocked:true},{id:'MythicDungeon::mythic::23',unlocked:false}]}};
+  assert.deepEqual(ui.availableMaps(packet,cfg).map(r=>r.id),['MythicDungeon::mythic::22']);
+  assert.deepEqual(ui.availableMaps({maps:packet.maps},cfg),[]);
+  assert.equal(ui.validateSettings(cfg),'');
+  cfg.farming.repeat_maps[0].dungeon_id='MythicDungeon::mythic::101';
+  assert.match(ui.validateSettings(cfg),/层数/);
+  cfg.farming.repeat_maps[0]={dungeon_id:'MythicDungeon::mythic::22',difficulty:'Normal',runs:3};
+  assert.match(ui.validateSettings(cfg),/层数/);
+  assert.deepEqual(ui.availableMaps({maps:[{id:'MythicDungeon',map_type:1},{id:'Forest1',map_type:0}]},cfg,'Normal').map(r=>r.id),['Forest1']);
+});
+
 test('material partition migration preserves policies and independent page choices through saving',()=>{
   const old=settings({cleanup:{equipment_action:'salvage',equipment_pages:[2,3]}});
   for(const key of ['gold_bar','legendary_rein']){

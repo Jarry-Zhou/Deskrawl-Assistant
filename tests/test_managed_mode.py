@@ -1,6 +1,7 @@
 """Managed-mode policy tests run without a game, runtime client or native calls."""
 from copy import deepcopy
 import unittest
+from unittest.mock import patch
 
 from deskrawl_assistant.managed_mode import (DEFAULT_SETTINGS, ManagedMode, ManagedMetrics,
     validate_settings, equipment_bucket, equip_candidate_allowed)
@@ -44,6 +45,16 @@ def settings(equip=False, farm=True, **cleanup):
 
 def verified(engine, action):
     return engine.complete(action['action_id'], result={'verified': True})
+
+
+def after_rewards(engine, world):
+    """Advance two empty, settled samples without a real-time sleep."""
+    with patch('deskrawl_assistant.combat_rewards.time.monotonic', return_value=100):
+        first = engine.next_action(world)
+    if first is not None:
+        return first
+    with patch('deskrawl_assistant.combat_rewards.time.monotonic', return_value=102):
+        return engine.next_action(world)
 
 
 class BatchCleanupTests(unittest.TestCase):
@@ -384,7 +395,9 @@ class LifecycleTests(unittest.TestCase):
         self.assertIsNone(engine.next_action(world))
         self.assertEqual(engine.repeat_completed, 1)
         world['scene']['run'].update(status='settling', completion_confirmed=True)
-        action = engine.next_action(world)
+        self.assertIsNone(engine.next_action(world))
+        world['scene']['completion_visible'] = {'CombatMapCompletionUI': True}
+        action = after_rewards(engine, world)
         self.assertEqual(action['kind'], 'return_town')
         self.assertEqual((engine.repeat_index, engine.repeat_completed, engine.target_dungeon), (1, 0, 'b'))
 
@@ -452,7 +465,7 @@ class LifecycleTests(unittest.TestCase):
         world = observation(); world['scene'].update(dungeon_id='last',difficulty='Normal',
             run={'id':'normal-final','status':'success','dungeon_id':'last','difficulty':'Normal'})
         engine = ManagedMode(s); engine.start(world)
-        action = engine.next_action(world); self.assertEqual(action['kind'],'return_town'); verified(engine,action)
+        action = after_rewards(engine, world); self.assertEqual(action['kind'],'return_town'); verified(engine,action)
         self.assertEqual((engine.target_dungeon,engine.target_difficulty),('a','Nightmare'))
         town = observation([],town=True); town['scene'].update(difficulty='Normal',run=None)
         action = engine.next_action(town); self.assertEqual(action['kind'],'switch_difficulty'); verified(engine,action)
@@ -587,7 +600,7 @@ class LifecycleTests(unittest.TestCase):
         s = settings(); s['farming']['mode'] = 'push'
         engine = ManagedMode(s); world = observation(); engine.start(world)
         world['scene']['run'] = {'id': 'a1', 'status': 'success', 'dungeon_id': 'a'}
-        action = engine.next_action(world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
+        action = after_rewards(engine, world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
         town = observation([], town=True)
         action = engine.next_action(town); self.assertEqual(action['dungeon_id'], 'b'); verified(engine, action)
         world['scene'].update(dungeon_id='b', run={'id': 'b1', 'status': 'running'}); self.assertIsNone(engine.next_action(world))
@@ -597,13 +610,13 @@ class LifecycleTests(unittest.TestCase):
         action = engine.next_action(town); self.assertEqual(action['dungeon_id'], 'a'); verified(engine, action)
         world['scene'].update(dungeon_id='a', run={'id': 'a2', 'status': 'running'}); engine.next_action(world)
         world['scene']['run']['status'] = 'success'
-        action = engine.next_action(world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
+        action = after_rewards(engine, world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
         self.assertEqual(engine.next_action(town)['dungeon_id'], 'b')
 
     def test_repeat_finished_map_always_returns_and_cleans_before_same_map_entry(self):
         engine = ManagedMode(settings()); world = observation(); engine.start(world)
         world['scene']['run'] = {'id': 'a1', 'status': 'success', 'dungeon_id': 'a'}
-        action = engine.next_action(world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
+        action = after_rewards(engine, world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
         self.assertIsNone(engine.next_action(world))  # Combat map cannot be entered again yet.
         town = observation([equipment('junk')], town=True)
         action = engine.next_action(town); self.assertEqual(action['kind'], 'transfer'); verified(engine, action)

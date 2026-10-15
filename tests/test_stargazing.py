@@ -5,7 +5,7 @@ import unittest
 from deskrawl_assistant.managed_mode import ManagedMode, validate_settings
 from deskrawl_assistant.stargazing import (DEFAULT_STARGAZING, FIXED_REWARDS, validate_stargazing,
                                          enabled, decide)
-from tests.test_managed_mode import observation, settings, equipment, verified
+from tests.test_managed_mode import observation, settings, equipment, verified, after_rewards
 
 
 def plan(world, items=()):
@@ -203,7 +203,7 @@ class StargazingPlannerTests(unittest.TestCase):
         engine,world=setup(True)
         self.reject_until_fallback(engine,world)
         world['scene']['run'].update(status='success',completion_confirmed=True)
-        action=engine.next_action(world)
+        action=after_rewards(engine,world)
         self.assertEqual(action['kind'],'return_town')
         self.assertNotIn('reason_code',action)
         verified(engine,action)

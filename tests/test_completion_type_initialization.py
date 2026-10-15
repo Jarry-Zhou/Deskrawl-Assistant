@@ -374,6 +374,7 @@ class CompletionTypeInitializationTests(unittest.TestCase):
             'character_id': 'fixture-character', 'difficulty': 'Normal',
             'unlocked_maps': {'Normal': []}, 'completed_maps': {'Normal': []},
             'entry_items': {},
+            'mythic_min_difficulty':'Inferno','mythic_unlocked':[],'mythic_completed':[],'is_demo':False,
         }}
         difficulty = ('Normal', [{'id': 'Normal', 'value': 0, 'unlocked': True}])
         with patch.object(fixture.game, 'capabilities', return_value={'compatible': True}), \

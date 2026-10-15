@@ -128,10 +128,10 @@ class GroundReceiptReviewTests(unittest.TestCase):
             with self.subTest(balance=balance),patch('deskrawl_assistant.game_actions.time.monotonic',side_effect=self.clock()),patch('deskrawl_assistant.game_actions.time.sleep'):
                 self.assertIs(game._confirm_effect('collect_ground',selected,{}),expected)
 
-    def test_healing_drop_must_heal_or_be_consumed_at_full_health(self):
-        for before,after,expected in [({'current':50,'maximum':100},{'current':50,'maximum':100},False),
-                                      ({'current':50,'maximum':100},{'current':80,'maximum':100},True),
-                                      ({'current':100,'maximum':100},{'current':100,'maximum':100},True)]:
+    def test_potion_drop_refills_charges_instead_of_healing(self):
+        for before,after,expected in [({'charges':1},{'charges':1},False),
+                                      ({'charges':1},{'charges':2},True),
+                                      ({'charges':3},{'charges':3},False)]:
             selected={'_address':0x200,'observation_id':'health-drop','internal_name':'HealthPotionDrop',
                       'item_type':1,'count':1,'_before_virtual':before}
             game=self.ground_game(True,[],[]);game._virtual_balance=Mock(return_value=after)

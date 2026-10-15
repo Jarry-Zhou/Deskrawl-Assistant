@@ -135,6 +135,8 @@ def make_handler(service, token):
                 if getattr(service,'updating',False) is True and path not in ('/api/stop','/api/shutdown'):
                     raise ValueError('正在替换程序，请稍候。')
                 if path=='/api/action': service.start(data.get('kind'),data)
+                elif path in ('/api/game/start','/api/game/close'):
+                    return self.reply(service.game_action(path.rsplit('/',1)[-1],data))
                 elif path in ('/api/update/check','/api/update/install'):
                     updater = getattr(self.server,'updater',None)
                     if updater is None: raise ValueError('当前启动方式不支持更新。')

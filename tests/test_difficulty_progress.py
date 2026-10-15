@@ -30,7 +30,7 @@ class TownCampaignCopy:
             asset_name=lambda obj:{0xB000:'Forest2',0xE000:'Ticket'}[obj])
         self.pointers = {0x1000+32:0x4000,0x1000+120:0,0x1000+112:0,0x2000+40:0x8000,
             DIFFICULTY_RVA:0x6000,0x6000+184:0x7000,0x5000+64:0x9000}
-        self.integers = {0x1000+168:1,0x7000:0,0x7004:1}
+        self.integers = {0x1000+168:1,0x7000:0,0x7004:1,0x4000+216:2,0xB000+32:0}
         self.flags = {0x4000+48:False}
         self.finished = False
     def singleton(self, rva, name): return {'GameManager':0x1000,'PlayerData':0x2000}[name]

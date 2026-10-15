@@ -331,12 +331,23 @@ function readAutomationForm(){
     pressure:{enabled:$('auto-pressure').checked,threshold:Number($('pressure-threshold').value),target_free:Number($('pressure-target').value),equipment_filter:$('pressure-filter').value,pages:pages('equipment')}};
 }
 function markAutomationDirty(){
-  automationDraft=readAutomationForm();automationDirty=JSON.stringify(automationDraft)!==JSON.stringify(state.automation.settings);
+  automationDraft=readAutomationForm();refreshAutomationDirty();
+}
+const sharedStorage=window.AutomationTools?.createSharedStorage();
+function refreshAutomationDirty(){
+  if(!automationDraft||!state?.automation)return;
+  const baseline=window.AutomationTools.withSharedPages(state.automation.settings,sharedStorage?.saved);
+  automationDirty=JSON.stringify(automationDraft)!==JSON.stringify(baseline);
   setDirty(dirty);
   $('automation-draft-state').textContent=automationDirty?'有未保存的设置':'设置已保存';
   $('save-automation').disabled=!automationDirty||!!state.managed?.running;
   $('run-automation').disabled=!state.automation.running&&(!state.connected||state.busy||state.managed?.running||automationDirty||!Object.values(automationDraft).some(v=>v.enabled));
 }
+sharedStorage?.subscribe(()=>{
+  if(!automationDraft)return;
+  automationDraft=window.AutomationTools.withSharedPages(automationDraft,sharedStorage.current);
+  renderAutomationPages();refreshAutomationDirty();
+});
 function filteredCollectionChoices(){
   return window.AutomationTools.kinds.map(([key,name])=>({key,name}));
 }
@@ -376,7 +387,8 @@ function renderAutomation(){
   if(!automationDraft||(!automationDirty&&JSON.stringify(automationDraft)!==JSON.stringify(a.settings))){
     automationDraft=JSON.parse(JSON.stringify(a.settings));$('auto-carriage').checked=automationDraft.carriage.enabled;$('auto-gems').checked=automationDraft.gems.enabled;$('auto-runes').checked=automationDraft.runes.enabled;$('auto-pressure').checked=automationDraft.pressure.enabled;$('pressure-threshold').value=automationDraft.pressure.threshold;$('pressure-target').value=automationDraft.pressure.target_free;$('pressure-filter').value=automationDraft.pressure.equipment_filter;renderCollectionChoices();
   }
-  renderAutomationPages();
+  automationDraft=window.AutomationTools.withSharedPages(automationDraft,sharedStorage?.current);
+  renderAutomationPages();refreshAutomationDirty();
   $('automation-panel').querySelectorAll('input,select,button').forEach(input=>input.disabled=!!state.managed?.running);
   renderCollectionChoices();
   $('automation-summary').textContent=(a.running?'运行中':'已暂停')+' · 点击配置';
@@ -428,6 +440,14 @@ function renderState(){
   const connection=$('connection-state');connection.className='status-pill'+(state.connected?' online':'')+(state.busy?' busy':'');
   connection.innerHTML='<i></i>'+ (state.connected?`已连接${state.busy?' · 处理中':''}`:state.busy?'正在连接…':'未连接游戏');
   connection.title=state.pid?`游戏进程 ${state.pid}`:'';
+  const game=state.game||{},gameLabels={running:'游戏运行中',stopped:'游戏未运行',starting:'Steam 启动中…',closing:'游戏退出中…',unknown:'游戏状态未确认'};
+  $('game-state').textContent=gameLabels[game.status]||'检测游戏中…';
+  $('game-state').dataset.status=game.status||'unknown';
+  $('game-state').title=game.error||(game.count>1?'检测到多个游戏进程，请在游戏窗口中退出。':'');
+  $('game-start').hidden=game.running===true||game.status==='closing';
+  $('game-start').disabled=game.can_start!==true;
+  $('game-close').hidden=game.running!==true;
+  $('game-close').disabled=game.can_close!==true;
   $('rule-count').textContent=state.rules.filter(r=>r.enabled).length;
   $('operation-message').textContent=state.message+(state.connected&&!state.complete&&!state.busy?' 本次读取不完整，请稍后刷新。':'');
   document.querySelector('.operation-notice').classList.toggle('error',!!state.error);
@@ -450,7 +470,8 @@ function renderState(){
 async function pollState(){
   if(polling||exiting)return;
   polling=true;
-  try{state=await api('state');renderState();}
+  const sharedEpoch=sharedStorage?.epoch;
+  try{state=await api('state');if(state.automation)sharedStorage?.observe(window.AutomationTools.sharedPages(state.automation.settings),sharedEpoch);renderState();}
   catch(error){renderManagedTab(null);clearLootPreview('助手服务已断开，请重新启动后连接游戏。','unavailable');$('footer-state').textContent='助手服务已断开，请重新双击启动文件。';if(!state)$('operation-message').textContent=error.message;}
   finally{polling=false;}
 }
@@ -467,6 +488,12 @@ async function download(path,name){
 document.querySelectorAll('.tab').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
 $('connect').addEventListener('click',()=>action('connect'));
 $('disconnect').addEventListener('click',()=>action('disconnect'));
+$('game-start').addEventListener('click',async()=>{try{$('game-start').disabled=true;await api('game/start',{});await pollState();}catch(error){toast(error.message,true);await pollState();}});
+$('game-close').addEventListener('click',async()=>{
+  const target=state?.game?.target;if(!target)return;
+  if(!await confirmAction('关闭游戏？','将停止托管、监控和自动整理，并请求游戏正常退出。未保存的助手配置会继续保留在当前窗口。','关闭游戏'))return;
+  try{$('game-close').disabled=true;await api('game/close',{confirmed:true,target});await pollState();}catch(error){toast(error.message,true);await pollState();}
+});
 $('refresh').addEventListener('click',()=>action('read'));
 $('equipment-search').addEventListener('input',renderCatalog);$('slot-filter').addEventListener('change',renderCatalog);$('configured-filter').addEventListener('change',renderCatalog);
 $('class-filters').addEventListener('click',e=>{const button=e.target.closest('[data-class]');if(!button)return;selectedClass=Number(button.dataset.class);document.querySelectorAll('[data-class]').forEach(b=>b.classList.toggle('selected',b===button));renderCatalog();});
@@ -549,11 +576,11 @@ $('unlock-all').addEventListener('click',async()=>{
   if(await confirmAction(`全部解锁 · ${scope}`,`将解锁此范围内的 ${count} 件已锁装备。解锁后，它们可被游戏出售或分解。\n持续监控将自动关闭。`,'解锁这 '+count+' 件装备'))action('unlock_all');
 });
 $('monitor-switch').addEventListener('click',async()=>{try{await api('monitor',{enabled:!state.monitoring});await pollState();}catch(error){toast(error.message,true);}});
-$('automation-panel').addEventListener('change',e=>{const key=e.target.dataset.collectType;if(key){const selected=new Set(automationDraft.carriage.types);e.target.checked?selected.add(key):selected.delete(key);automationDraft.carriage.types=[...selected];}markAutomationDirty();renderCollectionChoices();renderAutomationPages();});
+$('automation-panel').addEventListener('change',e=>{const key=e.target.dataset.collectType;if(key){const selected=new Set(automationDraft.carriage.types);e.target.checked?selected.add(key):selected.delete(key);automationDraft.carriage.types=[...selected];}markAutomationDirty();const kind=e.target.dataset.automationPages;if(['rune','gem'].includes(kind))sharedStorage?.edit({[kind]:automationDraft[kind+'s'].pages});renderCollectionChoices();renderAutomationPages();});
 $('carriage-select-all').addEventListener('click',()=>setFilteredCollectionSelection(true));
 $('carriage-select-none').addEventListener('click',()=>setFilteredCollectionSelection(false));
 for(const id of ['pressure-threshold','pressure-target'])$(id).addEventListener('input',markAutomationDirty);
-async function saveAutomation(){try{const result=await api('automation/settings',{settings:readAutomationForm()});automationDraft=result.settings;automationDirty=false;setDirty(dirty);await pollState();toast('自动整理设置已保存');return true;}catch(error){toast(error.message,true);return false;}}
+async function saveAutomation(){try{const submitted=readAutomationForm(),result=await api('automation/settings',{settings:submitted});state.automation.settings=result.settings;automationDraft=result.settings;sharedStorage?.commit(window.AutomationTools.sharedPages(result.settings),window.AutomationTools.sharedPages(submitted));automationDraft=window.AutomationTools.withSharedPages(automationDraft,sharedStorage?.current);refreshAutomationDirty();await pollState();await window.ManagedModeUI?.refresh();toast('自动整理设置已保存，共用存放页已同步');return true;}catch(error){toast(error.message,true);return false;}}
 $('save-automation').addEventListener('click',saveAutomation);
 $('run-automation').addEventListener('click',async()=>{try{await api('automation/run',{enabled:!state.automation.running});await pollState();}catch(error){toast(error.message,true);}});
 $('stop').addEventListener('click',async()=>{try{await api('stop',{});await pollState();}catch(error){toast(error.message,true);}});
@@ -567,7 +594,7 @@ $('exit').addEventListener('click',requestExit);
 window.addEventListener('beforeunload',e=>{if(!exiting&&hasPendingDrafts()){e.preventDefault();e.returnValue='';}});
 async function boot(){
   if(desktopMode)$('usage-note').textContent='监控只自动处理新增装备；已有装备请用“一键按规则锁定”。最小化窗口可继续监控，关闭窗口会退出助手并停止监控。';
-  try{catalog=await api('catalog');buildCatalog();window.ManagedModeUI?.init({api,toast,confirmAction,onDirty:syncDraftState,catalog});await pollState();const first=state.rules[0]?.equipment_keys[0]||'LegendaryBelt3';if(first)await chooseGear(first);await window.ManagedModeUI?.refresh();await pollUpdate();setInterval(pollState,1000);setInterval(pollUpdate,1500);setInterval(()=>{if(activeTab==='logs'&&!logBefore)loadLogs(true);},2000);}catch(error){toast(error.message,true);}
+  try{catalog=await api('catalog');buildCatalog();window.ManagedModeUI?.init({api,toast,confirmAction,onDirty:syncDraftState,catalog,sharedStorage});await pollState();const first=state.rules[0]?.equipment_keys[0]||'LegendaryBelt3';if(first)await chooseGear(first);await window.ManagedModeUI?.refresh();await pollUpdate();setInterval(pollState,1000);setInterval(pollUpdate,1500);setInterval(()=>{if(activeTab==='logs'&&!logBefore)loadLogs(true);},2000);}catch(error){toast(error.message,true);}
 }
 function renderUpdate(){
   if(!updateState)return;

@@ -21,6 +21,7 @@ from .activity_journal import ActivityJournal, ItemActivityTracker, operation_id
 from .experience import ExperienceBook
 from .recommendation_book import RecommendationBook
 from .automation import DEFAULT_SETTINGS, validate_settings, pressure_candidates, free_slots, storage_targets
+from .storage_preferences import SHARED_STORAGE_GROUPS, validate_shared_pages, write_settings_files
 from copy import deepcopy
 from .version import VERSION
 from .managed_service import ManagedServiceMixin
@@ -75,16 +76,21 @@ class AssistantService(ManagedServiceMixin):
         self.activity = ItemActivityTracker(self.journal, self._describe_item)
         self.client.item_events = self._record_item_commit
         self.operation_kind = None
+        from .game_lifecycle import GameLifecycle
+        self.game_lifecycle = GameLifecycle()
+        self.game_transition = False
         self.automation_config = self.config.with_name('automation.json')
         self.automation_settings = deepcopy(DEFAULT_SETTINGS)
         self.automation_running = False
         self.automation_status = '自动整理已暂停。'
+        self.automation_config_load_failed = False
         self.pressure_active = False
         self.carriage = {'available':False,'count':0,'items':[]}
         try:
             if self.automation_config.exists():
                 self.automation_settings = validate_settings(json.loads(self.automation_config.read_text(encoding='utf-8')),self.item_ui['collectibles'])
         except Exception as exc:
+            self.automation_config_load_failed = True
             self.automation_status = '自动整理配置未载入，原文件已保留：'+str(exc)
         self.guard = threading.RLock()
         self.cancelled = threading.Event()
@@ -631,6 +637,7 @@ class AssistantService(ManagedServiceMixin):
             result['character'] = self._character_payload(character)
             result['compatibility'] = dict(getattr(self.client,'compatibility',{'phase':'idle','message':'连接时自动检测游戏兼容性'}))
             result['managed'] = {'running':self.managed.running,'phase':self.managed.phase,'status':self.managed.status}
+        result['game'] = self.game_lifecycle.state() if hasattr(self,'game_lifecycle') else {}
         if not snap: return result
         adapted = self.adapter.adapt_snapshot(snap)
         observations = {(i.container,i.index):i for i in adapted.items}
@@ -706,6 +713,8 @@ class AssistantService(ManagedServiceMixin):
         with self.guard:
             if self.closed.is_set(): raise ValidationError('助手已退出，请重新启动。')
             if self.updating: raise ValidationError('正在更新程序，请稍候。')
+            if self.game_actions_blocked():
+                raise ValidationError('游戏正在启动或退出，请稍候。')
             if self.busy: raise ValidationError('当前操作尚未完成，请稍候或停止操作。')
             if self.managed.running: raise ValidationError('请先暂停托管，再执行手动背包操作。')
             if kind not in ('connect','disconnect','read','lock_selected','lock_rules','unlock_all','move_items'):
@@ -905,6 +914,7 @@ class AssistantService(ManagedServiceMixin):
         if not isinstance(enabled,bool): raise ValidationError('监控开关必须为布尔值。')
         with self.guard:
             if enabled:
+                if self.game_actions_blocked(): raise ValidationError('游戏正在启动或退出，请稍候。')
                 if self.managed.running: raise ValidationError('托管正在运行，请先暂停托管。')
                 if not self.client.connected: raise ValidationError('请先连接游戏。')
                 if self.busy: raise ValidationError('请等待当前操作完成后开启监控。')
@@ -920,6 +930,37 @@ class AssistantService(ManagedServiceMixin):
                 self.message = '监控已关闭。'
             self.monitoring = enabled
             self.journal.append('settings','monitor_changed','开启自动锁定监控' if enabled else '关闭自动锁定监控')
+
+    def game_actions_blocked(self):
+        return getattr(self,'game_transition',False) or (hasattr(self,'game_lifecycle') and self.game_lifecycle.state()['status']=='closing')
+
+    def game_action(self, action, payload):
+        if action not in ('start','close'): raise ValidationError('游戏操作无效。')
+        if action=='start' and payload: raise ValidationError('启动游戏不接受额外参数。')
+        if action=='close' and (set(payload)!={'confirmed','target'} or payload['confirmed'] is not True):
+            raise ValidationError('请先确认关闭游戏。')
+        with self.guard:
+            if self.closed.is_set() or self.updating: raise ValidationError('助手正在退出或更新。')
+            if self.game_transition: raise ValidationError('游戏操作正在进行，请稍候。')
+            if action=='close':
+                current = self.game_lifecycle.state(fresh=True)
+                if not current['can_close'] or payload['target'] != current['target']:
+                    raise ValidationError('游戏进程已变化，请重新确认关闭。')
+            self.game_transition = True
+        try:
+            if action=='start': return self.game_lifecycle.start()
+            # Stop writers and let any submitted action finish before normal quit.
+            self.stop()
+            worker = self.worker
+            if worker and worker is not threading.current_thread(): worker.join(10)
+            with self.guard:
+                if self.busy: raise ValidationError('游戏操作尚未结束，已暂停托管，请稍候再关闭游戏。')
+                result = self.game_lifecycle.close(payload['target'])
+                self.message = '已请求游戏正常退出，托管和监控已停止。'
+                self.journal.append('system','game_close_requested',self.message)
+                return result
+        finally:
+            with self.guard: self.game_transition = False
 
     def stop(self):
         self.cancelled.set()
@@ -947,11 +988,18 @@ class AssistantService(ManagedServiceMixin):
             if self.closed.is_set(): raise ValidationError('助手已退出。')
             if self.managed.running or self.operation_kind=='managed':
                 raise ValidationError('请先暂停托管，再修改自动整理设置。')
-            self.automation_config.parent.mkdir(parents=True,exist_ok=True)
-            temp=self.automation_config.with_suffix('.json.tmp')
-            temp.write_text(json.dumps(settings,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-            temp.replace(self.automation_config)
+            if self.managed_config_load_failed:
+                raise ValidationError('托管配置未能载入，请先修复或保存托管设置，再修改共用存放页；原文件已保留。')
+            managed_settings=deepcopy(self.managed.settings)
+            for kind,group in SHARED_STORAGE_GROUPS:
+                managed_settings['cleanup'][kind+'_pages']=list(settings[group]['pages'])
+            validate_shared_pages(settings,managed_settings['cleanup'])
+            write_settings_files({self.automation_config:settings,self.managed_config:managed_settings})
             self.automation_settings=settings
+            self.automation_config_load_failed=False
+            self.managed.settings=managed_settings
+            self.managed_config_error=''
+            self.managed_can_resume=False
             self.pressure_active=False
             self.revision+=1
             self.journal.append('settings','automation_saved','保存自动整理设置',context={'settings':settings})
@@ -961,6 +1009,7 @@ class AssistantService(ManagedServiceMixin):
         if not isinstance(enabled,bool): raise ValidationError('自动整理开关无效。')
         with self.guard:
             if enabled:
+                if self.game_actions_blocked(): raise ValidationError('游戏正在启动或退出，请稍候。')
                 if self.managed.running: raise ValidationError('托管正在运行，请先暂停托管。')
                 if not self.client.connected: raise ValidationError('请先连接游戏。')
                 if self.busy: raise ValidationError('请等待当前操作完成。')
@@ -1099,7 +1148,8 @@ class AssistantService(ManagedServiceMixin):
             self.monitor_wake.clear()
             if self.closed.is_set(): break
             with self.guard:
-                if self.busy or self.updating or not self.client.connected: continue
+                if self.busy or self.updating or getattr(self,'game_transition',False) or not self.client.connected: continue
+                if hasattr(self,'game_lifecycle') and self.game_lifecycle.state()['status']=='closing': continue
                 self.busy = True
                 self.operation_kind = 'managed' if self.managed.running else 'monitor' if self.monitoring or self.automation_running else 'observe'
                 self.worker = threading.Thread(target=self._work,args=(self.operation_kind,{}),daemon=True)
