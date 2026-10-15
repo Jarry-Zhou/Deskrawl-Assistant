@@ -57,6 +57,7 @@ class FakeManagedClient:
     def snapshot(self):
         self.captures += 1
         snap = deepcopy(FIXTURE)
+        if getattr(self,'force_cleanup',False) and not self.in_town: snap['containers']['inventory']['slot_count']=3
         snap.update(bridge_session='offline-session',snapshot_id=f'offline-{self.captures}',pid=self.pid)
         snap['transfer'] = {'available':True,'page_size':50,'storage_indices':list(self.storage_indices)}
         for container, details in snap['containers'].items():
@@ -238,6 +239,7 @@ class ManagedServiceTests(unittest.TestCase):
         self.service.set_managed_running(True)
 
     def returning_world(self):
+        self.client.force_cleanup=True
         self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
         self.client.run_status='success'
         self.ready(farming=True,auto_equip=False)
@@ -245,6 +247,7 @@ class ManagedServiceTests(unittest.TestCase):
             self.service._managed_once()  # First empty reward confirmation.
 
     def test_return_preflight_replans_a_boss_win_or_drop_after_planning(self):
+        self.client.force_cleanup=True
         self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
         self.ready(farming=True,auto_equip=False)
         world=self.service._managed_observation()
@@ -267,6 +270,7 @@ class ManagedServiceTests(unittest.TestCase):
         self.assertEqual(self.client.actions,[])
 
     def test_completed_run_pickup_uses_receipt_before_returning(self):
+        self.client.force_cleanup=True
         self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
         self.client.run_status='success'
         self.client.ground=[equipment(0,container='ground',selection_id='boss-drop')]
@@ -1011,7 +1015,8 @@ class ManagedServiceTests(unittest.TestCase):
         self.assertIn('关卡切换结果未确认',self.service.managed.status)
         self.assertEqual([action[0] for action in self.client.actions],['enter_map'])
 
-    def test_completed_run_waits_for_actual_town_before_cleaning_or_reentering(self):
+    def test_bag_pressure_waits_for_actual_town_before_cleaning_or_reentering(self):
+        self.client.force_cleanup=True
         self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
         self.client.run_status='success'
         self.service._publish(self.client.snapshot())
@@ -1033,6 +1038,7 @@ class ManagedServiceTests(unittest.TestCase):
         self.assertEqual([a[0] for a in self.client.actions],['return_town','enter_map'])
 
     def test_cancelled_return_replans_native_repeat_without_cleanup_or_false_arrival(self):
+        self.client.force_cleanup=True
         self.client.items=[];self.client.in_town=False;self.client.current_map='offline-map'
         self.client.run_status='success'
         self.service._publish(self.client.snapshot());self.ready(farming=True,auto_equip=False)
@@ -1043,6 +1049,7 @@ class ManagedServiceTests(unittest.TestCase):
             self.service._work('managed',{})
         # The repeat restarted after a cancelled portal. Discard stale return
         # intent and reconsider this live run; never pretend town was visited.
+        self.client.force_cleanup=False
         self.client.run_status='running'
         for now in (101,109,112):
             with patch('deskrawl_assistant.managed_service.time.monotonic',return_value=now):

@@ -544,6 +544,18 @@ class ManagedServiceMixin:
         elif kind == 'return_town':
             action.pop('protect_completion_rewards', None)
         stargazing_entry = kind == 'enter_dungeon' and action.get('reason_code') == 'stargazing_skip'
+        completed_entry = kind == 'enter_dungeon' and action.get('reason_code') == 'completed_continue'
+        if completed_entry:
+            if not self.managed.completion_rewards.ready(observation):
+                return {'verified':False,'retryable':True,'reason':self.managed.completion_rewards.reason}
+            run = run_record(scene.get('run'))
+            if (scene.get('in_dungeon') is not True or scene.get('dead') is True
+                    or not action.get('source_run_id') or run.get('id') != action['source_run_id']
+                    or run.get('status') != 'success' or observation.get('ground',{}).get('complete') is not True
+                    or observation.get('ground',{}).get('items')
+                    or observation.get('carriage',{}).get('complete') is not True
+                    or self.managed._bag_free(observation)-len(observation.get('carriage',{}).get('items',[])) < self.managed.settings['farming']['free_threshold']):
+                return {'verified':False,'retryable':True,'reason':'通关、地面奖励或背包状态已变化，重新读取后继续。'}
         if action.get('reason_code') == 'stargazing_skip':
             if scene.get('travel_blocked') is True:
                 raise GameBusyError(scene.get('travel_wait_reason') or '等待角色恢复可切图状态。')
@@ -561,7 +573,7 @@ class ManagedServiceMixin:
                     or verdict['verdict'] != 'skip'
                     or not (combat_rewards_clear(observation) if stargazing_entry else combat_rewards_known(observation))):
                 return {'verified':False, 'retryable':True, 'reason':'观星状态或实际奖励已变化，重新核验后再切图。'}
-        if kind in ('enter_dungeon','switch_difficulty','merchant_buy','merchant_open','merchant_refresh') and not stargazing_entry and not town_rewards_clear(observation):
+        if kind in ('enter_dungeon','switch_difficulty','merchant_buy','merchant_open','merchant_refresh') and not stargazing_entry and not completed_entry and not town_rewards_clear(observation):
             return {'verified':False,'retryable':True,'reason':'主城奖励尚未收取或收纳完成，继续整理后再进入地图。'}
         if self.managed.finishing and kind in ('enter_dungeon','switch_difficulty','merchant_buy','merchant_open','merchant_refresh','allocate_talent','learn_life_skill','set_skill'):
             return {'verified':False,'retryable':True,'reason':'已请求停止，改为回城整理。'}
@@ -846,7 +858,7 @@ class ManagedServiceMixin:
                      else scene.get('in_dungeon') is True and str(scene.get('dungeon_id'))==str(action['dungeon_id'])
                      and (not action.get('difficulty') or scene.get('difficulty')==action['difficulty'])
                      and run_record(scene.get('run')).get('status') in ('running','settling'))
-                if confirmed and action['kind'] == 'enter_dungeon' and action.get('reason_code') == 'stargazing_skip':
+                if confirmed and action['kind'] == 'enter_dungeon' and action.get('reason_code') in ('stargazing_skip','completed_continue'):
                     new_id = run_record(scene.get('run')).get('id')
                     confirmed = bool(new_id and new_id != action.get('source_run_id'))
                 if confirmed:

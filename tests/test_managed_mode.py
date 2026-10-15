@@ -458,7 +458,7 @@ class LifecycleTests(unittest.TestCase):
         action = engine.next_action(world); self.assertEqual(action['kind'],'enter_dungeon')
         self.assertEqual(action['difficulty'],'Nightmare')
 
-    def test_push_crosses_difficulty_and_failure_returns_to_previous_tier(self):
+    def test_push_crosses_difficulty_and_death_retries_same_tier(self):
         s = settings(); s['farming'].update(mode='push',dungeon_id='last',difficulty='Normal',progression=[
             {'dungeon_id':'last','difficulty':'Normal'}, {'dungeon_id':'a','difficulty':'Nightmare'},
             {'dungeon_id':'last','difficulty':'Nightmare'}, {'dungeon_id':'a','difficulty':'Inferno'}])
@@ -475,10 +475,8 @@ class LifecycleTests(unittest.TestCase):
         self.assertIsNone(engine.next_action(world))
         world['scene']['run']['status']='failed'
         action = engine.next_action(world); self.assertEqual(action['kind'],'return_town'); verified(engine,action)
-        self.assertEqual((engine.target_dungeon,engine.target_difficulty),('last','Normal'))
-        action = engine.next_action(town); self.assertEqual(action['difficulty'],'Normal'); verified(engine,action)
-        town['scene']['difficulty']='Normal'
-        action = engine.next_action(town); self.assertEqual((action['dungeon_id'],action['difficulty']),('last','Normal'))
+        self.assertEqual((engine.target_dungeon,engine.target_difficulty),('a','Nightmare'))
+        action = engine.next_action(town); self.assertEqual((action['dungeon_id'],action['difficulty']),('a','Nightmare'))
 
     def test_death_returns_even_without_run_or_merchant_growth_data(self):
         for run in (None,{'id':'dead-run','status':'running'}):
@@ -596,32 +594,29 @@ class LifecycleTests(unittest.TestCase):
         world = observation(rows + [loot('7', 'material', 'Material', 7)], capacity=10)
         self.assertEqual(engine.next_action(world)['kind'], 'return_town')
 
-    def test_push_failure_falls_back_to_last_success(self):
+    def test_push_death_retries_failed_map_after_town_cleanup(self):
         s = settings(); s['farming']['mode'] = 'push'
         engine = ManagedMode(s); world = observation(); engine.start(world)
-        world['scene']['run'] = {'id': 'a1', 'status': 'success', 'dungeon_id': 'a'}
-        action = after_rewards(engine, world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
-        town = observation([], town=True)
-        action = engine.next_action(town); self.assertEqual(action['dungeon_id'], 'b'); verified(engine, action)
-        world['scene'].update(dungeon_id='b', run={'id': 'b1', 'status': 'running'}); self.assertIsNone(engine.next_action(world))
-        world['scene']['run']['status'] = 'failed'
-        action = engine.next_action(world); self.assertEqual(action['kind'], 'return_town'); self.assertTrue(engine.push_failed)
-        verified(engine, action)
-        action = engine.next_action(town); self.assertEqual(action['dungeon_id'], 'a'); verified(engine, action)
-        world['scene'].update(dungeon_id='a', run={'id': 'a2', 'status': 'running'}); engine.next_action(world)
-        world['scene']['run']['status'] = 'success'
-        action = after_rewards(engine, world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
-        self.assertEqual(engine.next_action(town)['dungeon_id'], 'b')
+        world['scene']['run'] = {'id':'a1','status':'success','dungeon_id':'a'}
+        action=after_rewards(engine,world)
+        self.assertEqual((action['kind'],action['dungeon_id'],action['reason_code']),('enter_dungeon','b','completed_continue'))
+        verified(engine,action)
+        world['scene'].update(dungeon_id='b',run={'id':'b1','status':'running'})
+        self.assertIsNone(engine.next_action(world))
+        world['scene']['run']['status']='failed'
+        action=after_rewards(engine,world);self.assertEqual(action['kind'],'return_town');verified(engine,action)
+        town=observation([],town=True)
+        self.assertEqual(engine.next_action(town)['dungeon_id'],'b')
 
-    def test_repeat_finished_map_always_returns_and_cleans_before_same_map_entry(self):
-        engine = ManagedMode(settings()); world = observation(); engine.start(world)
-        world['scene']['run'] = {'id': 'a1', 'status': 'success', 'dungeon_id': 'a'}
-        action = after_rewards(engine, world); self.assertEqual(action['kind'], 'return_town'); verified(engine, action)
-        self.assertIsNone(engine.next_action(world))  # Combat map cannot be entered again yet.
-        town = observation([equipment('junk')], town=True)
-        action = engine.next_action(town); self.assertEqual(action['kind'], 'transfer'); verified(engine, action)
-        town['items'][0]['container'] = 'storage'; town['counts']['inventory']['occupied'] = 0
-        action = engine.next_action(town); self.assertEqual(action['kind'], 'enter_dungeon'); self.assertEqual(action['dungeon_id'], 'a')
+    def test_repeat_finished_map_continues_without_town_and_requires_new_run(self):
+        engine=ManagedMode(settings());world=observation();engine.start(world)
+        world['scene']['run']={'id':'a1','status':'success','dungeon_id':'a'}
+        action=after_rewards(engine,world)
+        self.assertEqual((action['kind'],action['dungeon_id'],action['reason_code']),('enter_dungeon','a','completed_continue'))
+        self.assertEqual(action['source_run_id'],'a1');verified(engine,action)
+        self.assertIsNone(engine.next_action(world))
+        world['scene']['run']={'id':'a2','status':'running','dungeon_id':'a'}
+        self.assertIsNone(engine.next_action(world));self.assertIsNone(engine.await_effect)
 
     def test_first_campaign_map_failure_repeats_first_map(self):
         s = settings(); s['farming']['mode'] = 'push'

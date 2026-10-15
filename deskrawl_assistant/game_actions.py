@@ -133,6 +133,7 @@ class GameActions:
         self._last_terminal_run = None
         self._last_character = None
         self._panel_log_cache = {}
+        self._combat_completion = 0
         self._progression = None
 
     def capabilities(self):
@@ -381,6 +382,50 @@ class GameActions:
         names,labels = ('Normal','Nightmare','Inferno'),('普通','噩梦','炼狱')
         return names[current],[{'id':key,'label':labels[n],'value':n,'unlocked':n<=maximum and n in values}
                                for n,key in enumerate(names)]
+
+    def _combat_completion_instance(self, read, klass, expected_map):
+        # CombatMapCompletionUI has only a static visibility flag, unlike the
+        # mythic singleton. Locate its live component once; prefab objects have
+        # no current replay map. Bound the read cost and revalidate cached roots.
+        def valid(obj):
+            read.verify(obj, 'CombatMapCompletionUI')
+            if not read.ptr(obj+16) or read.ptr(obj+208)!=expected_map:
+                raise MemoryReadError('结算界面实例或关卡已变化。')
+            return obj
+        mark = len(read.guards)
+        if self._combat_completion:
+            try: return valid(self._combat_completion)
+            except MemoryReadError: del read.guards[mark:]; self._combat_completion=0
+        anchor = read.singleton('Inventory')
+        regions = sorted((r for r in self.reader.memory.regions() if r.kind==0x20000),
+                         key=lambda r:(max(r.base-anchor,anchor-(r.base+r.size),0),r.size))
+        deadline, scanned = time.monotonic()+1, 0
+        needle = struct.pack('<Q',klass)
+        for region in regions:
+            for offset in sorted(range(0,region.size,1024*1024),key=lambda n:abs(region.base+n-anchor)):
+                if time.monotonic()>deadline or scanned>=64*1024*1024:
+                    raise GameBusyError('等待定位当前通关界面后继续刷图。')
+                size=min(1024*1024,region.size-offset,64*1024*1024-scanned)
+                scanned+=size
+                try: block=self.reader.memory.read(region.base+offset,size)
+                except MemoryReadError: continue
+                pos=-1
+                while (pos:=block.find(needle,pos+1))>=0:
+                    obj=region.base+offset+pos
+                    if obj%8:continue
+                    mark=len(read.guards)
+                    try: self._combat_completion=valid(obj);return obj
+                    except MemoryReadError: del read.guards[mark:]
+        raise GameBusyError('当前通关界面尚未稳定，等待游戏继续。')
+
+    def _visible_completion(self, read, name, expected_map=None):
+        if self._completion_state(read).get(name) is not True:
+            raise GameBusyError('等待游戏结算界面就绪后继续。')
+        klass = read.klass(read.ptr(self.reader.module['base']+self.profile['statics'][name]),name)
+        if name=='CombatMapCompletionUI':
+            return self._combat_completion_instance(read,klass,expected_map)
+        static = read.ptr(klass+184)
+        return read.verify(read.ptr(static),name)
 
     def _completion_state(self, read):
         """These native visibility flags guard the game's shortcut return key."""
@@ -739,11 +784,32 @@ class GameActions:
         elif kind == 'enter_map':
             self._require_travel_ready(read)
             stargazing_entry = payload.get('reason_code') == 'stargazing_skip'
-            if not stargazing_entry:
+            completed_entry = payload.get('reason_code') == 'completed_continue'
+            if not stargazing_entry and not completed_entry:
                 self._require_empty_town(read,manager,scene)
             state = self.control_snapshot()
             if not state['available']:
                 raise NativeActionError(state['reason'])
+            if completed_entry:
+                run = state.get('run') or {}
+                if (scene != 0 or state.get('dead') is True or not payload.get('source_run_id')
+                        or run.get('id') != payload['source_run_id'] or run.get('status') != 'success'):
+                    raise SnapshotChangedError('原通关记录已变化，未重复入场。')
+                # Re-read the plan identity and terminal flags into mailbox guards;
+                # built-in auto-run may replace the plan before our request runs.
+                from .recommendation_reader import _Copy
+                import hashlib
+                copy = _Copy(self.reader)
+                plan = copy.verify(copy.ptr(manager+120),'RunPlan')
+                wave = copy.verify(copy.ptr(manager+104),'WaveManager')
+                if (copy.ptr(wave+88)!=plan
+                        or hashlib.sha256((self.reader.string(copy.ptr(plan+16)) or '').encode()).hexdigest()!=payload['source_run_id']
+                        or not copy.boolean(wave+248)):
+                    raise SnapshotChangedError('通关结算尚未完成，等待游戏继续。')
+                player = copy.ptr(copy.ptr(manager+64)+32)
+                if copy.boolean(player+296): raise SnapshotChangedError('角色已死亡，改为回城整理。')
+                read.guards.extend(copy.guards)
+                if self._ground(read,manager): raise GameBusyError('等待收取地面奖励后继续。')
             if stargazing_entry:
                 if (scene != 0 or (state.get('run') or {}).get('id') != payload.get('source_run_id')
                         or not payload.get('source_run_id') or state.get('dead') is True
@@ -769,7 +835,7 @@ class GameActions:
                 raise NativeActionError('目标关卡尚未解锁、缺少材料或资源未载入')
             if not floor and target_difficulty != state['difficulty']:
                 raise NativeActionError('请先在游戏里切换难度；托管不会绕过难度解锁')
-            if floor and (scene!=1 or stargazing_entry):
+            if floor and ((scene!=1 and not completed_entry) or stargazing_entry):
                 raise NativeActionError('神话裂隙必须回城整理后进入。')
             native_key = MYTHIC_MAP if floor else key
             obj = self._map_objects(read, area, native_key)[native_key]
@@ -784,8 +850,20 @@ class GameActions:
                     Invocation('SaveSystem.mythic_unlocked',arguments=(Argument.reference(obj),Argument.integer(floor)),require_true=True),
                     Invocation('TownPortalSystem.entry_materials',arguments=(Argument.reference(obj),),require_true=True),
                     Invocation('GameManager.enter_mythic',manager,(Argument.reference(obj),Argument.integer(floor)))]
+                if completed_entry:
+                    if key!=state.get('map_id') or copy.integer(wave+304)!=floor or copy.integer(plan+64)!=floor:
+                        raise SnapshotChangedError('裂隙实际层级已变化，未重开。')
+                    read.guards.extend(copy.guards)
+                    ui=self._visible_completion(read,'MythicCompletionUI')
+                    calls[-1]=Invocation('MythicCompletionUI.repeat',ui,(Argument.boolean(False),))
             else:
-                calls = [Invocation('TownPortalSystem.fri', portal, (Argument.reference(obj),), require_true=True)]
+                if completed_entry and key==state.get('map_id'):
+                    ui=self._visible_completion(read,'CombatMapCompletionUI',obj)
+                    if read.ptr(ui+208)!=obj:raise SnapshotChangedError('结算重开关卡已变化。')
+                    calls=[Invocation('TownPortalSystem.entry_materials',arguments=(Argument.reference(obj),),require_true=True),
+                           Invocation('CombatMapCompletionUI.repeat',ui)]
+                else:
+                    calls = [Invocation('TownPortalSystem.fri', portal, (Argument.reference(obj),), require_true=True)]
         elif kind == 'collect_ground':
             rows = self._ground(read, manager, payload.get('selection_id'))
             selected = next((row for row in rows if row['selection_id'] == payload.get('selection_id')), None)
@@ -861,7 +939,7 @@ class GameActions:
                    uncertain=exc.uncertain,state=exc.state,item=item_log)
             raise
         # The native call can return before asynchronous travel/save concludes.
-        result.update({'kind':kind, 'native_verified':kind in self.verified_kinds,
+        result.update({'kind':kind, 'native_verified':kind in self.verified_kinds and payload.get('reason_code')!='completed_continue',
             'online_save_confirmed':False, 'effect_confirmed':False})
         if kind in ('return_town', 'enter_map'):
             result['transition_requested'] = True

@@ -18,37 +18,38 @@ class FarmingCycleTests(unittest.TestCase):
     def finish(self, engine, status, run_id):
         world=scene(engine.target_dungeon,engine.target_difficulty,status,run_id)
         action=after_rewards(engine,world)
-        self.assertEqual(action['kind'],'return_town');verified(engine,action)
+        self.assertIn(action['kind'],('return_town','enter_dungeon'));returning=action['kind']=='return_town';verified(engine,action)
         # Re-reading the same result during return cannot advance twice.
         target=(engine.target_dungeon,engine.target_difficulty,engine.repeat_completed)
         self.assertIsNone(engine.next_action(world));self.assertEqual(target,
             (engine.target_dungeon,engine.target_difficulty,engine.repeat_completed))
-        town=scene(None,world['scene']['difficulty'],town=True)
-        action=engine.next_action(town)
-        if action['kind']=='switch_difficulty':
-            verified(engine,action);town['scene']['difficulty']=action['difficulty'];action=engine.next_action(town)
-        self.assertEqual(action['kind'],'enter_dungeon');verified(engine,action)
+        if returning:
+            town=scene(None,world['scene']['difficulty'],town=True)
+            action=engine.next_action(town)
+            if action['kind']=='switch_difficulty':
+                verified(engine,action);town['scene']['difficulty']=action['difficulty'];action=engine.next_action(town)
+            self.assertEqual(action['kind'],'enter_dungeon');verified(engine,action)
         self.assertIsNone(engine.next_action(scene(engine.target_dungeon,engine.target_difficulty,run_id=run_id+'-next')))
 
     def test_push_repeatedly_retries_failed_map_instead_of_permanent_fallback(self):
         cfg=settings();cfg['farming'].update(mode='push',dungeon_id='b',difficulty='Normal')
         engine=ManagedMode(cfg);engine.start(scene('b'))
-        for status,expected in [('failed','a'),('success','b'),('failed','a'),('success','b'),('success','c')]:
+        for status,expected in [('failed','b'),('failed','b'),('success','c'),('failed','c'),('success','c')]:
             self.finish(engine,status,str(len(engine.handled_runs)))
             self.assertEqual(engine.target_dungeon,expected);self.assertTrue(engine.running)
 
-    def test_first_attempt_failure_knows_previous_map_without_session_success(self):
+    def test_first_attempt_failure_retries_same_map_without_session_success(self):
         cfg=settings();cfg['farming'].update(mode='push',dungeon_id='b',difficulty='Normal')
         engine=ManagedMode(cfg);engine.start(scene('b'));self.finish(engine,'failed','b-first')
-        self.assertEqual(engine.target_dungeon,'a')
+        self.assertEqual(engine.target_dungeon,'b')
 
-    def test_cross_tier_failure_retreats_then_retries_and_campaign_end_repeats(self):
+    def test_cross_tier_failure_retries_same_tier_and_campaign_end_repeats(self):
         cfg=settings();cfg['farming'].update(mode='push',difficulty='Normal',dungeon_id='b',
             progression=[{'dungeon_id':m,'difficulty':d} for d in ('Normal','Nightmare','Inferno') for m in ('a','b')])
         engine=ManagedMode(cfg);engine.start(scene('b'))
         self.finish(engine,'success','normal-end');self.assertEqual(engine.target_difficulty,'Nightmare')
-        self.finish(engine,'failed','nightmare-first');self.assertEqual((engine.target_dungeon,engine.target_difficulty),('b','Normal'))
-        self.finish(engine,'success','normal-retry');self.assertEqual((engine.target_dungeon,engine.target_difficulty),('a','Nightmare'))
+        self.finish(engine,'failed','nightmare-first');self.assertEqual((engine.target_dungeon,engine.target_difficulty),('a','Nightmare'))
+        self.finish(engine,'success','nightmare-retry');self.assertEqual((engine.target_dungeon,engine.target_difficulty),('b','Nightmare'))
         for i in range(4):self.finish(engine,'success',str(i))
         self.assertEqual((engine.target_dungeon,engine.target_difficulty),('b','Inferno'))
 

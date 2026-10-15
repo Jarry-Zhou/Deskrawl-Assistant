@@ -213,14 +213,32 @@ class MythicCycleTests(unittest.TestCase):
             self.assertIsNone(engine.next_action(running))
             world=scene(floor_id(22),'Mythic',status,f'floor-run-{n}')
             world['scene']['world_difficulty']='Inferno'
-            action=after_rewards(engine,world);self.assertEqual(action['kind'],'return_town');verified(engine,action)
+            action=after_rewards(engine,world)
+            self.assertEqual(action['kind'],'enter_dungeon' if n==1 else 'return_town')
+            verified(engine,action)
             self.assertEqual(engine.repeat_completed,1 if n==1 else 0)
+            if n==1:
+                self.assertEqual((action['dungeon_id'],action['difficulty']),(floor_id(22),'Mythic'))
+                self.assertEqual(action['reason_code'],'completed_continue')
+                continue
             town=self.town();action=engine.next_action(town)
             if n==2:
                 self.assertEqual((action['kind'],action['difficulty']),('switch_difficulty','Normal'))
                 verified(engine,action);town=self.town('Normal');action=engine.next_action(town)
             self.assertEqual(action['kind'],'enter_dungeon');verified(engine,action)
         self.assertEqual((engine.target_dungeon,engine.target_difficulty),('a','Normal'))
+
+    def test_rotating_different_floors_preserves_town_entry_requirement(self):
+        cfg=settings();cfg['farming']['repeat_maps']=[{'dungeon_id':floor_id(22),'difficulty':'Mythic','runs':1},
+                                                     {'dungeon_id':floor_id(23),'difficulty':'Mythic','runs':1}]
+        world=scene(floor_id(22),'Mythic',status='success',run_id='floor22-win')
+        world['scene']['world_difficulty']='Inferno'
+        engine=ManagedMode(cfg);engine.start(world)
+        action=after_rewards(engine,world)
+        self.assertEqual(action['kind'],'return_town')
+        self.assertEqual(engine.target_dungeon,floor_id(23));verified(engine,action)
+        action=engine.next_action(self.town())
+        self.assertEqual((action['kind'],action['dungeon_id']),('enter_dungeon',floor_id(23)))
 
     def test_current_normal_target_started_inside_rift_uses_world_tier(self):
         cfg=settings();world=scene(floor_id(22),'Mythic');world['scene']['world_difficulty']='Inferno'

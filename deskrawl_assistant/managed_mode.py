@@ -920,7 +920,7 @@ class ManagedMode:
             visible = (not self._town(observation) and str(scene.get('dungeon_id')) == str(action['dungeon_id'])
                        and (not action.get('difficulty') or scene.get('difficulty')==action['difficulty'])
                        and run_record(scene.get('run')).get('status') in ('running', 'settling'))
-            if action.get('reason_code') == 'stargazing_skip':
+            if action.get('reason_code') in ('stargazing_skip','completed_continue'):
                 new_id = run_record(scene.get('run')).get('id')
                 visible = visible and bool(new_id and new_id != action.get('source_run_id'))
         elif kind == 'switch_difficulty':
@@ -1082,7 +1082,7 @@ class ManagedMode:
             self.status = '等待完整读取马车与地面掉落。'
         return None, complete
 
-    def _return_town(self, observation, all_items=None, **data):
+    def _return_town(self, observation, all_items=None, *, continue_dungeon=False, **data):
         """Count wins immediately, but collect their settled drops before travel."""
         if observation.get('scene', {}).get('dead') is not True:
             if not self.completion_rewards.ready(observation):
@@ -1110,7 +1110,7 @@ class ManagedMode:
                 return None
         if self.completion_rewards.run_id is not None:
             data['protect_completion_rewards'] = True
-        return self._action('return_town', **data)
+        return self._action('enter_dungeon' if continue_dungeon else 'return_town', **data)
 
     def merchant_batch_ready(self, observation):
         bag=[r for r in observation['items'] if r.get('container')=='inventory']
@@ -1311,7 +1311,7 @@ class ManagedMode:
         if pos is None:
             self._pause('当前关卡未在已核验的推图路线中，等待重新读取关卡。')
             return
-        index = min(pos+1,len(points)-1) if status=='success' else max(0,pos-1)
+        index = min(pos+1,len(points)-1) if status=='success' else pos
         self.target_dungeon,self.target_difficulty = points[index]['dungeon_id'],points[index]['difficulty']
 
     def _stargazing(self, observation):
@@ -1454,12 +1454,27 @@ class ManagedMode:
                 if self._bag_free(observation) < self.settings['farming']['free_threshold']:
                     self.phase = 'returning'
                     return self._return_town(observation, all_items, reason='背包剩余空格低于门槛，自动回城整理。')
-                if run_record(scene.get('run')).get('status') in ('success', 'failed'):
-                    # TownPortalSystem.fri rejects the already active combat map.
-                    # Finish every run through the original return/cleanup/entry
-                    # path, including repeats of the same map after a failure.
-                    self.phase = 'returning'
-                    return self._return_town(observation, all_items, reason='本轮结束，回城整理后复刷或推进关卡。')
+                run=run_record(scene.get('run'))
+                if run.get('status')=='failed':
+                    self.phase='returning'
+                    return self._return_town(observation,all_items,reason='角色战败，回城整理和换装后重新挑战当前关卡。')
+                if run.get('status')=='success':
+                    if self.target_difficulty==MYTHIC and str(scene.get('dungeon_id'))!=str(self.target_dungeon):
+                        self.phase='returning'
+                        return self._return_town(observation,all_items,reason='切换裂隙层级前，回城收取并整理奖励。')
+                    carriage=observation.get('carriage',{})
+                    if carriage.get('complete') is not True:
+                        self.status='等待读取马车奖励后继续。';return None
+                    if self._bag_free(observation)-len(carriage.get('items',[])) < self.settings['farming']['free_threshold']:
+                        self.phase='returning'
+                        return self._return_town(observation,all_items,reason='背包和待收奖励需要整理，回城后继续刷图。')
+                    self.phase='travel'
+                    # Keep v1.3.3's settled-drop/quiet-read fence for every exit,
+                    # including a direct replay. Never leave late boss loot.
+                    return self._return_town(observation,all_items,continue_dungeon=True,
+                        dungeon_id=self.target_dungeon,difficulty=self.target_difficulty,
+                        source_run_id=run['id'],reason_code='completed_continue',
+                        reason='本轮已完成且空间充足，收完地面奖励后直接继续目标关卡。')
                 if scene.get('dungeon_id') is not None and str(scene['dungeon_id']) != str(self.target_dungeon):
                     self.phase = 'returning'
                     return self._return_town(observation, all_items, reason='当前关卡与托管目标不同，回城整理后切换关卡。')

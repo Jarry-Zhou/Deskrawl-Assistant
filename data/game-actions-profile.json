@@ -12636,6 +12636,30 @@
       "parameters": [],
       "rva": 7811136,
       "prefix": "40534883ec20803d142c4603007518488d0d92c32a03e855"
+    },
+    "CombatMapCompletionUI.repeat": {
+      "name": "fxe",
+      "token": "0x060012F1",
+      "isStatic": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "rva": 5537600,
+      "prefix": "48895c2408574883ec20803d99d1680300488bd97529488d"
+    },
+    "MythicCompletionUI.repeat": {
+      "name": "hbm",
+      "token": "0x060017E2",
+      "isStatic": false,
+      "returnType": "System.Void",
+      "parameters": [
+        {
+          "name": "a",
+          "typeIndex": 18234,
+          "resolvedType": "System.Boolean"
+        }
+      ],
+      "rva": 6174064,
+      "prefix": "48895c2408574883ec2080b9e9000000000fb6fa488bd975"
     }
   },
   "singletons": {

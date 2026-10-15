@@ -353,7 +353,7 @@
     $('managed-stargazing-options').hidden=!$('managed-stargazing').checked;
     for(const key of stargazingRewards)$('managed-stargazing-'+key).disabled=fixedStargazing.has(key)||running||busy||!$('managed-farming').checked||!$('managed-stargazing').checked;
     root.document.querySelector('.managed-repeat-count-label').hidden=!two;
-    $('managed-farm-note').textContent=push?'从最高已解锁难度的最后一张已解锁图开始；通关前进一关，失败后退一关，上一关通关后再次挑战。普通通关后进入噩梦，噩梦通关后进入炼狱。':two?'依次打满图 1、图 2 的成功通关局数后循环；观星退出、失败和途中回城均不计数。':'重复进入选定关卡，仅成功通关计数；神话裂隙只显示已解锁层数，每次入场消耗游戏要求的材料；背包空格不足时先回城整理，再继续刷图。';
+    $('managed-farm-note').textContent=push?'从最高已解锁难度的最后一张已解锁图开始；通关前进一关；死亡后回城整理、检查换装，再挑战同一关。普通通关后进入噩梦，噩梦通关后进入炼狱。':two?'依次打满图 1、图 2 的成功通关局数后循环；观星退出、失败和途中回城均不计数。':'通关后直接续刷，仅成功通关计数；神话裂隙只显示已解锁层数，每次入场消耗游戏要求的材料；背包空格不足时先回城整理，再继续刷图。';
     root.ManagedGrowthUI?.render(draft,packet?.progression_catalog,packet?.progression_state,running||busy,(next,renderNow=true)=>{
       draft={...readForm(),...next};markDirty();if(renderNow){renderDependencies();renderCapabilities();}else {renderFoldSummaries();renderControls();}
     },connected);
